@@ -54,7 +54,6 @@ export async function POST(req: Request, { params }: { params: { code: string } 
 
     await updateDoc(trainerRef, {
       acceptedInvitations: newAcceptedInvitations,
-      [`invitationStatus_${code}`]: "Accepted Invitation", // Add this status field
       lastInviteAcceptedAt: serverTimestamp(), // serverTimestamp() only at top level
       updatedAt: serverTimestamp(),
     })
