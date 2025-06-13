@@ -1,0 +1,11 @@
+/* Ensure chart dots are perfectly round */
+.chart-dot {
+  shape-rendering: geometricPrecision;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Fix for SVG circles to ensure they're perfectly round */
+svg circle {
+  shape-rendering: geometricPrecision;
+  vector-effect: non-scaling-stroke;
+}
