@@ -24,7 +24,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import {
@@ -563,7 +562,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
               <div className="text-center">
                 <div className="text-lg font-semibold">Week {currentWeek}</div>
-                <Badge className={getWeekPhase(currentWeek).color}>{getWeekPhase(currentWeek).name} Phase</Badge>
               </div>
 
               <Button
