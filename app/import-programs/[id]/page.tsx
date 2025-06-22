@@ -2,6 +2,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { notFound } from "next/navigation"
 import ReviewProgramClient from "./review-program-client"
+import PeriodizedReviewClient from "./periodized-review-client"
 
 interface PageProps {
   params: {
@@ -35,7 +36,11 @@ export default async function ReviewProgramPage({ params }: PageProps) {
     console.log("Program weeks:", importData.program?.weeks)
 
     // Use appropriate component based on periodization
-    return <ReviewProgramClient importData={importData} />
+    if (isPeriodized) {
+      return <PeriodizedReviewClient importData={importData} programData={importData.program} />
+    } else {
+      return <ReviewProgramClient importData={importData} programData={importData.program} />
+    }
   } catch (error) {
     console.error("Error fetching import data:", error)
     notFound()

@@ -1,5 +1,5 @@
-import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
-import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore" // Keep these for type inference if needed, but use admin db
+import { db } from "@/lib/firebase/firebase"
+import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { NextResponse } from "next/server"
 
 export async function POST(req: Request, { params }: { params: { code: string } }) {
@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: { code: string } 
     console.log(`[Accept Invitation] 📝 Client info:`, clientInfo)
 
     // Find trainer with this universal invite code
-    const usersRef = collection(getFirebaseAdminFirestore(), "users")
+    const usersRef = collection(db, "users")
     const q = query(usersRef, where("universalInviteCode", "==", code))
     const querySnapshot = await getDocs(q)
 
@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: { params: { code: string } 
       createdAt: now,
     }
 
-    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
+    const trainerRef = doc(db, "users", trainerId)
 
     // Add to accepted invitations array AND set status field
     const currentAcceptedInvitations = trainerData.acceptedInvitations || []

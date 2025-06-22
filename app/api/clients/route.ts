@@ -1,70 +1,112 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { createClient } from "@/lib/firebase/client-service"
+import { collection, query, where, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase"
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   try {
-    console.log("🚀 Starting /api/clients request")
-
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
-    console.log("🆔 User ID from cookie:", userId)
 
     if (!userId) {
-      console.log("❌ No user_id in cookies")
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    try {
-      // Import Firestore directly
-      const { db } = await import("@/lib/firebase/firebase")
-      console.log("📊 Firestore imported successfully")
+    const body = await request.json()
+    const { name, email, goal, program } = body
 
-      if (!db) {
-        console.error("❌ Firestore not available")
-        return NextResponse.json({ error: "Database not available" }, { status: 500 })
-      }
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 })
+    }
 
-      console.log("🔍 Querying Firestore for clients of trainer:", userId)
+    const result = await createClient(userId, {
+      name,
+      email: email || "",
+      goal: goal || "",
+      program: program || "",
+    })
 
-      // Import collection and query functions from firebase/firestore
-      const { collection, query, where, getDocs } = await import("firebase/firestore")
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        clientId: result.clientId,
+        message: "Client created successfully",
+      })
+    } else {
+      return NextResponse.json({ error: result.error?.message || "Failed to create client" }, { status: 500 })
+    }
+  } catch (error) {
+    console.error("Error creating client:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
-      // ❌ WRONG: Query clients where trainerId matches the current user
-      const clientsRef = collection(db, "clients")
-      const q = query(clientsRef, where("trainerId", "==", userId))
-      const querySnapshot = await getDocs(q)
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const trainerId = searchParams.get("trainerId")
+    const status = searchParams.get("status")
 
-      console.log("✅ Clients query completed, found:", querySnapshot.size, "clients")
+    console.log(`[GET /api/clients] Request params:`, { trainerId, status })
 
-      const clients: any[] = []
-      querySnapshot.forEach((doc) => {
-        clients.push({
-          id: doc.id,
-          ...doc.data(),
-        })
+    if (!trainerId) {
+      return NextResponse.json({ error: "trainerId is required" }, { status: 400 })
+    }
+
+    // Query the trainer's clients subcollection
+    const clientsRef = collection(db, "users", trainerId, "clients")
+
+    // Simple query without orderBy to avoid index issues
+    const q = status ? query(clientsRef, where("status", "==", status)) : query(clientsRef)
+
+    console.log(`[GET /api/clients] Querying clients for trainer: ${trainerId} with status: ${status || "all"}`)
+
+    const querySnapshot = await getDocs(q)
+    console.log(`[GET /api/clients] Found ${querySnapshot.size} clients`)
+
+    const clients = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      console.log(`[GET /api/clients] Client ${doc.id}:`, {
+        name: data.name,
+        status: data.status,
+        email: data.email,
       })
 
-      console.log("📤 Sending clients response:", clients.length, "clients")
-      return NextResponse.json(clients)
-    } catch (firestoreError: any) {
-      console.error("💥 Firestore error:", firestoreError)
-      return NextResponse.json(
-        {
-          error: "Database error",
-          details: firestoreError?.message || "Database connection failed",
-        },
-        { status: 500 },
-      )
-    }
-  } catch (error: any) {
-    console.error("💥 Unexpected error:", error)
+      // Only include valid client data
+      if (data.name && typeof data.name === "string" && !data.name.includes("channel?VER=")) {
+        clients.push({
+          id: doc.id,
+          name: data.name,
+          email: data.email || "",
+          status: data.status || "Pending",
+          goal: data.goal || "",
+          notes: data.notes || "",
+          createdAt: data.createdAt,
+        })
+      }
+    })
+
+    // Sort clients by creation date (client-side since we removed orderBy)
+    clients.sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0
+      return b.createdAt.seconds - a.createdAt.seconds
+    })
+
+    console.log(`[GET /api/clients] Returning ${clients.length} valid clients`)
+
+    return NextResponse.json({
+      success: true,
+      clients: clients,
+    })
+  } catch (error) {
+    console.error("[GET /api/clients] Error fetching clients:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Internal server error",
-        details: error?.message || "Unknown error",
+        details: error.message,
       },
       { status: 500 },
     )

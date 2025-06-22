@@ -408,7 +408,7 @@ const retryWithBackoff = async (fn: Function, maxRetries = 3) => {
 }
 \`\`\`
 
-## Monitoring &#43; Debugging
+## Monitoring & Debugging
 
 ### Logging Strategy
 
@@ -448,3 +448,6 @@ try {
   const failureTime = performance.now() - startTime
   console.error(`Import failed after ${failureTime}ms:`, error)
 }
+\`\`\`
+
+Now, let's apply the necessary code updates:

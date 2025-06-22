@@ -17,7 +17,7 @@ export function GoogleSheetsImport() {
   const [savedSheetLinks, setSavedSheetLinks] = useState<string[]>([])
   const { toast } = useToast()
 
-  // Check if we're already authenticated with Google and load storage flags
+  // Check if we're already authenticated with Google
   useEffect(() => {
     console.log("Google Sheets Import Component Mounted")
 
@@ -113,36 +113,6 @@ export function GoogleSheetsImport() {
     }
   }
 
-  // This function is called when the "Import Google Sheet" button is clicked
-  const handleImportButtonClick = () => {
-    // Check if user has permanently dismissed the instructions
-    const dontShowAgain = localStorage.getItem("dontShowSheetsInstructions") === "true"
-    if (dontShowAgain) {
-      // Skip instructions and go directly to sheet link input
-      setShowSheetLinkDialog(true)
-      return
-    }
-
-    // Check if user has seen instructions in this session
-    const hasSeenInSession = sessionStorage.getItem("hasSeenSheetsInstructions") === "true"
-    if (hasSeenInSession) {
-      // Skip instructions and go directly to sheet link input
-      setShowSheetLinkDialog(true)
-    } else {
-      // Show instructions modal
-      setShowImportDialog(true)
-    }
-  }
-
-  // This function is called when the SheetsImportDialog (instructions modal) is closed
-  const handleSheetsImportDialogClose = (open: boolean) => {
-    setShowImportDialog(open)
-    if (!open) {
-      // After closing the instructions, automatically open the link input modal
-      setShowSheetLinkDialog(true)
-    }
-  }
-
   const handleSaveSheetLink = () => {
     if (!sheetLink) {
       toast({
@@ -219,7 +189,7 @@ export function GoogleSheetsImport() {
 
           <div className="flex flex-col w-full space-y-4">
             <div className="flex justify-between items-center w-full">
-              <Button onClick={handleImportButtonClick} variant="outline">
+              <Button onClick={() => setShowImportDialog(true)} variant="outline">
                 <LinkIcon className="mr-2 h-4 w-4" />
                 Import Google Sheet
               </Button>
@@ -290,10 +260,8 @@ export function GoogleSheetsImport() {
         </Button>
       )}
 
-      {/* SheetsImportDialog (instructions modal) */}
-      <SheetsImportDialog open={showImportDialog} onOpenChange={handleSheetsImportDialogClose} />
+      <SheetsImportDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
 
-      {/* Dialog for adding sheet link */}
       <Dialog open={showSheetLinkDialog} onOpenChange={setShowSheetLinkDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
