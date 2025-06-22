@@ -555,26 +555,26 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       {programState.is_periodized && (
         <Card className="p-4 mb-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="flex-1 text-center">
-                <div className="text-lg font-semibold">
-                  Week {currentWeek}/{programState.program_weeks}
-                </div>
+            {" "}
+            {/* This container will push items to ends */}
+            <Button variant="ghost" size="icon" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
+              <ChevronLeft className="h-6 w-6" /> {/* Increased size */}
+            </Button>
+            <div className="flex-1 text-center">
+              {" "}
+              {/* This will center the text */}
+              <div className="text-lg font-semibold">
+                Week {currentWeek}/{programState.program_weeks}
               </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToNextWeek}
-                disabled={currentWeek === programState.program_weeks}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={goToNextWeek}
+              disabled={currentWeek === programState.program_weeks}
+            >
+              <ChevronRight className="h-6 w-6" /> {/* Increased size */}
+            </Button>
           </div>
 
           {/* Week selector dots */}
