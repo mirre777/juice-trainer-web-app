@@ -132,7 +132,7 @@ function EditableProgramName({
 
   return (
     <h3
-      className="text-[14px] font-medium text-black font-sen cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors"
+      className="text-[14px] font-medium text-black font-sen cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors text-left"
       onClick={handleDoubleClick} // Change from onDoubleClick to onClick
       title="Click to edit" // Update the title for accessibility
     >
@@ -155,7 +155,9 @@ export default function ImportProgramsClient() {
   const [imports, setImports] = useState<SheetsImport[]>([])
   const [isLoadingImports, setIsLoadingImports] = useState(false)
   const [completedImports, setCompletedImports] = useState<SheetsImport[]>([])
-  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set())
+  const [dismissedNotifications, setDismissedNotifications] = new Set(
+    typeof window !== "undefined" ? JSON.parse(localStorage.getItem("dismissedImportNotifications") || "[]") : [],
+  )
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
 
   useEffect(() => {
