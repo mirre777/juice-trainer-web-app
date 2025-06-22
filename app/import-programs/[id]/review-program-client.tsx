@@ -71,25 +71,22 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
 
-      // Normalize data structure: Always use 'weeks' array
+      // Normalize data structure: Always use 'weeks' array and ensure set_numbers
       let normalizedWeeks: ExerciseWeek[] = []
 
       if (initialProgram.is_periodized) {
-        // If already periodized and has weeks, use them
         if (initialProgram.weeks && initialProgram.weeks.length > 0) {
           normalizedWeeks = initialProgram.weeks
         } else if (initialProgram.routines && initialProgram.routines.length > 0) {
-          // If periodized but only has top-level routines (old structure), convert to weeks
           for (let i = 0; i < initialProgram.program_weeks; i++) {
             normalizedWeeks.push({
               week_number: i + 1,
-              set_count: 0, // Will be derived from exercises
-              sets: [], // Will be derived from exercises
-              routines: JSON.parse(JSON.stringify(initialProgram.routines)), // Deep copy routines
+              set_count: 0,
+              sets: [],
+              routines: JSON.parse(JSON.stringify(initialProgram.routines)),
             })
           }
         } else {
-          // Default empty weeks for a new periodized program
           for (let i = 0; i < initialProgram.program_weeks; i++) {
             normalizedWeeks.push({
               week_number: i + 1,
@@ -100,12 +97,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           }
         }
       } else {
-        // If non-periodized, ensure there's exactly one week
         if (initialProgram.weeks && initialProgram.weeks.length > 0) {
-          // If it has weeks, take the first one
           normalizedWeeks = [initialProgram.weeks[0]]
         } else if (initialProgram.routines && initialProgram.routines.length > 0) {
-          // If it has top-level routines, create a single week from them
           normalizedWeeks = [
             {
               week_number: 1,
@@ -115,7 +109,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             },
           ]
         } else {
-          // Default empty single week
           normalizedWeeks = [
             {
               week_number: 1,
@@ -125,8 +118,36 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             },
           ]
         }
-        initialProgram.program_weeks = 1 // Non-periodized always has 1 week
+        initialProgram.program_weeks = 1
       }
+
+      // --- NEW: Normalize set_number for all exercises in all routines/weeks ---
+      normalizedWeeks.forEach((week) => {
+        week.routines?.forEach((routine) => {
+          routine.exercises.forEach((exercise) => {
+            if (exercise.weeks && exercise.weeks.length > 0) {
+              // For periodized programs, iterate through each week's sets
+              exercise.weeks.forEach((exWeek) => {
+                if (exWeek.sets) {
+                  exWeek.sets.forEach((set, setIndex) => {
+                    if (typeof set.set_number !== "number" || set.set_number <= 0) {
+                      set.set_number = setIndex + 1
+                    }
+                  })
+                }
+              })
+            } else if (exercise.sets) {
+              // For non-periodized programs (or if 'weeks' is not used at exercise level), iterate through top-level sets
+              exercise.sets.forEach((set, setIndex) => {
+                if (typeof set.set_number !== "number" || set.set_number <= 0) {
+                  set.set_number = setIndex + 1
+                }
+              })
+            }
+          })
+        })
+      })
+      // --- END NEW NORMALIZATION ---
 
       setProgramState({
         ...initialProgram,
@@ -674,8 +695,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                                 {setIndex === 0 && (
                                   <div>
                                     <div className="font-medium text-gray-900">{exercise.name}</div>
-                                    {exercise.exercise_notes && (
-                                      <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
+                                    {exercise.notes && ( // Changed to exercise.notes
+                                      <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>
                                     )}
                                   </div>
                                 )}
