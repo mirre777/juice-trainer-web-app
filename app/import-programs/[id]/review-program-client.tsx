@@ -38,7 +38,6 @@ import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@
 
 interface ReviewProgramClientProps {
   importData: any
-  // programData: any // This prop is redundant if importData contains everything
 }
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
@@ -62,8 +61,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   // Initialize programState from importData on component mount or importData change
   useEffect(() => {
     if (importData?.program) {
-      // Deep copy to ensure we can revert to the original imported state
       const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
+
       // Ensure program_weeks is a number, default to 4 if not present or invalid
       initialProgram.program_weeks =
         Number.isInteger(initialProgram.program_weeks) && initialProgram.program_weeks > 0
@@ -72,43 +71,78 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
 
-      // Normalize data structure:
-      // If it's marked periodized but only has routines (old non-periodized structure), convert to weeks
-      if (initialProgram.is_periodized && !initialProgram.weeks?.length && initialProgram.routines?.length) {
-        const newWeeks: ExerciseWeek[] = []
-        for (let i = 0; i < initialProgram.program_weeks; i++) {
-          newWeeks.push({
-            week_number: i + 1,
-            set_count: 0, // Will be derived from exercises
-            sets: [], // Will be derived from exercises
-            routines: JSON.parse(JSON.stringify(initialProgram.routines)), // Deep copy routines
-          })
+      // Normalize data structure: Always use 'weeks' array
+      let normalizedWeeks: ExerciseWeek[] = []
+
+      if (initialProgram.is_periodized) {
+        // If already periodized and has weeks, use them
+        if (initialProgram.weeks && initialProgram.weeks.length > 0) {
+          normalizedWeeks = initialProgram.weeks
+        } else if (initialProgram.routines && initialProgram.routines.length > 0) {
+          // If periodized but only has top-level routines (old structure), convert to weeks
+          for (let i = 0; i < initialProgram.program_weeks; i++) {
+            normalizedWeeks.push({
+              week_number: i + 1,
+              set_count: 0, // Will be derived from exercises
+              sets: [], // Will be derived from exercises
+              routines: JSON.parse(JSON.stringify(initialProgram.routines)), // Deep copy routines
+            })
+          }
+        } else {
+          // Default empty weeks for a new periodized program
+          for (let i = 0; i < initialProgram.program_weeks; i++) {
+            normalizedWeeks.push({
+              week_number: i + 1,
+              set_count: 0,
+              sets: [],
+              routines: [],
+            })
+          }
         }
-        initialProgram.weeks = newWeeks
-        initialProgram.routines = [] // Clear top-level routines for periodized
-      }
-      // If it's non-periodized but has a 'weeks' array (e.g., from a previous periodized state),
-      // take the first week's routines and clear 'weeks'.
-      else if (!initialProgram.is_periodized && initialProgram.weeks?.length) {
-        initialProgram.routines = initialProgram.weeks[0]?.routines || []
-        initialProgram.weeks = []
+      } else {
+        // If non-periodized, ensure there's exactly one week
+        if (initialProgram.weeks && initialProgram.weeks.length > 0) {
+          // If it has weeks, take the first one
+          normalizedWeeks = [initialProgram.weeks[0]]
+        } else if (initialProgram.routines && initialProgram.routines.length > 0) {
+          // If it has top-level routines, create a single week from them
+          normalizedWeeks = [
+            {
+              week_number: 1,
+              set_count: 0,
+              sets: [],
+              routines: JSON.parse(JSON.stringify(initialProgram.routines)),
+            },
+          ]
+        } else {
+          // Default empty single week
+          normalizedWeeks = [
+            {
+              week_number: 1,
+              set_count: 0,
+              sets: [],
+              routines: [],
+            },
+          ]
+        }
+        initialProgram.program_weeks = 1 // Non-periodized always has 1 week
       }
 
-      setProgramState(initialProgram)
+      setProgramState({
+        ...initialProgram,
+        weeks: normalizedWeeks,
+        routines: [], // Ensure top-level routines are always empty
+      })
       setCurrentWeek(1) // Always start at week 1 for display
       setHasChanges(false)
       setJustSaved(false)
     }
   }, [importData])
 
-  // Derived state for current routines based on periodization and current week
+  // Derived state for current routines based on current week
   const currentRoutines: WorkoutRoutine[] = useMemo(() => {
-    if (!programState) return []
-    if (programState.is_periodized && programState.weeks && programState.weeks.length > 0) {
-      return programState.weeks[currentWeek - 1]?.routines || []
-    } else {
-      return programState.routines || [] // For non-periodized
-    }
+    if (!programState || !programState.weeks || programState.weeks.length === 0) return []
+    return programState.weeks[currentWeek - 1]?.routines || []
   }, [programState, currentWeek])
 
   // Week navigation
@@ -168,6 +202,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           setCurrentWeek(newWeeksCount)
         }
       }
+      // If not periodized, program_weeks should always be 1, so this input should be disabled.
+      // No change needed here for non-periodized as it's handled by togglePeriodization.
       return updatedProgram
     })
     setHasChanges(true)
@@ -186,7 +222,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setShowSelectWeekDialog(true) // Open dialog to select which week to keep
     } else {
       // Switching from Non-Periodized to Periodized
-      const currentNonPeriodizedRoutines = programState.routines || []
+      const currentSingleWeekRoutines = programState.weeks?.[0]?.routines || []
       const newWeeks: ExerciseWeek[] = []
       const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4 // Use existing weeks or default to 4
 
@@ -195,7 +231,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           week_number: i + 1,
           set_count: 0, // Will be derived from exercises
           sets: [], // Will be derived from exercises
-          routines: JSON.parse(JSON.stringify(currentNonPeriodizedRoutines)), // Deep copy routines
+          routines: JSON.parse(JSON.stringify(currentSingleWeekRoutines)), // Deep copy routines
         })
       }
 
@@ -205,8 +241,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           ...prev,
           is_periodized: true,
           weeks: newWeeks,
-          routines: [], // Clear top-level routines for periodized
-          program_weeks: defaultWeeks, // Update program_weeks if it was 0 or undefined
+          program_weeks: defaultWeeks, // Update program_weeks
         }
       })
       setCurrentWeek(1) // Reset current week to 1
@@ -224,8 +259,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         return {
           ...prev,
           is_periodized: false,
-          routines: selectedWeekData.routines, // Set top-level routines from selected week
-          weeks: [], // Clear weeks array for non-periodized
+          weeks: [JSON.parse(JSON.stringify(selectedWeekData))], // Keep only the selected week
+          program_weeks: 1, // Non-periodized always has 1 week
         }
       })
       setShowSelectWeekDialog(false)
@@ -276,12 +311,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
 
-      let targetExercise
-      if (updatedProgram.is_periodized) {
-        targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-      } else {
-        targetExercise = updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]
-      }
+      // Always access through the weeks array
+      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise) {
         const newSetNumber = (targetExercise.sets?.length || 0) + 1
@@ -292,8 +323,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           weight: "",
           rpe: "",
           rest: "",
-          duration: "",
-          notes: "",
+          duration_sec: null, // Use duration_sec as per type
+          notes: null, // Use notes as per type
         }
         if (!targetExercise.sets) targetExercise.sets = []
         targetExercise.sets.push(newSet)
@@ -310,12 +341,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      let targetExercise
-      if (updatedProgram.is_periodized) {
-        targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-      } else {
-        targetExercise = updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]
-      }
+      // Always access through the weeks array
+      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise && targetExercise.sets && targetExercise.sets[setIndex]) {
         const setToDuplicate = targetExercise.sets[setIndex]
@@ -341,12 +368,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      let targetExercise
-      if (updatedProgram.is_periodized) {
-        targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-      } else {
-        targetExercise = updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]
-      }
+      // Always access through the weeks array
+      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise && targetExercise.sets) {
         targetExercise.sets.splice(setIndex, 1)
@@ -365,15 +388,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
 
-      if (updatedProgram.is_periodized) {
-        const weekData = updatedProgram.weeks[currentWeek - 1]
-        if (weekData && weekData.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
-          weekData.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
-        }
-      } else {
-        if (updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
-          updatedProgram.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
-        }
+      // Always access through the weeks array
+      const weekData = updatedProgram.weeks[currentWeek - 1]
+      if (weekData && weekData.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
+        weekData.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
       }
       return updatedProgram
     })
@@ -508,6 +526,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               onChange={handleProgramWeeksChange}
               className="w-full border-transparent focus:border-lime-500"
               min={1}
+              disabled={!programState.is_periodized} // Disable if not periodized
             />
           </div>
         </div>
@@ -642,188 +661,92 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                       {routine.exercises.map((exercise, exerciseIndex) => (
                         <div key={exerciseIndex} className="border-b border-gray-200">
                           {/* Exercise sets */}
-                          {exercise.weeks && programState.is_periodized ? (
-                            // Render sets for the current week if periodized
-                            exercise.weeks[currentWeek - 1]?.sets?.map((set, setIndex) => (
-                              <div
-                                key={setIndex}
-                                className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
-                              >
-                                {/* Exercise name (only show on first set) */}
-                                <div className="col-span-2">
-                                  {setIndex === 0 && (
-                                    <div>
-                                      <div className="font-medium text-gray-900">{exercise.name}</div>
-                                      {exercise.exercise_notes && (
-                                        <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="col-span-1 text-center text-sm text-gray-600">{set.set_number}</div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.reps || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="10"
-                                  />
-                                </div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.weight || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="kg"
-                                  />
-                                </div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.rpe || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="7"
-                                  />
-                                </div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.rest || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="60s"
-                                  />
-                                </div>
-
-                                <div className="col-span-2 flex justify-end gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
-                                  >
-                                    <Copy className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))
-                          ) : // Render sets directly if non-periodized
-                          exercise.sets && exercise.sets.length > 0 ? (
-                            exercise.sets.map((set, setIndex) => (
-                              <div
-                                key={setIndex}
-                                className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
-                              >
-                                {/* Exercise name (only show on first set) */}
-                                <div className="col-span-2">
-                                  {setIndex === 0 && (
-                                    <div>
-                                      <div className="font-medium text-gray-900">{exercise.name}</div>
-                                      {exercise.exercise_notes && (
-                                        <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="col-span-1 text-center text-sm text-gray-600">{set.set_number}</div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.reps || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="10"
-                                  />
-                                </div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.weight || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="kg"
-                                  />
-                                </div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.rpe || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="7"
-                                  />
-                                </div>
-
-                                <div className="col-span-1">
-                                  <Input
-                                    value={set.rest || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
-                                    }
-                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                    placeholder="60s"
-                                  />
-                                </div>
-
-                                <div className="col-span-2 flex justify-end gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
-                                  >
-                                    <Copy className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="grid grid-cols-9 gap-4 py-3 px-4 items-center">
+                          {/* Now, regardless of periodized or not, we always access sets from the current week's exercise */}
+                          {programState.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[
+                            exerciseIndex
+                          ]?.sets?.map((set, setIndex) => (
+                            <div
+                              key={setIndex}
+                              className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
+                            >
+                              {/* Exercise name (only show on first set) */}
                               <div className="col-span-2">
-                                <div className="font-medium text-gray-900">{exercise.name}</div>
-                                {exercise.exercise_notes && (
-                                  <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
+                                {setIndex === 0 && (
+                                  <div>
+                                    <div className="font-medium text-gray-900">{exercise.exercise}</div>
+                                    {exercise.exercise_notes && (
+                                      <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                              <div className="col-span-5 text-center text-gray-500 text-sm">No sets defined</div>
-                              <div className="col-span-2"></div>
+
+                              <div className="col-span-1 text-center text-sm text-gray-600">{set.set_number}</div>
+
+                              <div className="col-span-1">
+                                <Input
+                                  value={set.reps || ""}
+                                  onChange={(e) =>
+                                    updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
+                                  }
+                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                  placeholder="10"
+                                />
+                              </div>
+
+                              <div className="col-span-1">
+                                <Input
+                                  value={set.weight || ""}
+                                  onChange={(e) =>
+                                    updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
+                                  }
+                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                  placeholder="kg"
+                                />
+                              </div>
+
+                              <div className="col-span-1">
+                                <Input
+                                  value={set.rpe || ""}
+                                  onChange={(e) =>
+                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
+                                  }
+                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                  placeholder="7"
+                                />
+                              </div>
+
+                              <div className="col-span-1">
+                                <Input
+                                  value={set.rest || ""}
+                                  onChange={(e) =>
+                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
+                                  }
+                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                  placeholder="60s"
+                                />
+                              </div>
+
+                              <div className="col-span-2 flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
+                                >
+                                  <Copy className="h-4 w-4 text-gray-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-gray-500" />
+                                </Button>
+                              </div>
                             </div>
-                          )}
+                          ))}
 
                           {/* Add set button */}
                           <div className="grid grid-cols-9 gap-4 py-2 px-4">
