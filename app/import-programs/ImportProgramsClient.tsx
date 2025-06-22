@@ -557,7 +557,7 @@ export default function ImportProgramsClient() {
           <Button
             onClick={handleConvert}
             disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
-            className="max-w-xs mx-auto h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] mb-8 font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-fit px-8 h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] mb-8 font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isProcessing ? "Processing..." : "Convert"}
           </Button>
@@ -570,7 +570,8 @@ export default function ImportProgramsClient() {
             </p>
           </div>
 
-          <Card className="max-w-2xl mx-auto p-6 bg-blue-50 border-blue-200">
+          {/* This card is now replaced by the popup */}
+          {/* <Card className="max-w-2xl mx-auto p-6 bg-blue-50 border-blue-200">
             <div className="flex items-start text-left">
               <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
                 <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
@@ -595,7 +596,7 @@ export default function ImportProgramsClient() {
                 </ol>
               </div>
             </div>
-          </Card>
+          </Card> */}
         </div>
 
         {/* Previously Imported Programs */}

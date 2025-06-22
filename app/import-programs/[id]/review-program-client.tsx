@@ -441,14 +441,20 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={revertChanges} disabled={!hasChanges || isSaving}>
+          <Button
+            variant="ghost"
+            onClick={revertChanges}
+            disabled={!hasChanges || isSaving}
+            className="flex items-center gap-2 text-gray-700 hover:bg-gray-100"
+          >
+            <RotateCcw className="h-4 w-4" />
             Revert
           </Button>
           <Button
             className={
               justSaved && !hasChanges
-                ? "bg-yellow-400 text-gray-800 cursor-not-allowed opacity-75 flex items-center gap-2"
-                : "bg-yellow-400 hover:bg-yellow-500 text-gray-800 flex items-center gap-2"
+                ? "bg-lime-400 text-gray-800 cursor-not-allowed opacity-75 flex items-center gap-2"
+                : "bg-lime-400 hover:bg-lime-500 text-gray-800 flex items-center gap-2"
             }
             onClick={handleSaveChanges}
             disabled={isSaving || (justSaved && !hasChanges)}
