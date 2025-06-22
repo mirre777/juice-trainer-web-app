@@ -16,7 +16,7 @@ The Google Sheets import system enables trainers to:
 ### Core Functionality
 - **URL-based Import**: Trainers paste Google Sheets URLs to import programs
 - **Real-time Status Updates**: Live updates on import processing status
-- **AI + Human Review**: Combines AI processing with human quality assurance
+- **AI &#43; Human Review**: Combines AI processing with human quality assurance
 - **Import History**: Track all previous imports with searchable history
 - **Status Notifications**: Visual notifications when imports are ready for review
 
@@ -124,7 +124,7 @@ The Google Sheets import system enables trainers to:
 - Saved links selection
 - Import progress tracking
 
-## Authentication & Permissions
+## Authentication &#43; Permissions
 
 ### Google Sheets Access
 - Requires Google OAuth authentication
@@ -225,7 +225,7 @@ const unsubscribe = onSnapshot(q, (querySnapshot) => {
 - No permanent storage of Google Sheets content
 - User can delete import history
 
-## Monitoring & Analytics
+## Monitoring &#43; Analytics
 
 ### Import Metrics
 - Track import success/failure rates
