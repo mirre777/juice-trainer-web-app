@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
-import { Search, Sparkles, FileSpreadsheet, ChevronRight } from "lucide-react"
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
+import { Search, FileSpreadsheet, ChevronRight, X } from "lucide-react"
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { useEffect, useState, useMemo } from "react"
@@ -169,6 +169,12 @@ export default function ImportProgramsClient() {
   })
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false) // Moved here
+  const [doNotShowInstructionsAgain, setDoNotShowInstructionsAgain] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("doNotShowInstructionsAgain") === "true"
+    }
+    return false
+  })
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -547,17 +553,17 @@ export default function ImportProgramsClient() {
               onChange={(e) => setGoogleSheetsLink(e.target.value)}
               className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
               required
-              onFocus={() => setShowInstructionsDialog(true)} // Added onFocus here
+              onFocus={() => {
+                if (!doNotShowInstructionsAgain) {
+                  setShowInstructionsDialog(true)
+                }
+              }}
             />
           </div>
 
           <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
             <p className="text-[14px] font-inter text-right flex items-center justify-end gap-2 text-gray-500">
-              <Sparkles className="w-5 h-5 text-yellow-400" />
-              <span>
-                Our AI will convert it into a structured program. You can still review and edit it before you send it to
-                your clients in the Juice app.
-              </span>
+              <span>You can still review and edit it before you send it to your clients in the Juice mobile app.</span>
             </p>
             <Button
               onClick={handleConvert}
@@ -731,6 +737,16 @@ export default function ImportProgramsClient() {
         {/* Instructions Dialog - Moved here */}
         <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
           <DialogContent className="sm:max-w-lg font-inter">
+            <DialogClose asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </DialogClose>
             <div className="p-4">
               <div className="flex items-center mb-4">
                 <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
@@ -759,6 +775,25 @@ export default function ImportProgramsClient() {
                   <span>Paste the link into the field above.</span>
                 </li>
               </ol>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  localStorage.setItem("doNotShowInstructionsAgain", "true")
+                  setDoNotShowInstructionsAgain(true)
+                  setShowInstructionsDialog(false)
+                }}
+                className="text-[14px] font-inter"
+              >
+                Don't show me again
+              </Button>
+              <Button
+                onClick={() => setShowInstructionsDialog(false)}
+                className="bg-black hover:bg-gray-800 text-white text-[14px] font-inter"
+              >
+                Ok Thanks
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
