@@ -513,7 +513,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               className="flex items-center gap-2"
             >
               <RotateCcw className="h-4 w-4" />
-              {programState.is_periodized ? "Periodized" : "Non-Periodized"}
+              {programState.is_periodized ? "Switch to Non-Periodized" : "Switch to Periodized"}
             </Button>
           </div>
         </div>
