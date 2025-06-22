@@ -16,10 +16,10 @@ export interface WorkoutRoutine {
 }
 
 export interface ProgramExercise {
-  exercise: string
+  name: string
   exercise_category: string
   exercise_video?: string | null
-  exercise_notes?: string | null
+  notes?: string | null // Changed from 'exercise_notes' to 'notes'
   weeks: ExerciseWeek[]
   // For non-periodized: weeks array has same values repeated
   // For periodized: weeks array has different values per week
@@ -29,6 +29,7 @@ export interface ExerciseWeek {
   week_number: number
   set_count: number
   sets: WorkoutSet[]
+  routines?: WorkoutRoutine[] // Added routines to ExerciseWeek for periodized programs
 }
 
 export interface WorkoutSet {
@@ -82,9 +83,9 @@ export const SAMPLE_PERIODIZED_PROGRAM: WorkoutProgram = {
       routine_rank: "1",
       exercises: [
         {
-          exercise: "Bench Press",
+          name: "Bench Press",
           exercise_category: "Push",
-          exercise_notes: "Focus on progressive overload",
+          notes: "Focus on progressive overload", // Changed from 'exercise_notes' to 'notes'
           weeks: [
             // Week 1-3: Volume Phase
             {

@@ -2,6 +2,7 @@ import { sign, verify } from "jsonwebtoken"
 import { cookies } from "next/headers"
 import { encrypt, decrypt } from "@/lib/utils/crypto"
 import { ErrorType, handleServerError, tryCatch } from "@/lib/utils/error-handler"
+import { OAuth2Client } from "google-auth-library"
 
 // Types for tokens
 export interface TokenData {
@@ -17,6 +18,7 @@ const ACCESS_TOKEN_COOKIE = "google_access_token"
 const REFRESH_TOKEN_COOKIE = "google_refresh_token"
 const TOKEN_EXPIRY_COOKIE = "google_token_expiry"
 const TOKEN_SCOPE_COOKIE = "google_token_scope"
+const GOOGLE_TOKEN_COOKIE = "google_token"
 
 const JWT_SECRET = process.env.JWT_SECRET || "default_jwt_secret_key" // Replace with a strong, secret key in production
 
@@ -85,6 +87,24 @@ export async function storeTokens(tokenData: TokenData): Promise<void> {
         path: "/",
         sameSite: "lax",
       })
+
+      // Store Google token securely in a cookie
+      const googleTokenData = {
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expiry_date: tokenData.expires_at,
+        token_type: tokenData.token_type,
+        scope: tokenData.scope,
+      }
+
+      cookieStore.set({
+        name: GOOGLE_TOKEN_COOKIE,
+        value: await encrypt(JSON.stringify(googleTokenData)),
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+        path: "/",
+      })
     },
     (error) => {
       throw handleServerError(error, {
@@ -144,6 +164,7 @@ export function clearTokens(): void {
       cookieStore.delete(REFRESH_TOKEN_COOKIE)
       cookieStore.delete(TOKEN_EXPIRY_COOKIE)
       cookieStore.delete(TOKEN_SCOPE_COOKIE)
+      cookieStore.delete(GOOGLE_TOKEN_COOKIE)
     },
     (error) => {
       throw handleServerError(error, {
@@ -157,6 +178,13 @@ export function clearTokens(): void {
 }
 
 // Check if token is expired
+const isTokenExpiredHelper = (tokenData: any) => {
+  if (!tokenData || !tokenData.expiry_date) {
+    return true
+  }
+  return Date.now() >= tokenData.expiry_date
+}
+
 export function isTokenExpired(tokenData: TokenData): boolean {
   // Add a 5-minute buffer to handle clock skew
   const bufferTime = 5 * 60 * 1000 // 5 minutes in milliseconds
@@ -164,8 +192,53 @@ export function isTokenExpired(tokenData: TokenData): boolean {
 }
 
 // Get token from server (for server components)
-export async function getTokenFromServer(): Promise<TokenData | null> {
-  return getTokens()
+export async function getTokenFromServer(): Promise<OAuth2Client | null> {
+  try {
+    const cookieStore = cookies()
+    const encryptedToken = cookieStore.get(GOOGLE_TOKEN_COOKIE)?.value
+
+    if (!encryptedToken) {
+      console.log("No encrypted Google token found in cookies.")
+      return null
+    }
+
+    const tokenData = JSON.parse(await decrypt(encryptedToken))
+
+    if (!tokenData) {
+      console.error("Failed to decrypt token data.")
+      return null
+    }
+
+    const oauth2Client = new OAuth2Client(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.NEXT_PUBLIC_APP_URL + "/api/auth/google/callback",
+    )
+
+    oauth2Client.setCredentials(tokenData)
+
+    // Check if the token is expired and refresh if necessary
+    if (isTokenExpiredHelper(tokenData)) {
+      console.log("Google token expired, attempting to refresh...")
+      const { credentials } = await oauth2Client.refreshAccessToken()
+      oauth2Client.setCredentials(credentials)
+
+      // Update the cookie with the new token
+      const newEncryptedToken = await encrypt(JSON.stringify(credentials)) // Re-encrypt the new token
+      cookieStore.set(GOOGLE_TOKEN_COOKIE, newEncryptedToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+        path: "/",
+      })
+      console.log("Google token refreshed and cookie updated.")
+    }
+
+    return oauth2Client
+  } catch (error) {
+    console.error("Error in getTokenFromServer:", error)
+    return null
+  }
 }
 
 // JWT Token Service
