@@ -1,8 +1,21 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronDown, ChevronUp, Copy, Trash2, Calendar, RotateCcw, Plus, Check } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Trash2,
+  Calendar,
+  RotateCcw,
+  Plus,
+  Check,
+  User,
+  MessageSquare,
+  Info,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -38,6 +51,11 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
+  const [showSendProgramDialog, setShowSendProgramDialog] = useState(false)
+  const [messageToClient, setMessageToClient] = useState("")
+  // Placeholder values as client data is not directly available in importData
+  const clientNameForModal = "Emilie Rentinger"
+  const dateForModal = "May 9, 2025"
 
   const programWeeks = weeks.length || 4
 
@@ -200,6 +218,71 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
     return "Save Changes"
   }
 
+  // Initialize data from importData
+  useEffect(() => {
+    try {
+      // Handle the data structure from the attachment
+      if (importData.program?.weeks && Array.isArray(importData.program.weeks)) {
+        setWeeks(importData.program.weeks)
+      } else {
+        // Fallback: create weeks structure from the data
+        const weeksData = []
+
+        // Check if we have the structure from the attachment
+        if (importData.program && typeof importData.program === "object") {
+          // Try to extract weeks from the nested structure
+          const programData = importData.program
+
+          if (programData.weeks && Array.isArray(programData.weeks)) {
+            setWeeks(programData.weeks)
+          } else {
+            // Create a default structure
+            weeksData.push({
+              week_number: 1,
+              routines: programData.routines || [],
+            })
+            setWeeks(weeksData)
+          }
+        }
+      }
+
+      if (importData.program?.notes) {
+        setProgramNotes(importData.program.notes)
+      }
+      setHasChanges(false) // Reset hasChanges on initial load or importData change
+      setJustSaved(false) // Reset justSaved on initial load or importData change
+    } catch (error) {
+      console.error("Error parsing program data:", error)
+      // Create minimal structure to avoid crashes
+      setWeeks([
+        {
+          week_number: 1,
+          routines: [],
+        },
+      ])
+    }
+  }, [importData])
+
+  const revertChanges = () => {
+    setProgramTitle(
+      importData.name || importData.programName || importData.program?.program_title || "Untitled Program",
+    )
+    setProgramNotes(importData.program?.notes || "")
+    setWeeks(importData.program?.weeks || [])
+    setIsPeriodized(importData.program?.is_periodized || false)
+    setHasChanges(false)
+    setJustSaved(false)
+    // Optionally, reset expanded routines if needed
+    setExpandedRoutines({ "0": true })
+  }
+
+  const handleSendProgram = () => {
+    // In a real application, this would trigger an API call to send the program to the client
+    console.log("Sending program to client:", programTitle, "with message:", messageToClient)
+    setShowSendProgramDialog(false)
+    // Optionally, show a success toast notification
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center mb-2">
@@ -223,6 +306,9 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
           <Button variant="outline" onClick={() => setShowConfirmDialog(true)}>
             Cancel
           </Button>
+          <Button variant="outline" onClick={revertChanges} disabled={!hasChanges || isSaving}>
+            Revert
+          </Button>
           <Button
             className={
               justSaved && !hasChanges
@@ -242,6 +328,13 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
             ) : (
               "Save Changes"
             )}
+          </Button>
+          <Button
+            className="bg-black hover:bg-gray-800 text-white"
+            onClick={() => setShowSendProgramDialog(true)}
+            disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
+          >
+            Send to Client
           </Button>
         </div>
       </div>
@@ -534,6 +627,52 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
           <Button variant="outline">+ Add Routine</Button>
         </div>
       )}
+
+      {/* Send Program Confirmation Dialog */}
+      <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Sending Program</DialogTitle>
+            <DialogDescription>You are about to send the following program:</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Card className="p-4">
+              <h3 className="font-bold text-lg mb-2">{programTitle}</h3>
+              <div className="flex items-center text-sm text-gray-600 mb-1">
+                <User className="h-4 w-4 mr-2" /> {clientNameForModal}
+              </div>
+              <div className="flex items-center text-sm text-gray-600 mb-3">
+                <Calendar className="h-4 w-4 mr-2" /> {dateForModal}
+              </div>
+              <div className="flex items-start text-sm text-gray-600">
+                <MessageSquare className="h-4 w-4 mr-2 mt-1" />
+                <Textarea
+                  value={messageToClient}
+                  onChange={(e) => setMessageToClient(e.target.value)}
+                  placeholder="Add a message to your client (optional)"
+                  className="flex-1"
+                  rows={3}
+                />
+              </div>
+            </Card>
+
+            <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
+              <Info className="h-4 w-4" />
+              <span>
+                We will send your client an email and app notification. They can still access their old program.
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)}>
+              Cancel
+            </Button>
+            <Button className="bg-lime-400 hover:bg-lime-500 text-gray-800" onClick={handleSendProgram}>
+              Send Program
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
