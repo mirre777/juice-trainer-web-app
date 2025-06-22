@@ -494,7 +494,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               id="program-title"
               value={programState.program_title}
               onChange={handleProgramTitleChange}
-              className="w-full border-transparent focus:border-lime-400"
+              className="w-full border-transparent focus:border-lime-500"
             />
           </div>
           <div>
@@ -506,14 +506,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               type="number"
               value={programState.program_weeks}
               onChange={handleProgramWeeksChange}
-              className="w-full border-transparent focus:border-lime-400"
+              className="w-full border-transparent focus:border-lime-500"
               min={1}
             />
           </div>
         </div>
 
         {/* Program Notes */}
-        <div className="mb-6">
+        <div className="mb-8">
           {" "}
           {/* Added mb-6 here */}
           <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
@@ -523,7 +523,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             id="program-notes"
             value={programState.program_notes || ""}
             onChange={handleProgramNotesChange}
-            className="w-full min-h-[100px] border-transparent focus:border-lime-400"
+            className="w-full min-h-[100px] border-transparent focus:border-lime-500"
             placeholder="Add notes about this program..."
           />
         </div>
