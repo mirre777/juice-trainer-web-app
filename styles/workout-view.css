@@ -1,0 +1,14 @@
+/* Add specific styles for the workout view */
+.view-history-link {
+  color: black;
+  border-bottom: 2px solid #d2ff28;
+  padding: 2px 4px;
+}
+
+.view-history-link:hover {
+  background-color: rgba(210, 255, 40, 0.1);
+}
+
+.pr-indicator {
+  color: #f59e0b; /* amber-500 */
+}

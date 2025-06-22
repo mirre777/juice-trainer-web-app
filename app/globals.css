@@ -1,0 +1,232 @@
+@import url("https://fonts.googleapis.com/css2?family=Sen:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap");
+@import "../styles/scrollbar-hide.css";
+@import "../styles/chart-styles.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+
+  --primary: 142.1 76.2% 36.3%;
+  --primary-foreground: 355.7 100% 97.3%;
+
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 142.1 76.2% 36.3%;
+
+  --radius: 0.5rem;
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-primary: 240 5.9% 10%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 217.2 91.2% 59.8%;
+
+  /* Streamlined chart colors */
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+}
+
+.dark {
+  --background: 20 14.3% 4.1%;
+  --foreground: 0 0% 95%;
+
+  --card: 24 9.8% 10%;
+  --card-foreground: 0 0% 95%;
+
+  --popover: 0 0% 9%;
+  --popover-foreground: 0 0% 95%;
+
+  --primary: 142.1 70.6% 45.3%;
+  --primary-foreground: 144.9 80.4% 10%;
+
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 0 0% 15%;
+  --muted-foreground: 240 5% 64.9%;
+
+  --accent: 12 6.5% 15.1%;
+  --accent-foreground: 0 0% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 85.7% 97.3%;
+
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 142.4 71.8% 29.2%;
+}
+
+.font-sen {
+  font-family: "Sen", sans-serif;
+}
+
+.font-inter {
+  font-family: "Inter", sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Add this to hide scrollbars but maintain scrolling functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+
+  @keyframes pulse-twice {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .animate-pulse-twice {
+    animation: pulse-twice 2s ease-in-out 2;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sen), sans-serif;
+  }
+}
+
+/* Set default text sizes */
+h1,
+.h1 {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+h2,
+.h2 {
+  font-size: 24px; /* Changed from 28px */
+  font-weight: 700;
+}
+
+h3,
+.h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+p,
+.body {
+  font-size: 14px;
+}
+
+.text-small {
+  font-size: 12px;
+}
+
+/* Text colors */
+.text-black {
+  color: #000000;
+}
+
+.text-darkgray {
+  color: #555555;
+}
+
+.text-lightgray {
+  color: #999999;
+}
+
+/* Update the font classes */
+.font-primary {
+  font-family: var(--font-sen), sans-serif;
+}
+
+.font-secondary {
+  font-family: var(--font-inter), sans-serif;
+}
+
+/* Custom styles for calendar integration */
+.gapi-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.calendar-event {
+  transition: all 0.2s ease-in-out;
+}
+
+.calendar-event:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Custom styles for workout view */
+.view-history-link {
+  color: black !important;
+  border-bottom: 2px solid #d2ff28 !important;
+  padding: 2px 4px !important;
+  background-color: transparent !important;
+}
+
+.view-history-link:hover {
+  background-color: rgba(210, 255, 40, 0.1) !important;
+}
+
+.trophy-icon {
+  color: #f59e0b !important; /* amber-500 */
+}
