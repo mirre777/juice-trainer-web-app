@@ -35,12 +35,12 @@ import {
 } from "@/components/ui/dialog"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
 
-interface PeriodizedReviewClientProps {
+interface ReviewProgramClientProps {
   importData: any
-  programData: any // This prop seems redundant if importData contains everything
+  // programData: any // This prop is redundant if importData contains everything
 }
 
-export default function PeriodizedReviewClient({ importData }: PeriodizedReviewClientProps) {
+export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
   const router = useRouter()
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
@@ -55,7 +55,6 @@ export default function PeriodizedReviewClient({ importData }: PeriodizedReviewC
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
 
   // Placeholder values as client data is not directly available in importData
-  // In a real app, you'd fetch this based on a client ID associated with the importData
   const clientNameForModal = "Emilie Rentinger"
   const dateForModal = "May 9, 2025" // Or format new Date()
 
@@ -70,14 +69,9 @@ export default function PeriodizedReviewClient({ importData }: PeriodizedReviewC
           ? initialProgram.program_weeks
           : 4
 
-      // If it's a non-periodized program from import, ensure 'weeks' is empty and 'routines' is populated
-      if (!initialProgram.is_periodized && !initialProgram.routines?.length && initialProgram.weeks?.length) {
-        // This handles cases where a non-periodized program might have been imported with a 'weeks' array
-        // but should actually use 'routines' directly. We'll take the first week's routines.
-        initialProgram.routines = initialProgram.weeks[0]?.routines || []
-        initialProgram.weeks = []
-      } else if (initialProgram.is_periodized && !initialProgram.weeks?.length && initialProgram.routines?.length) {
-        // If it's marked periodized but only has routines, convert to weeks
+      // Normalize data structure:
+      // If it's marked periodized but only has routines (old non-periodized structure), convert to weeks
+      if (initialProgram.is_periodized && !initialProgram.weeks?.length && initialProgram.routines?.length) {
         const newWeeks: ExerciseWeek[] = []
         for (let i = 0; i < initialProgram.program_weeks; i++) {
           newWeeks.push({
@@ -89,6 +83,12 @@ export default function PeriodizedReviewClient({ importData }: PeriodizedReviewC
         }
         initialProgram.weeks = newWeeks
         initialProgram.routines = [] // Clear top-level routines for periodized
+      }
+      // If it's non-periodized but has a 'weeks' array (e.g., from a previous periodized state),
+      // take the first week's routines and clear 'weeks'.
+      else if (!initialProgram.is_periodized && initialProgram.weeks?.length) {
+        initialProgram.routines = initialProgram.weeks[0]?.routines || []
+        initialProgram.weeks = []
       }
 
       setProgramState(initialProgram)
@@ -629,7 +629,93 @@ export default function PeriodizedReviewClient({ importData }: PeriodizedReviewC
                       {routine.exercises.map((exercise, exerciseIndex) => (
                         <div key={exerciseIndex} className="border-b border-gray-200">
                           {/* Exercise sets */}
-                          {exercise.sets && exercise.sets.length > 0 ? (
+                          {exercise.weeks && programState.is_periodized ? (
+                            // Render sets for the current week if periodized
+                            exercise.weeks[currentWeek - 1]?.sets?.map((set, setIndex) => (
+                              <div
+                                key={setIndex}
+                                className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
+                              >
+                                {/* Exercise name (only show on first set) */}
+                                <div className="col-span-2">
+                                  {setIndex === 0 && (
+                                    <div>
+                                      <div className="font-medium text-gray-900">{exercise.exercise}</div>
+                                      {exercise.exercise_notes && (
+                                        <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="col-span-1 text-center text-sm text-gray-600">{set.set_number}</div>
+
+                                <div className="col-span-1">
+                                  <Input
+                                    value={set.reps || ""}
+                                    onChange={(e) =>
+                                      updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
+                                    }
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                    placeholder="10"
+                                  />
+                                </div>
+
+                                <div className="col-span-1">
+                                  <Input
+                                    value={set.weight || ""}
+                                    onChange={(e) =>
+                                      updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
+                                    }
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                    placeholder="kg"
+                                  />
+                                </div>
+
+                                <div className="col-span-1">
+                                  <Input
+                                    value={set.rpe || ""}
+                                    onChange={(e) =>
+                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
+                                    }
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                    placeholder="7"
+                                  />
+                                </div>
+
+                                <div className="col-span-1">
+                                  <Input
+                                    value={set.rest || ""}
+                                    onChange={(e) =>
+                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
+                                    }
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
+                                    placeholder="60s"
+                                  />
+                                </div>
+
+                                <div className="col-span-2 flex justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
+                                  >
+                                    <Copy className="h-4 w-4 text-gray-500" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-gray-500" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          ) : // Render sets directly if non-periodized
+                          exercise.sets && exercise.sets.length > 0 ? (
                             exercise.sets.map((set, setIndex) => (
                               <div
                                 key={setIndex}
