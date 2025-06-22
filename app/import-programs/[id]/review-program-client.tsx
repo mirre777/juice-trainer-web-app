@@ -17,6 +17,8 @@ import {
   User,
   MessageSquare,
   Info,
+  Save,
+  Send,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -445,8 +447,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className={
               justSaved && !hasChanges
-                ? "bg-lime-400 text-gray-800 cursor-not-allowed opacity-75"
-                : "bg-lime-400 hover:bg-lime-500 text-gray-800"
+                ? "bg-[#28a745] text-white cursor-not-allowed opacity-75 flex items-center gap-2"
+                : "bg-[#28a745] hover:bg-[#218838] text-white flex items-center gap-2"
             }
             onClick={handleSaveChanges}
             disabled={isSaving || (justSaved && !hasChanges)}
@@ -454,19 +456,23 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             {isSaving ? (
               "Saving..."
             ) : justSaved && !hasChanges ? (
-              <div className="flex items-center gap-2">
+              <>
                 <Check className="h-4 w-4" />
                 Saved
-              </div>
+              </>
             ) : (
-              "Save Changes"
+              <>
+                <Save className="h-4 w-4" />
+                Save Changes
+              </>
             )}
           </Button>
           <Button
-            className="bg-black hover:bg-gray-800 text-white"
+            className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => setShowSendProgramDialog(true)}
             disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
           >
+            <Send className="h-4 w-4" />
             Send to Client
           </Button>
         </div>
