@@ -155,9 +155,18 @@ export default function ImportProgramsClient() {
   const [imports, setImports] = useState<SheetsImport[]>([])
   const [isLoadingImports, setIsLoadingImports] = useState(false)
   const [completedImports, setCompletedImports] = useState<SheetsImport[]>([])
-  const [dismissedNotifications, setDismissedNotifications] = new Set(
-    typeof window !== "undefined" ? JSON.parse(localStorage.getItem("dismissedImportNotifications") || "[]") : [],
-  )
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("dismissedImportNotifications")
+        return new Set(saved ? JSON.parse(saved) : [])
+      } catch (error) {
+        console.error("Failed to parse dismissed notifications from localStorage", error)
+        return new Set()
+      }
+    }
+    return new Set()
+  })
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -280,18 +289,6 @@ export default function ImportProgramsClient() {
   }, [userId, dismissedNotifications, activeToastId])
 
   // Persist dismissed notifications to localStorage
-  useEffect(() => {
-    const savedDismissed = localStorage.getItem("dismissedImportNotifications")
-    if (savedDismissed) {
-      try {
-        const parsed = JSON.parse(savedDismissed)
-        setDismissedNotifications(new Set(parsed))
-      } catch (error) {
-        console.error("[ImportPrograms] Error parsing saved dismissed notifications:", error)
-      }
-    }
-  }, [])
-
   useEffect(() => {
     localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
   }, [dismissedNotifications])
@@ -557,13 +554,13 @@ export default function ImportProgramsClient() {
           </div>
 
           <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
-            <div className="flex items-center text-gray-500">
-              <Sparkles className="w-5 h-5 mr-2 text-yellow-400" />
-              <p className="text-[14px] font-inter text-right">
+            <p className="text-[14px] font-inter text-right flex items-center justify-end gap-2 text-gray-500">
+              <Sparkles className="w-5 h-5 text-yellow-400" />
+              <span>
                 Our AI will convert it into a structured program. You can still review and edit it before you send it to
                 your clients in the Juice app.
-              </p>
-            </div>
+              </span>
+            </p>
             <Button
               onClick={handleConvert}
               disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
