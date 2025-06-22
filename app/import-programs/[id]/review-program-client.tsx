@@ -514,7 +514,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         </div>
 
         {/* Program Notes */}
-        <div className="mb-6"> {/* Added mb-6 here */}
+        <div className="mb-6">
+          {" "}
+          {/* Added mb-6 here */}
           <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
             Program Notes
           </label>
@@ -522,7 +524,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             id="program-notes"
             value={programState.program_notes || ""}
             onChange={handleProgramNotesChange}
-            className="w-full min-h-[100px] border-transparent focus:border-gray-300\" {/* Changed focus color */}
+            className="w-full min-h-[100px] border-transparent focus:border-lime-400"
             placeholder="Add notes about this program..."
           />
         </div>
