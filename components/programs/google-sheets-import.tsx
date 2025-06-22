@@ -271,13 +271,11 @@ export function GoogleSheetsImport() {
           <div className="flex flex-col space-y-4 py-4">
             <p className="text-sm text-gray-500">Enter the URL of your Google Sheet to save it for quick access.</p>
             <Input
-              id="google-sheets-link"
-              type="url"
               placeholder="https://docs.google.com/spreadsheets/d/..."
               value={sheetLink}
               onChange={(e) => setSheetLink(e.target.value)}
-              onFocus={() => setShowInstructionsDialog(true)}
               className="w-full"
+              onFocus={() => setShowInstructionsDialog(true)}
             />
           </div>
           <DialogFooter>
@@ -289,44 +287,36 @@ export function GoogleSheetsImport() {
         </DialogContent>
       </Dialog>
 
-      {/* Google Sheets Instructions Modal */}
       <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
-        <DialogContent className="sm:max-w-lg font-sen">
+        <DialogContent className="sm:max-w-lg font-inter">
           <div className="p-4">
-            <div className="flex items-start text-left bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
+            <div className="flex items-center mb-4">
+              <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
                 <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
               </div>
-              <div>
-                <h3 className="font-medium text-gray-900 mb-3 text-[14px] font-sen">
-                  How to get your Google Sheets link:
-                </h3>
-                <ol className="space-y-2 text-[12px] text-gray-700 font-inter">
-                  <li className="flex">
-                    <span className="font-medium text-blue-600 mr-2">1.</span>
-                    Open your workout program in Google Sheets
-                  </li>
-                  <li className="flex">
-                    <span className="font-medium text-blue-600 mr-2">2.</span>
-                    Click Share → "Anyone with the link can view"
-                  </li>
-                  <li className="flex">
-                    <span className="font-medium text-blue-600 mr-2">3.</span>
-                    Paste the link above
-                  </li>
-                </ol>
-              </div>
+              <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
             </div>
-            <div className="mt-6">
-              <img
-                src="/google-sheets-share-instructions.png"
-                alt="Google Sheets share instructions"
-                className="w-full h-auto rounded-md border border-gray-200"
-              />
-            </div>
-            <div className="flex justify-end mt-6">
-              <Button onClick={() => setShowInstructionsDialog(false)}>Got It</Button>
-            </div>
+            <ol className="space-y-4 text-[14px] text-gray-700">
+              <li className="flex items-start">
+                <span className="font-medium text-blue-600 mr-2">1.</span>
+                <span>Open your workout program in Google Sheets.</span>
+              </li>
+              <li className="flex flex-col items-start">
+                <div className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">2.</span>
+                  <span>Click "Share" → "Anyone with the link can view".</span>
+                </div>
+                <img
+                  src="/google-sheets-share-dialog.png"
+                  alt="Google Sheets Share Dialog"
+                  className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
+                />
+              </li>
+              <li className="flex items-start">
+                <span className="font-medium text-blue-600 mr-2">3.</span>
+                <span>Paste the link into the field above.</span>
+              </li>
+            </ol>
           </div>
         </DialogContent>
       </Dialog>
