@@ -554,10 +554,10 @@ export default function ImportProgramsClient() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-4 max-w-2xl mx-auto mb-8">
+          <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
             <div className="flex items-center text-gray-500">
               <Sparkles className="w-5 h-5 mr-2 text-yellow-400" />
-              <p className="text-[14px] font-inter text-left">
+              <p className="text-[14px] font-inter text-right">
                 Our AI will convert it into a structured program. You can still review and edit it before you send it to
                 your clients in the Juice app.
               </p>
@@ -584,7 +584,7 @@ export default function ImportProgramsClient() {
                     placeholder="Search programs..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-72 bg-gray-50 border-gray-200 text-[14px] font-inter focus:border-primary focus:ring-primary"
+                    className="pl-10 w-72 bg-white border-black text-[14px] font-inter focus:border-primary focus:ring-primary"
                   />
                 </div>
               </div>
