@@ -929,7 +929,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 router.push("/import-programs")
               }}
             >
-              Discard Changes
+              Leave Without Saving
             </Button>
           </DialogFooter>
         </DialogContent>

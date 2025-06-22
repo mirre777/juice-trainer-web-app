@@ -246,7 +246,11 @@ export function GoogleSheetsImport() {
           </div>
         </div>
       ) : (
-        <Button onClick={handleConnectGoogleSheets} disabled={isLoading} className="mt-4">
+        <Button
+          onClick={handleConnectGoogleSheets}
+          disabled={isLoading}
+          className="mt-4 w-fit bg-lime-200 text-lime-800 hover:bg-lime-300"
+        >
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
