@@ -447,8 +447,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className={
               justSaved && !hasChanges
-                ? "bg-[#28a745] text-white cursor-not-allowed opacity-75 flex items-center gap-2"
-                : "bg-[#28a745] hover:bg-[#218838] text-white flex items-center gap-2"
+                ? "bg-yellow-400 text-gray-800 cursor-not-allowed opacity-75 flex items-center gap-2"
+                : "bg-yellow-400 hover:bg-yellow-500 text-gray-800 flex items-center gap-2"
             }
             onClick={handleSaveChanges}
             disabled={isSaving || (justSaved && !hasChanges)}

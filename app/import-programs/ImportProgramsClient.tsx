@@ -533,7 +533,7 @@ export default function ImportProgramsClient() {
               placeholder="e.g., My Client's Strength Program"
               value={programNameInput}
               onChange={(e) => setProgramNameInput(e.target.value)}
-              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg  mb-4"
+              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400 mb-4"
               required
             />
 
@@ -549,7 +549,7 @@ export default function ImportProgramsClient() {
               placeholder="https://docs.google.com/spreadsheets/d/..."
               value={googleSheetsLink}
               onChange={(e) => setGoogleSheetsLink(e.target.value)}
-              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg "
+              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
               required
             />
           </div>
