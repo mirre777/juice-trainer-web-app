@@ -554,201 +554,183 @@ export default function ImportProgramsClient() {
             />
           </div>
 
-          <Button
-            onClick={handleConvert}
-            disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
-            className="w-fit px-8 h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] mb-8 font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isProcessing ? "Processing..." : "Convert"}
-          </Button>
-
-          <div className="flex items-center justify-center text-gray-500 mb-8">
-            <Sparkles className="w-5 h-5 mr-2 text-yellow-400" />
-            <p className="text-[14px] font-inter">
-              Our AI will convert it into a structured program that you can review, edit, and send to your clients in
-              the Juice app.
-            </p>
+          <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
+            <div className="flex items-center text-gray-500">
+              <Sparkles className="w-5 h-5 mr-2 text-yellow-400" />
+              <p className="text-[14px] font-inter">
+                Our AI will convert it into a structured program that you can review, edit, and send to your clients in
+                the Juice app.
+              </p>
+            </div>
+            <Button
+              onClick={handleConvert}
+              disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
+              className="w-fit px-8 h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? "Processing..." : "Convert"}
+            </Button>
           </div>
 
-          {/* This card is now replaced by the popup */}
-          {/* <Card className="max-w-2xl mx-auto p-6 bg-blue-50 border-blue-200">
-            <div className="flex items-start text-left">
-              <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 mt-0.5 flex-shrink-0">
-                <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
+          {/* Previously Imported Programs */}
+          <Card className="p-8" data-section="previously-imported">
+            <div className="border-t border-gray-100 pt-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-[18px] font-semibold text-gray-900 font-sen">Previously Imported Programs</h2>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search programs..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-72 bg-gray-50 border-gray-200 text-[14px] font-inter focus:border-primary focus:ring-primary"
+                  />
+                </div>
               </div>
-              <div>
-                <h3 className="font-medium text-gray-900 mb-3 text-[14px] font-sen">
-                  How to get your Google Sheets link:
-                </h3>
-                <ol className="space-y-2 text-[12px] text-gray-700 font-inter">
-                  <li className="flex">
-                    <span className="font-medium text-blue-600 mr-2">1.</span>
-                    Open your workout program in Google Sheets
-                  </li>
-                  <li className="flex">
-                    <span className="font-medium text-blue-600 mr-2">2.</span>
-                    Click Share → "Anyone with the link can view"
-                  </li>
-                  <li className="flex">
-                    <span className="font-medium text-blue-600 mr-2">3.</span>
-                    Paste the link above
-                  </li>
-                </ol>
-              </div>
-            </div>
-          </Card> */}
-        </div>
 
-        {/* Previously Imported Programs */}
-        <Card className="p-8" data-section="previously-imported">
-          <div className="border-t border-gray-100 pt-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-[18px] font-semibold text-gray-900 font-sen">Previously Imported Programs</h2>
+              {isLoadingImports && (
+                <div className="text-center py-8">
+                  <div className="animate-spin h-8 w-8 border-b-2 border-lime-400 rounded-full mx-auto mb-4"></div>
+                  <p className="text-[14px] text-gray-500 font-inter">Loading your imports...</p>
+                </div>
+              )}
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder="Search programs..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-72 bg-gray-50 border-gray-200 text-[14px] font-inter focus:border-primary focus:ring-primary"
-                />
-              </div>
-            </div>
+              {!isLoadingImports && filteredImports.length === 0 && (
+                <div className="text-center py-12">
+                  <FileSpreadsheet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-[18px] font-medium text-gray-900 mb-2 font-sen">No imports yet</h3>
+                  <p className="text-[14px] text-gray-500 font-inter">
+                    {searchTerm
+                      ? "No imports match your search. Try a different search term."
+                      : "Import your first Google Sheets workout program to get started."}
+                  </p>
+                </div>
+              )}
 
-            {isLoadingImports && (
-              <div className="text-center py-8">
-                <div className="animate-spin h-8 w-8 border-b-2 border-lime-400 rounded-full mx-auto mb-4"></div>
-                <p className="text-[14px] text-gray-500 font-inter">Loading your imports...</p>
-              </div>
-            )}
+              {!isLoadingImports && filteredImports.length > 0 && (
+                <div className="space-y-4">
+                  {filteredImports.map((importItem) => {
+                    const statusInfo = getStatusInfo(importItem.status)
+                    const isReady = importItem.status === "conversion_complete"
+                    const isReviewed = importItem.status === "reviewed"
+                    const isEditable = isReady || isReviewed
+                    const { date, dayName } = formatImportDate(importItem.createdAt)
 
-            {!isLoadingImports && filteredImports.length === 0 && (
-              <div className="text-center py-12">
-                <FileSpreadsheet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-[18px] font-medium text-gray-900 mb-2 font-sen">No imports yet</h3>
-                <p className="text-[14px] text-gray-500 font-inter">
-                  {searchTerm
-                    ? "No imports match your search. Try a different search term."
-                    : "Import your first Google Sheets workout program to get started."}
-                </p>
-              </div>
-            )}
-
-            {!isLoadingImports && filteredImports.length > 0 && (
-              <div className="space-y-4">
-                {filteredImports.map((importItem) => {
-                  const statusInfo = getStatusInfo(importItem.status)
-                  const isReady = importItem.status === "conversion_complete"
-                  const isReviewed = importItem.status === "reviewed"
-                  const isEditable = isReady || isReviewed
-                  const { date, dayName } = formatImportDate(importItem.createdAt)
-
-                  return (
-                    <div key={importItem.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
-                      <div className="flex-1 flex items-center space-x-3">
-                        <div className="flex flex-col">
-                          <EditableProgramName importItem={importItem} onNameUpdate={handleNameUpdate} />
-                          {date && (
-                            <div className="flex items-center space-x-2 mt-1">
-                              <span className="text-[12px] text-gray-500 font-inter">{dayName}</span>
-                              <span className="text-[12px] text-gray-400 font-inter">•</span>
-                              <span className="text-[12px] text-gray-500 font-inter">{date}</span>
-                            </div>
-                          )}
+                    return (
+                      <div key={importItem.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
+                        <div className="flex-1 flex items-center space-x-3">
+                          <div className="flex flex-col">
+                            <EditableProgramName importItem={importItem} onNameUpdate={handleNameUpdate} />
+                            {date && (
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span className="text-[12px] text-gray-500 font-inter">{dayName}</span>
+                                <span className="text-[12px] text-gray-400 font-inter">•</span>
+                                <span className="text-[12px] text-gray-500 font-inter">{date}</span>
+                              </div>
+                            )}
+                          </div>
+                          <Badge
+                            variant={statusInfo.variant}
+                            className={`text-[12px] font-normal font-inter ${statusInfo.className}`}
+                          >
+                            {statusInfo.text}
+                          </Badge>
                         </div>
-                        <Badge
-                          variant={statusInfo.variant}
-                          className={`text-[12px] font-normal font-inter ${statusInfo.className}`}
+
+                        <Button
+                          onClick={() => handleReviewClick(importItem)}
+                          disabled={!isEditable}
+                          className="bg-black hover:bg-gray-800 text-white font-normal text-[14px] font-sen px-4 py-2 h-8 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                         >
-                          {statusInfo.text}
-                        </Badge>
+                          {isReviewed ? "Edit" : "Review"}
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
                       </div>
-
-                      <Button
-                        onClick={() => handleReviewClick(importItem)}
-                        disabled={!isEditable}
-                        className="bg-black hover:bg-gray-800 text-white font-normal text-[14px] font-sen px-4 py-2 h-8 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                      >
-                        {isReviewed ? "Edit" : "Review"}
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Processing Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-md font-sen">
-          <div className="text-center p-6">
-            <div className="w-16 h-16 bg-lime-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-              {isProcessing ? (
-                <svg
-                  className="animate-spin h-8 w-8 text-lime-500"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              ) : (
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                    <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
+          </Card>
+        </div>
 
-            <h3 className="text-[24px] font-bold mb-4 text-gray-900">
-              {isProcessing ? "Processing Your Workout Program" : "You are using the new version of our Import AI"}
-            </h3>
+        {/* Processing Modal */}
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="sm:max-w-md font-sen">
+            <div className="text-center p-6">
+              <div className="w-16 h-16 bg-lime-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+                {isProcessing ? (
+                  <svg
+                    className="animate-spin h-8 w-8 text-lime-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                ) : (
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            <p className="text-[14px] text-gray-500 mb-6 leading-relaxed">
-              {isProcessing ? (
-                "We're converting your Google Sheet into a structured workout program. This may take a few moments."
-              ) : (
-                <>
-                  To ensure your Google Sheets data is converted accurately,{" "}
-                  <span className="font-bold text-lime-600">we've added a manual review step.</span> Your structured
-                  workout program will be ready for review within 24 hours.
-                </>
+              <h3 className="text-[24px] font-bold mb-4 text-gray-900">
+                {isProcessing ? "Processing Your Workout Program" : "You are using the new version of our Import AI"}
+              </h3>
+
+              <p className="text-[14px] text-gray-500 mb-6 leading-relaxed">
+                {isProcessing ? (
+                  "We're converting your Google Sheet into a structured workout program. This may take a few moments."
+                ) : (
+                  <>
+                    To ensure your Google Sheets data is converted accurately,{" "}
+                    <span className="font-bold text-lime-600">we've added a manual review step.</span> Your structured
+                    workout program will be ready for review within 24 hours.
+                  </>
+                )}
+              </p>
+
+              {isProcessing && (
+                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+                  <div className="bg-lime-400 h-2.5 rounded-full w-3/4 animate-pulse"></div>
+                </div>
               )}
-            </p>
 
-            {isProcessing && (
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
-                <div className="bg-lime-400 h-2.5 rounded-full w-3/4 animate-pulse"></div>
-              </div>
-            )}
+              {!isProcessing && (
+                <div className="mb-6">
+                  <p className="text-[14px] text-blue-600 font-medium">
+                    Note: You can import other programs while you wait.
+                  </p>
+                </div>
+              )}
 
-            {!isProcessing && (
-              <div className="mb-6">
-                <p className="text-[14px] text-blue-600 font-medium">
-                  Note: You can import other programs while you wait.
+              {isProcessing && (
+                <p className="text-[12px] text-gray-400">
+                  Converting rows and columns into exercises, sets, and reps...
                 </p>
-              </div>
-            )}
-
-            {isProcessing && (
-              <p className="text-[12px] text-gray-400">Converting rows and columns into exercises, sets, and reps...</p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   )
 }
