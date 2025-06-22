@@ -558,8 +558,8 @@ export default function ImportProgramsClient() {
             <div className="flex items-center text-gray-500">
               <Sparkles className="w-5 h-5 mr-2 text-yellow-400" />
               <p className="text-[14px] font-inter">
-                Our AI will convert it into a structured program that you can review, edit, and send to your clients in
-                the Juice app.
+                Our AI will convert it into a structured program. You can still review and edit it before you send it to
+                your clients in the Juice app.
               </p>
             </div>
             <Button
