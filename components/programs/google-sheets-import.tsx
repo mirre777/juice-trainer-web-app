@@ -16,7 +16,6 @@ export function GoogleSheetsImport() {
   const [sheetLink, setSheetLink] = useState("")
   const [savedSheetLinks, setSavedSheetLinks] = useState<string[]>([])
   const { toast } = useToast()
-  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false)
 
   // Check if we're already authenticated with Google
   useEffect(() => {
@@ -275,7 +274,6 @@ export function GoogleSheetsImport() {
               value={sheetLink}
               onChange={(e) => setSheetLink(e.target.value)}
               className="w-full"
-              onFocus={() => setShowInstructionsDialog(true)}
             />
           </div>
           <DialogFooter>
@@ -284,40 +282,6 @@ export function GoogleSheetsImport() {
             </Button>
             <Button onClick={handleSaveSheetLink}>Save Link</Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
-        <DialogContent className="sm:max-w-lg font-inter">
-          <div className="p-4">
-            <div className="flex items-center mb-4">
-              <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
-                <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
-              </div>
-              <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
-            </div>
-            <ol className="space-y-4 text-[14px] text-gray-700">
-              <li className="flex items-start">
-                <span className="font-medium text-blue-600 mr-2">1.</span>
-                <span>Open your workout program in Google Sheets.</span>
-              </li>
-              <li className="flex flex-col items-start">
-                <div className="flex items-start">
-                  <span className="font-medium text-blue-600 mr-2">2.</span>
-                  <span>Click "Share" → "Anyone with the link can view".</span>
-                </div>
-                <img
-                  src="/google-sheets-share-dialog.png"
-                  alt="Google Sheets Share Dialog"
-                  className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
-                />
-              </li>
-              <li className="flex items-start">
-                <span className="font-medium text-blue-600 mr-2">3.</span>
-                <span>Paste the link into the field above.</span>
-              </li>
-            </ol>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

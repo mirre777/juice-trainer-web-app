@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
 import { Search, Sparkles, FileSpreadsheet, ChevronRight } from "lucide-react"
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore" // Import 'limit'
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { useEffect, useState, useMemo } from "react" // Import 'useMemo'
+import { useEffect, useState, useMemo } from "react"
 import { useToast } from "@/components/ui/toast-context"
-import { useDebounce } from "@/hooks/use-debounce" // Import useDebounce
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface SheetsImport {
   id: string
@@ -145,8 +145,8 @@ export default function ImportProgramsClient() {
   const router = useRouter()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
-  const debouncedSearchTerm = useDebounce(searchTerm, 300) // Debounce search term
-  const [programNameInput, setProgramNameInput] = useState("") // New state for program name
+  const debouncedSearchTerm = useDebounce(searchTerm, 300)
+  const [programNameInput, setProgramNameInput] = useState("")
   const [googleSheetsLink, setGoogleSheetsLink] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -168,6 +168,7 @@ export default function ImportProgramsClient() {
     return new Set()
   })
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
+  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false) // Moved here
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -210,7 +211,7 @@ export default function ImportProgramsClient() {
       collection(db, "sheets_imports"),
       where("userId", "==", userId),
       orderBy("createdAt", "desc"),
-      limit(50), // Limit results for pagination, as per docs
+      limit(50),
     )
 
     const unsubscribe = onSnapshot(
@@ -359,7 +360,6 @@ export default function ImportProgramsClient() {
 
   const handleConvert = async () => {
     if (!programNameInput.trim()) {
-      // Check if program name is provided
       alert("Please enter a program name.")
       return
     }
@@ -394,7 +394,7 @@ export default function ImportProgramsClient() {
         userId,
         spreadsheetId,
         sheetsUrl: googleSheetsLink,
-        name: programNameInput.trim(), // Include the program name
+        name: programNameInput.trim(),
       })
 
       const docRef = await addDoc(collection(db, "sheets_imports"), {
@@ -404,13 +404,13 @@ export default function ImportProgramsClient() {
         status: "ready_for_conversion",
         updatedAt: serverTimestamp(),
         userId: userId,
-        name: programNameInput.trim(), // Save the program name
+        name: programNameInput.trim(),
       })
 
       console.log("[ImportPrograms] Document created with ID:", docRef.id)
 
       setGoogleSheetsLink("")
-      setProgramNameInput("") // Clear the program name input after submission
+      setProgramNameInput("")
 
       setTimeout(() => {
         setIsProcessing(false)
@@ -439,15 +439,13 @@ export default function ImportProgramsClient() {
       title,
       message:
         "Your workout program is now good to go! Review it, edit if needed, and you're all set to send it out. 💪",
-      duration: null, // Don't auto-dismiss
-      pages: ["/programs", "/import-programs", "/demo/programs", "/demo/import-programs"], // Only show on program-related pages
+      duration: null,
+      pages: ["/programs", "/import-programs", "/demo/programs", "/demo/import-programs"],
       ctaButton: {
         text: "Show Me",
         onClick: () => {
-          // Navigate to import-programs page if not already there
           if (window.location.pathname !== "/import-programs") {
             router.push("/import-programs")
-            // Wait for navigation then scroll
             setTimeout(() => {
               const importsSection = document.querySelector('[data-section="previously-imported"]')
               if (importsSection) {
@@ -458,7 +456,6 @@ export default function ImportProgramsClient() {
               }
             }, 100)
           } else {
-            // Already on import-programs page, just scroll
             const importsSection = document.querySelector('[data-section="previously-imported"]')
             if (importsSection) {
               importsSection.scrollIntoView({
@@ -468,7 +465,6 @@ export default function ImportProgramsClient() {
             }
           }
 
-          // Mark as dismissed
           const newDismissed = new Set(dismissedNotifications)
           newlyCompleted.forEach((imp) => {
             newDismissed.add(imp.id)
@@ -496,6 +492,7 @@ export default function ImportProgramsClient() {
     completedImports: completedImports.length,
     filteredImports: filteredImports.length,
     activeToastId,
+    showInstructionsDialog, // Added for debugging
   })
 
   return (
@@ -550,6 +547,7 @@ export default function ImportProgramsClient() {
               onChange={(e) => setGoogleSheetsLink(e.target.value)}
               className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
               required
+              onFocus={() => setShowInstructionsDialog(true)} // Added onFocus here
             />
           </div>
 
@@ -726,6 +724,41 @@ export default function ImportProgramsClient() {
                   Converting rows and columns into exercises, sets, and reps...
                 </p>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Instructions Dialog - Moved here */}
+        <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
+          <DialogContent className="sm:max-w-lg font-inter">
+            <div className="p-4">
+              <div className="flex items-center mb-4">
+                <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
+                  <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
+                </div>
+                <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
+              </div>
+              <ol className="space-y-4 text-[14px] text-gray-700">
+                <li className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">1.</span>
+                  <span>Open your workout program in Google Sheets.</span>
+                </li>
+                <li className="flex flex-col items-start">
+                  <div className="flex items-start">
+                    <span className="font-medium text-blue-600 mr-2">2.</span>
+                    <span>Click "Share" → "Anyone with the link can view".</span>
+                  </div>
+                  <img
+                    src="/google-sheets-share-dialog.png"
+                    alt="Google Sheets Share Dialog"
+                    className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
+                  />
+                </li>
+                <li className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">3.</span>
+                  <span>Paste the link into the field above.</span>
+                </li>
+              </ol>
             </div>
           </DialogContent>
         </Dialog>
