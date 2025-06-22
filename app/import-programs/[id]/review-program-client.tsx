@@ -69,6 +69,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           ? initialProgram.program_weeks
           : 4
 
+      initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
+
       // Normalize data structure:
       // If it's marked periodized but only has routines (old non-periodized structure), convert to weeks
       if (initialProgram.is_periodized && !initialProgram.weeks?.length && initialProgram.routines?.length) {
@@ -418,7 +420,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           variant="ghost"
           size="sm"
           className="text-gray-500 hover:text-gray-700"
-          onClick={() => router.push("/import-programs")}
+          onClick={() => {
+            if (hasChanges) {
+              setShowConfirmDialog(true)
+            } else {
+              router.push("/import-programs")
+            }
+          }}
         >
           <ChevronLeft className="w-4 h-4 mr-1" />
           Back
@@ -431,9 +439,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowConfirmDialog(true)}>
-            Cancel
-          </Button>
           <Button variant="outline" onClick={revertChanges} disabled={!hasChanges || isSaving}>
             Revert
           </Button>
@@ -911,7 +916,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
               Continue Editing
             </Button>
-            <Button variant="destructive" onClick={() => router.push("/import-programs")}>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setHasChanges(false) // Ensure changes are marked as discarded
+                router.push("/import-programs")
+              }}
+            >
               Discard Changes
             </Button>
           </DialogFooter>
