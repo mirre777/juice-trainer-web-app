@@ -673,7 +673,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                               <div className="col-span-2">
                                 {setIndex === 0 && (
                                   <div>
-                                    <div className="font-medium text-gray-900">{exercise.exercise}</div>
+                                    <div className="font-medium text-gray-900">{exercise.name}</div>{" "}
+                                    {/* Changed to exercise.name */}
                                     {exercise.exercise_notes && (
                                       <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
                                     )}
