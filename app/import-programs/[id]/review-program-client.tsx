@@ -682,7 +682,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                                 )}
                               </div>
 
-                              <div className="col-span-1 text-center text-sm text-gray-600">{set.set_number}</div>
+                              <div className="col-span-1 flex justify-center">
+                                <div className="bg-white border border-gray-300 rounded px-2 py-1 text-center font-medium text-gray-800 text-sm min-w-[30px]">
+                                  {set.set_number}
+                                </div>
+                              </div>
 
                               <div className="col-span-1">
                                 <Input
