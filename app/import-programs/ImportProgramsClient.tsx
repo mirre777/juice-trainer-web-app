@@ -557,7 +557,7 @@ export default function ImportProgramsClient() {
           <Button
             onClick={handleConvert}
             disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
-            className="w-full max-w-2xl h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] mb-8 font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="max-w-xs mx-auto h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] mb-8 font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isProcessing ? "Processing..." : "Convert"}
           </Button>
