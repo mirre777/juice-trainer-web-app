@@ -556,29 +556,24 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         <Card className="p-4 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
+              <Button variant="ghost" size="sm" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
-              <div className="text-center">
-                <div className="text-lg font-semibold">Week {currentWeek}</div>
+              <div className="flex-1 text-center">
+                <div className="text-lg font-semibold">
+                  Week {currentWeek}/{programState.program_weeks}
+                </div>
               </div>
 
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={goToNextWeek}
                 disabled={currentWeek === programState.program_weeks}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              <span className="text-sm text-gray-500">
-                {currentWeek} of {programState.program_weeks} weeks
-              </span>
             </div>
           </div>
 
