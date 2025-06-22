@@ -21,9 +21,10 @@ interface ProgramCardProps {
   onClick?: (program: Program) => void
   onEdit?: (program: Program) => void
   onDelete?: (program: Program) => void
+  onAssign?: (program: Program) => void
 }
 
-export const ProgramCard: React.FC<ProgramCardProps> = ({ program, onClick, onEdit, onDelete }) => {
+export const ProgramCard: React.FC<ProgramCardProps> = ({ program, onClick, onEdit, onDelete, onAssign }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -82,6 +83,16 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ program, onClick, onEd
             }}
           >
             Delete
+          </Button>
+          <Button
+            variant="default" // Use a different variant to distinguish
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAssign?.(program)
+            }}
+          >
+            Assign
           </Button>
         </div>
       </CardContent>
