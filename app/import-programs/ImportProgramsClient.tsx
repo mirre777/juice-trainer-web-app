@@ -562,7 +562,7 @@ export default function ImportProgramsClient() {
           </div>
 
           <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
-            <p className="text-[14px] font-inter text-right text-gray-500 max-w-[200px]">
+            <p className="text-[14px] font-inter text-right text-gray-500 max-w-[160px]">
               You can still review and edit it before you send it to your clients in the Juice mobile app.
             </p>
             <Button
