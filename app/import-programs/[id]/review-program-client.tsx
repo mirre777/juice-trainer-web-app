@@ -1,13 +1,10 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect, useMemo } from "react"
-import { useRouter } from "next/navigation"
 import {
   ChevronLeft,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
   Copy,
   Trash2,
   Calendar,
@@ -19,7 +16,10 @@ import {
   Info,
   Save,
   Send,
+  ChevronUp,
 } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -513,6 +513,20 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </div>
         </div>
 
+        {/* Program Notes */}
+        <div>
+          <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
+            Program Notes
+          </label>
+          <Textarea
+            id="program-notes"
+            value={programState.program_notes || ""}
+            onChange={handleProgramNotesChange}
+            className="w-full min-h-[100px] border-transparent focus:border-gray-300"
+            placeholder="Add notes about this program..."
+          />
+        </div>
+
         {/* Periodization Toggle */}
         <div className="mb-6">
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -533,19 +547,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               {programState.is_periodized ? "Switch to Non-Periodized" : "Switch to Periodized"}
             </Button>
           </div>
-        </div>
-
-        <div>
-          <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
-            Program Notes
-          </label>
-          <Textarea
-            id="program-notes"
-            value={programState.program_notes || ""}
-            onChange={handleProgramNotesChange}
-            className="w-full min-h-[100px] border-transparent focus:border-gray-300"
-            placeholder="Add notes about this program..."
-          />
         </div>
       </Card>
 
@@ -569,7 +570,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 onClick={goToNextWeek}
                 disabled={currentWeek === programState.program_weeks}
               >
-                <ChevronUp className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 
