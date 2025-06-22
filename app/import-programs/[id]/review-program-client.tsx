@@ -681,8 +681,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
                       {routine.exercises.map((exercise, exerciseIndex) => (
                         <div key={exerciseIndex} className="border-b border-gray-200">
+                          {/* Exercise Name and Notes - displayed once per exercise, outside the set loop */}
+                          <div className="py-3 px-4">
+                            <div className="font-medium text-gray-900">{exercise.name}</div>
+                            {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
+                          </div>
+
                           {/* Exercise sets */}
-                          {/* Now, regardless of periodized or not, we always access sets from the current week's exercise */}
                           {programState.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[
                             exerciseIndex
                           ]?.sets?.map((set, setIndex) => (
@@ -690,20 +695,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                               key={setIndex}
                               className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
                             >
-                              {/* Exercise name (only show on first set) */}
-                              <div className="col-span-2">
-                                {setIndex === 0 && (
-                                  <div>
-                                    <div className="font-medium text-gray-900">{exercise.name}</div>
-                                    {exercise.notes && ( // Changed to exercise.notes
-                                      <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                              {/* Empty div to maintain col-span-2 alignment for the first column */}
+                              <div className="col-span-2"></div>
 
                               <div className="col-span-1 flex justify-center">
-                                <div className="bg-white border border-gray-300 rounded px-2 py-1 text-center font-medium text-gray-800 text-sm min-w-[30px]">
+                                <div className="bg-white border border-gray-300 rounded-xl w-8 h-8 flex items-center justify-center text-center font-medium text-gray-800 text-sm">
                                   {set.set_number}
                                 </div>
                               </div>
