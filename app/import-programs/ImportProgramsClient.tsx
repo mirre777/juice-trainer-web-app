@@ -718,9 +718,15 @@ export default function ImportProgramsClient() {
             </h3>
 
             <p className="text-[14px] text-gray-500 mb-6 leading-relaxed">
-              {isProcessing
-                ? "We're converting your Google Sheet into a structured workout program. This may take a few moments."
-                : "To ensure your Google Sheets data is converted accurately, we've added a manual review step. Your structured workout program will be ready for review within 24 hours."}
+              {isProcessing ? (
+                "We're converting your Google Sheet into a structured workout program. This may take a few moments."
+              ) : (
+                <>
+                  To ensure your Google Sheets data is converted accurately,{" "}
+                  <span className="font-bold text-lime-600">we've added a manual review step.</span> Your structured
+                  workout program will be ready for review within 24 hours.
+                </>
+              )}
             </p>
 
             {isProcessing && (
