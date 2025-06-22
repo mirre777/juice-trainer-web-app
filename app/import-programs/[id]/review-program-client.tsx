@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
   ChevronLeft,
@@ -31,73 +33,221 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
 
 interface PeriodizedReviewClientProps {
   importData: any
-  programData: any
+  programData: any // This prop seems redundant if importData contains everything
 }
 
-export default function PeriodizedReviewClient({ importData, programData }: PeriodizedReviewClientProps) {
+export default function PeriodizedReviewClient({ importData }: PeriodizedReviewClientProps) {
   const router = useRouter()
+  const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
-  const [programTitle, setProgramTitle] = useState(
-    importData.name || importData.programName || importData.program?.program_title || "Untitled Program",
-  )
-  const [programNotes, setProgramNotes] = useState(importData.program?.notes || "")
-  const [weeks, setWeeks] = useState(importData.program?.weeks || [])
-  const [expandedRoutines, setExpandedRoutines] = useState<Record<string, boolean>>({ "0": true })
-  const [isPeriodized, setIsPeriodized] = useState(importData.program?.is_periodized || false)
   const [isSaving, setIsSaving] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [showSendProgramDialog, setShowSendProgramDialog] = useState(false)
   const [messageToClient, setMessageToClient] = useState("")
+  const [showSelectWeekDialog, setShowSelectWeekDialog] = useState(false)
+  const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
+  const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
+
   // Placeholder values as client data is not directly available in importData
+  // In a real app, you'd fetch this based on a client ID associated with the importData
   const clientNameForModal = "Emilie Rentinger"
-  const dateForModal = "May 9, 2025"
+  const dateForModal = "May 9, 2025" // Or format new Date()
 
-  const programWeeks = weeks.length || 4
+  // Initialize programState from importData on component mount or importData change
+  useEffect(() => {
+    if (importData?.program) {
+      // Deep copy to ensure we can revert to the original imported state
+      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
+      // Ensure program_weeks is a number, default to 4 if not present or invalid
+      initialProgram.program_weeks =
+        Number.isInteger(initialProgram.program_weeks) && initialProgram.program_weeks > 0
+          ? initialProgram.program_weeks
+          : 4
 
-  // Get current week data
-  const getCurrentWeekData = () => {
-    return weeks.find((week) => week.week_number === currentWeek) || weeks[0]
-  }
+      // If it's a non-periodized program from import, ensure 'weeks' is empty and 'routines' is populated
+      if (!initialProgram.is_periodized && !initialProgram.routines?.length && initialProgram.weeks?.length) {
+        // This handles cases where a non-periodized program might have been imported with a 'weeks' array
+        // but should actually use 'routines' directly. We'll take the first week's routines.
+        initialProgram.routines = initialProgram.weeks[0]?.routines || []
+        initialProgram.weeks = []
+      } else if (initialProgram.is_periodized && !initialProgram.weeks?.length && initialProgram.routines?.length) {
+        // If it's marked periodized but only has routines, convert to weeks
+        const newWeeks: ExerciseWeek[] = []
+        for (let i = 0; i < initialProgram.program_weeks; i++) {
+          newWeeks.push({
+            week_number: i + 1,
+            set_count: 0, // Will be derived from exercises
+            sets: [], // Will be derived from exercises
+            routines: JSON.parse(JSON.stringify(initialProgram.routines)), // Deep copy routines
+          })
+        }
+        initialProgram.weeks = newWeeks
+        initialProgram.routines = [] // Clear top-level routines for periodized
+      }
 
-  const currentWeekData = getCurrentWeekData()
-  const currentRoutines = currentWeekData?.routines || []
+      setProgramState(initialProgram)
+      setCurrentWeek(1) // Always start at week 1 for display
+      setHasChanges(false)
+      setJustSaved(false)
+    }
+  }, [importData])
+
+  // Derived state for current routines based on periodization and current week
+  const currentRoutines: WorkoutRoutine[] = useMemo(() => {
+    if (!programState) return []
+    if (programState.is_periodized && programState.weeks && programState.weeks.length > 0) {
+      return programState.weeks[currentWeek - 1]?.routines || []
+    } else {
+      return programState.routines || [] // For non-periodized
+    }
+  }, [programState, currentWeek])
 
   // Week navigation
   const goToPreviousWeek = () => setCurrentWeek(Math.max(1, currentWeek - 1))
-  const goToNextWeek = () => setCurrentWeek(Math.min(programWeeks, currentWeek + 1))
+  const goToNextWeek = () => setCurrentWeek(Math.min(programState?.program_weeks || 1, currentWeek + 1))
 
-  // Toggle between periodized and non-periodized
-  const togglePeriodization = () => {
-    setIsPeriodized(!isPeriodized)
+  // Handle changes to program title and notes
+  const handleProgramTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setProgramState((prev) => {
+      if (!prev) return prev
+      return { ...prev, program_title: e.target.value }
+    })
     setHasChanges(true)
     setJustSaved(false)
   }
 
-  const toggleRoutine = (index: number) => {
-    setExpandedRoutines((prev) => ({ ...prev, [index]: !prev[index] }))
+  const handleProgramNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setProgramState((prev) => {
+      if (!prev) return prev
+      return { ...prev, program_notes: e.target.value }
+    })
+    setHasChanges(true)
+    setJustSaved(false)
+  }
+
+  // Handle changes to program weeks (only relevant for periodized programs)
+  const handleProgramWeeksChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newWeeksCount = Number.parseInt(e.target.value, 10)
+    if (isNaN(newWeeksCount) || newWeeksCount < 1) return
+
+    setProgramState((prev) => {
+      if (!prev) return null
+
+      const updatedProgram = { ...prev, program_weeks: newWeeksCount }
+
+      if (updatedProgram.is_periodized) {
+        const currentWeeks = updatedProgram.weeks || []
+        const newWeeksArray: ExerciseWeek[] = []
+
+        for (let i = 0; i < newWeeksCount; i++) {
+          if (currentWeeks[i]) {
+            newWeeksArray.push(currentWeeks[i])
+          } else {
+            // Copy the last available week's data, or create empty if no weeks exist
+            const lastWeekData = currentWeeks[currentWeeks.length - 1] || { routines: [] }
+            newWeeksArray.push({
+              week_number: i + 1,
+              set_count: 0, // Will be derived
+              sets: [], // Will be derived
+              routines: JSON.parse(JSON.stringify(lastWeekData.routines)), // Deep copy
+            })
+          }
+        }
+        updatedProgram.weeks = newWeeksArray
+        // Adjust currentWeek if it's now out of bounds
+        if (currentWeek > newWeeksCount) {
+          setCurrentWeek(newWeeksCount)
+        }
+      }
+      return updatedProgram
+    })
+    setHasChanges(true)
+    setJustSaved(false)
+  }
+
+  // Toggle between periodized and non-periodized
+  const togglePeriodization = () => {
+    if (!programState) return
+
+    setHasChanges(true)
+    setJustSaved(false)
+
+    if (programState.is_periodized) {
+      // Switching from Periodized to Non-Periodized
+      setShowSelectWeekDialog(true) // Open dialog to select which week to keep
+    } else {
+      // Switching from Non-Periodized to Periodized
+      const currentNonPeriodizedRoutines = programState.routines || []
+      const newWeeks: ExerciseWeek[] = []
+      const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4 // Use existing weeks or default to 4
+
+      for (let i = 0; i < defaultWeeks; i++) {
+        newWeeks.push({
+          week_number: i + 1,
+          set_count: 0, // Will be derived from exercises
+          sets: [], // Will be derived from exercises
+          routines: JSON.parse(JSON.stringify(currentNonPeriodizedRoutines)), // Deep copy routines
+        })
+      }
+
+      setProgramState((prev) => {
+        if (!prev) return null
+        return {
+          ...prev,
+          is_periodized: true,
+          weeks: newWeeks,
+          routines: [], // Clear top-level routines for periodized
+          program_weeks: defaultWeeks, // Update program_weeks if it was 0 or undefined
+        }
+      })
+      setCurrentWeek(1) // Reset current week to 1
+    }
+  }
+
+  // Handle selection of week when switching from periodized to non-periodized
+  const handleSelectWeekForNonPeriodized = (weekNumber: number) => {
+    if (!programState || !programState.weeks) return
+
+    const selectedWeekData = programState.weeks.find((w) => w.week_number === weekNumber)
+    if (selectedWeekData) {
+      setProgramState((prev) => {
+        if (!prev) return null
+        return {
+          ...prev,
+          is_periodized: false,
+          routines: selectedWeekData.routines, // Set top-level routines from selected week
+          weeks: [], // Clear weeks array for non-periodized
+        }
+      })
+      setShowSelectWeekDialog(false)
+      setCurrentWeek(1) // Reset current week for display purposes
+      setHasChanges(true)
+      setJustSaved(false)
+    }
   }
 
   const handleSaveChanges = async () => {
+    if (!programState) return
+
+    setIsSaving(true)
     try {
-      setIsSaving(true)
       await updateDoc(doc(db, "sheets_imports", importData.id), {
-        name: programTitle,
-        program: {
-          ...importData.program,
-          notes: programNotes,
-          weeks: weeks,
-          is_periodized: isPeriodized,
-        },
+        name: programState.program_title,
+        program: programState, // Save the entire programState object
         status: "reviewed",
         updatedAt: new Date(),
       })
       setHasChanges(false)
       setJustSaved(true)
+      // Re-initialize importData to reflect the saved state for correct revert behavior
+      // In a real app, you might refetch importData or update it via a parent callback
+      importData.program = JSON.parse(JSON.stringify(programState))
     } catch (error) {
       console.error("Error saving program:", error)
       alert("Failed to save changes. Please try again.")
@@ -106,95 +256,130 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
     }
   }
 
+  const revertChanges = () => {
+    if (importData?.program) {
+      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
+      setProgramState(initialProgram)
+      setCurrentWeek(1)
+      setHasChanges(false)
+      setJustSaved(false)
+      setExpandedRoutines({ "0": true }) // Reset expanded routines
+    }
+  }
+
   // Add empty set to exercise
   const addSet = (routineIndex: number, exerciseIndex: number) => {
-    const updatedWeeks = [...weeks]
-    const weekIndex = updatedWeeks.findIndex((w) => w.week_number === currentWeek)
+    setProgramState((prev) => {
+      if (!prev) return null
+      const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
 
-    if (weekIndex !== -1) {
-      const exercise = updatedWeeks[weekIndex].routines[routineIndex].exercises[exerciseIndex]
-      const newSetNumber = (exercise.sets?.length || 0) + 1
-
-      const newSet = {
-        set_number: newSetNumber,
-        warmup: false,
-        reps: "",
-        weight: "",
-        rpe: "",
-        rest: "",
-        duration: "",
-        notes: "",
+      let targetExercise
+      if (updatedProgram.is_periodized) {
+        targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
+      } else {
+        targetExercise = updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]
       }
 
-      if (!exercise.sets) exercise.sets = []
-      exercise.sets.push(newSet)
-
-      setWeeks(updatedWeeks)
-      setHasChanges(true)
-      setJustSaved(false)
-    }
+      if (targetExercise) {
+        const newSetNumber = (targetExercise.sets?.length || 0) + 1
+        const newSet: WorkoutSet = {
+          set_number: newSetNumber,
+          warmup: false,
+          reps: "",
+          weight: "",
+          rpe: "",
+          rest: "",
+          duration: "",
+          notes: "",
+        }
+        if (!targetExercise.sets) targetExercise.sets = []
+        targetExercise.sets.push(newSet)
+      }
+      return updatedProgram
+    })
+    setHasChanges(true)
+    setJustSaved(false)
   }
 
   // Duplicate specific set
   const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    const updatedWeeks = [...weeks]
-    const weekIndex = updatedWeeks.findIndex((w) => w.week_number === currentWeek)
+    setProgramState((prev) => {
+      if (!prev) return null
+      const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-    if (weekIndex !== -1) {
-      const exercise = updatedWeeks[weekIndex].routines[routineIndex].exercises[exerciseIndex]
-      const setToDuplicate = exercise.sets[setIndex]
-
-      const duplicatedSet = {
-        ...setToDuplicate,
-        set_number: setToDuplicate.set_number + 1,
+      let targetExercise
+      if (updatedProgram.is_periodized) {
+        targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
+      } else {
+        targetExercise = updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]
       }
 
-      // Update set numbers for sets after the insertion point
-      for (let i = setIndex + 1; i < exercise.sets.length; i++) {
-        exercise.sets[i].set_number += 1
+      if (targetExercise && targetExercise.sets && targetExercise.sets[setIndex]) {
+        const setToDuplicate = targetExercise.sets[setIndex]
+        const duplicatedSet = {
+          ...setToDuplicate,
+          set_number: setToDuplicate.set_number + 1,
+        }
+
+        targetExercise.sets.splice(setIndex + 1, 0, duplicatedSet)
+        targetExercise.sets.forEach((set, index) => {
+          set.set_number = index + 1
+        })
       }
-
-      exercise.sets.splice(setIndex + 1, 0, duplicatedSet)
-
-      setWeeks(updatedWeeks)
-      setHasChanges(true)
-      setJustSaved(false)
-    }
+      return updatedProgram
+    })
+    setHasChanges(true)
+    setJustSaved(false)
   }
 
   // Delete set
   const deleteSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    const updatedWeeks = [...weeks]
-    const weekIndex = updatedWeeks.findIndex((w) => w.week_number === currentWeek)
+    setProgramState((prev) => {
+      if (!prev) return null
+      const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-    if (weekIndex !== -1) {
-      const exercise = updatedWeeks[weekIndex].routines[routineIndex].exercises[exerciseIndex]
-      exercise.sets.splice(setIndex, 1)
+      let targetExercise
+      if (updatedProgram.is_periodized) {
+        targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
+      } else {
+        targetExercise = updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]
+      }
 
-      // Update set numbers
-      exercise.sets.forEach((set, index) => {
-        set.set_number = index + 1
-      })
-
-      setWeeks(updatedWeeks)
-      setHasChanges(true)
-      setJustSaved(false)
-    }
+      if (targetExercise && targetExercise.sets) {
+        targetExercise.sets.splice(setIndex, 1)
+        targetExercise.sets.forEach((set, index) => {
+          set.set_number = index + 1
+        })
+      }
+      return updatedProgram
+    })
+    setHasChanges(true)
+    setJustSaved(false)
   }
 
   const updateSetField = (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
-    const updatedWeeks = [...weeks]
-    const weekIndex = updatedWeeks.findIndex((w) => w.week_number === currentWeek)
+    setProgramState((prev) => {
+      if (!prev) return null
+      const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
 
-    if (weekIndex !== -1) {
-      const exercise = updatedWeeks[weekIndex].routines[routineIndex].exercises[exerciseIndex]
-      if (exercise.sets && exercise.sets[setIndex]) {
-        exercise.sets[setIndex][field] = value
-        setWeeks(updatedWeeks)
-        setHasChanges(true)
-        setJustSaved(false)
+      if (updatedProgram.is_periodized) {
+        const weekData = updatedProgram.weeks[currentWeek - 1]
+        if (weekData && weekData.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
+          weekData.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
+        }
+      } else {
+        if (updatedProgram.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
+          updatedProgram.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
+        }
       }
-    }
+      return updatedProgram
+    })
+    setHasChanges(true)
+    setJustSaved(false)
+  }
+
+  const toggleRoutine = (index: number) => {
+    setExpandedRoutines((prev) => ({ ...prev, [index]: !prev[index] }))
   }
 
   const getRoutineColor = (index: number) => {
@@ -211,76 +396,19 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
     return { name: "Taper", color: "bg-green-100 text-green-800" }
   }
 
-  // Get button text based on state
-  const getButtonText = () => {
-    if (isSaving) return "Saving..."
-    if (justSaved && !hasChanges) return "Saved"
-    return "Save Changes"
-  }
-
-  // Initialize data from importData
-  useEffect(() => {
-    try {
-      // Handle the data structure from the attachment
-      if (importData.program?.weeks && Array.isArray(importData.program.weeks)) {
-        setWeeks(importData.program.weeks)
-      } else {
-        // Fallback: create weeks structure from the data
-        const weeksData = []
-
-        // Check if we have the structure from the attachment
-        if (importData.program && typeof importData.program === "object") {
-          // Try to extract weeks from the nested structure
-          const programData = importData.program
-
-          if (programData.weeks && Array.isArray(programData.weeks)) {
-            setWeeks(programData.weeks)
-          } else {
-            // Create a default structure
-            weeksData.push({
-              week_number: 1,
-              routines: programData.routines || [],
-            })
-            setWeeks(weeksData)
-          }
-        }
-      }
-
-      if (importData.program?.notes) {
-        setProgramNotes(importData.program.notes)
-      }
-      setHasChanges(false) // Reset hasChanges on initial load or importData change
-      setJustSaved(false) // Reset justSaved on initial load or importData change
-    } catch (error) {
-      console.error("Error parsing program data:", error)
-      // Create minimal structure to avoid crashes
-      setWeeks([
-        {
-          week_number: 1,
-          routines: [],
-        },
-      ])
-    }
-  }, [importData])
-
-  const revertChanges = () => {
-    setProgramTitle(
-      importData.name || importData.programName || importData.program?.program_title || "Untitled Program",
-    )
-    setProgramNotes(importData.program?.notes || "")
-    setWeeks(importData.program?.weeks || [])
-    setIsPeriodized(importData.program?.is_periodized || false)
-    setHasChanges(false)
-    setJustSaved(false)
-    // Optionally, reset expanded routines if needed
-    setExpandedRoutines({ "0": true })
-  }
-
   const handleSendProgram = () => {
     // In a real application, this would trigger an API call to send the program to the client
-    console.log("Sending program to client:", programTitle, "with message:", messageToClient)
+    console.log("Sending program to client:", programState?.program_title, "with message:", messageToClient)
     setShowSendProgramDialog(false)
     // Optionally, show a success toast notification
+  }
+
+  if (!programState) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500">Loading program...</p>
+      </div>
+    )
   }
 
   return (
@@ -303,7 +431,6 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
         <div className="flex gap-2">
-          {/* This is the div containing the action buttons */}
           <Button variant="outline" onClick={() => setShowConfirmDialog(true)}>
             Cancel
           </Button>
@@ -349,20 +476,23 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
             </label>
             <Input
               id="program-title"
-              value={programTitle}
-              onChange={(e) => {
-                setProgramTitle(e.target.value)
-                setHasChanges(true)
-                setJustSaved(false)
-              }}
-              className="w-full"
+              value={programState.program_title}
+              onChange={handleProgramTitleChange}
+              className="w-full border-transparent focus:border-gray-300"
             />
           </div>
           <div>
             <label htmlFor="program-weeks" className="block text-sm font-medium text-gray-700 mb-1">
               Program Weeks
             </label>
-            <span className="text-sm text-gray-500">{programWeeks} weeks</span>
+            <Input
+              id="program-weeks"
+              type="number"
+              value={programState.program_weeks}
+              onChange={handleProgramWeeksChange}
+              className="w-full border-transparent focus:border-gray-300"
+              min={1}
+            />
           </div>
         </div>
 
@@ -372,18 +502,18 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
             <div>
               <h3 className="font-medium text-gray-900">Periodization</h3>
               <p className="text-sm text-gray-500">
-                {isPeriodized
+                {programState.is_periodized
                   ? "Program changes week by week with different training variables"
                   : "Same routine repeated each week"}
               </p>
             </div>
             <Button
-              variant={isPeriodized ? "default" : "outline"}
+              variant={programState.is_periodized ? "default" : "outline"}
               onClick={togglePeriodization}
               className="flex items-center gap-2"
             >
               <RotateCcw className="h-4 w-4" />
-              {isPeriodized ? "Periodized" : "Non-Periodized"}
+              {programState.is_periodized ? "Periodized" : "Non-Periodized"}
             </Button>
           </div>
         </div>
@@ -394,20 +524,16 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
           </label>
           <Textarea
             id="program-notes"
-            value={programNotes || ""}
-            onChange={(e) => {
-              setProgramNotes(e.target.value)
-              setHasChanges(true)
-              setJustSaved(false)
-            }}
-            className="w-full min-h-[100px]"
+            value={programState.program_notes || ""}
+            onChange={handleProgramNotesChange}
+            className="w-full min-h-[100px] border-transparent focus:border-gray-300"
             placeholder="Add notes about this program..."
           />
         </div>
       </Card>
 
       {/* Week Navigation (only show if periodized) */}
-      {isPeriodized && (
+      {programState.is_periodized && (
         <Card className="p-4 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -420,7 +546,12 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                 <Badge className={getWeekPhase(currentWeek).color}>{getWeekPhase(currentWeek).name} Phase</Badge>
               </div>
 
-              <Button variant="outline" size="sm" onClick={goToNextWeek} disabled={currentWeek === programWeeks}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextWeek}
+                disabled={currentWeek === programState.program_weeks}
+              >
                 <ChevronUp className="h-4 w-4" />
               </Button>
             </div>
@@ -428,14 +559,14 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-gray-500" />
               <span className="text-sm text-gray-500">
-                {currentWeek} of {programWeeks} weeks
+                {currentWeek} of {programState.program_weeks} weeks
               </span>
             </div>
           </div>
 
           {/* Week selector dots */}
           <div className="flex justify-center mt-4 gap-1">
-            {Array.from({ length: programWeeks }, (_, i) => i + 1).map((week) => (
+            {Array.from({ length: programState.program_weeks }, (_, i) => i + 1).map((week) => (
               <button
                 key={week}
                 onClick={() => setCurrentWeek(week)}
@@ -448,7 +579,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
         </Card>
       )}
 
-      {/* Routines for Current Week */}
+      {/* Routines for Current Week / Non-Periodized Program */}
       {currentRoutines && currentRoutines.length > 0 ? (
         <div className="space-y-4">
           {currentRoutines.map((routine, routineIndex) => (
@@ -461,13 +592,13 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                   <div
                     className={`w-8 h-8 rounded-full ${getRoutineColor(routineIndex)} flex items-center justify-center text-white mr-3`}
                   >
-                    {routine.name?.charAt(0) || "R"}
+                    {routine.routine_name?.charAt(0) || "R"}
                   </div>
                   <div>
-                    <h3 className="font-medium text-gray-900">{routine.name}</h3>
+                    <h3 className="font-medium text-gray-900">{routine.routine_name}</h3>
                     <p className="text-sm text-gray-500">
                       {routine.exercises?.length || 0} exercises
-                      {isPeriodized && ` • Week ${currentWeek} view`}
+                      {programState.is_periodized && ` • Week ${currentWeek} view`}
                     </p>
                   </div>
                 </div>
@@ -508,9 +639,9 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                                 <div className="col-span-2">
                                   {setIndex === 0 && (
                                     <div>
-                                      <div className="font-medium text-gray-900">{exercise.name}</div>
-                                      {exercise.notes && (
-                                        <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>
+                                      <div className="font-medium text-gray-900">{exercise.exercise}</div>
+                                      {exercise.exercise_notes && (
+                                        <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
                                       )}
                                     </div>
                                   )}
@@ -524,7 +655,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                                     onChange={(e) =>
                                       updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
                                     }
-                                    className="text-center h-8 text-sm"
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
                                     placeholder="10"
                                   />
                                 </div>
@@ -535,7 +666,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                                     onChange={(e) =>
                                       updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
                                     }
-                                    className="text-center h-8 text-sm"
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
                                     placeholder="kg"
                                   />
                                 </div>
@@ -546,7 +677,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                                     onChange={(e) =>
                                       updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
                                     }
-                                    className="text-center h-8 text-sm"
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
                                     placeholder="7"
                                   />
                                 </div>
@@ -557,7 +688,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                                     onChange={(e) =>
                                       updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
                                     }
-                                    className="text-center h-8 text-sm"
+                                    className="text-center h-8 text-sm border-transparent focus:border-gray-300"
                                     placeholder="60s"
                                   />
                                 </div>
@@ -585,8 +716,10 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                           ) : (
                             <div className="grid grid-cols-9 gap-4 py-3 px-4 items-center">
                               <div className="col-span-2">
-                                <div className="font-medium text-gray-900">{exercise.name}</div>
-                                {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
+                                <div className="font-medium text-gray-900">{exercise.exercise}</div>
+                                {exercise.exercise_notes && (
+                                  <div className="text-sm text-gray-500 mt-1">{exercise.exercise_notes}</div>
+                                )}
                               </div>
                               <div className="col-span-5 text-center text-gray-500 text-sm">No sets defined</div>
                               <div className="col-span-2"></div>
@@ -624,7 +757,11 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
             <Calendar className="mx-auto h-12 w-12" />
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-1">No routines found</h3>
-          <p className="text-gray-500 mb-4">Week {currentWeek} doesn't have any workout routines yet.</p>
+          <p className="text-gray-500 mb-4">
+            {programState.is_periodized
+              ? `Week ${currentWeek} doesn't have any workout routines yet.`
+              : `This program doesn't have any workout routines yet.`}
+          </p>
           <Button variant="outline">+ Add Routine</Button>
         </div>
       )}
@@ -638,7 +775,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <Card className="p-4">
-              <h3 className="font-bold text-lg mb-2">{programTitle}</h3>
+              <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
               <div className="flex items-center text-sm text-gray-600 mb-1">
                 <User className="h-4 w-4 mr-2" /> {clientNameForModal}
               </div>
@@ -651,7 +788,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
                   value={messageToClient}
                   onChange={(e) => setMessageToClient(e.target.value)}
                   placeholder="Add a message to your client (optional)"
-                  className="flex-1"
+                  className="flex-1 border-transparent focus:border-gray-300"
                   rows={3}
                 />
               </div>
@@ -675,7 +812,7 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
         </DialogContent>
       </Dialog>
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog for Unsaved Changes */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent>
           <DialogHeader>
@@ -690,6 +827,45 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
             </Button>
             <Button variant="destructive" onClick={() => router.push("/import-programs")}>
               Discard Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Select Week Dialog for switching from Periodized to Non-Periodized */}
+      <Dialog open={showSelectWeekDialog} onOpenChange={setShowSelectWeekDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Week to Keep</DialogTitle>
+            <DialogDescription>
+              You are switching from a periodized program to a non-periodized program. Please select which week's data
+              you would like to keep as the single routine for this program.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-4">
+            {programState.weeks?.map((week) => (
+              <Button
+                key={week.week_number}
+                variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
+                onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
+              >
+                Week {week.week_number}
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedWeekForNonPeriodized !== null) {
+                  handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
+                }
+              }}
+              disabled={selectedWeekForNonPeriodized === null}
+            >
+              Confirm Selection
             </Button>
           </DialogFooter>
         </DialogContent>
