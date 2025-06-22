@@ -303,7 +303,6 @@ export default function PeriodizedReviewClient({ importData, programData }: Peri
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
         <div className="flex gap-2">
-          {" "}
           {/* This is the div containing the action buttons */}
           <Button variant="outline" onClick={() => setShowConfirmDialog(true)}>
             Cancel
