@@ -174,30 +174,29 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  // TEMPORARY: Removed trainer and toast from dependencies to force effect re-run on dialog state change
+  // Restore the original dependencies for the useEffect, as they are correctly used within the effect.
+  // The issue seems to be the useEffect not firing, not the dependencies themselves.
+  // We will add a direct call to fetchClients in the button handler.
   useEffect(() => {
     console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
     console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
-    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer) // Still log trainer to see its value
+    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
 
-    if (showSendProgramDialog) {
-      // Only depend on showSendProgramDialog for now
-      if (trainer?.uid) {
-        console.log(
-          `[ReviewProgramClient] Condition met: Dialog opened and trainer UID (${trainer.uid}) available. Calling fetchClients...`,
-        )
-        fetchClients(trainer.uid)
-      } else {
-        setLoadingClients(false)
-        console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing. Cannot fetch clients.")
-        toast({
-          title: "Authentication Error",
-          description: "Could not retrieve trainer information. Please log in again.",
-          variant: "destructive",
-        })
-      }
+    if (showSendProgramDialog && trainer?.uid) {
+      console.log(
+        `[ReviewProgramClient] Condition met: Dialog opened and trainer UID (${trainer.uid}) available. Calling fetchClients...`,
+      )
+      fetchClients(trainer.uid)
+    } else if (showSendProgramDialog && !trainer?.uid) {
+      setLoadingClients(false)
+      console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing. Cannot fetch clients.")
+      toast({
+        title: "Authentication Error",
+        description: "Could not retrieve trainer information. Please log in again.",
+        variant: "destructive",
+      })
     }
-  }, [showSendProgramDialog]) // Only showSendProgramDialog in dependencies for this test
+  }, [showSendProgramDialog, trainer, toast]) // Restore all relevant dependencies
 
   const fetchClients = async (trainerId: string) => {
     setLoadingClients(true)
@@ -663,8 +662,18 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
               console.log(
-                "[ReviewProgramClient] 'Send to Client' button clicked. Setting showSendProgramDialog to true.",
+                "[ReviewProgramClient] 'Send to Client' button clicked. Setting showSendProgramDialog to true and initiating client fetch.",
               )
+              if (trainer?.uid) {
+                fetchClients(trainer.uid) // Explicitly call fetchClients here
+              } else {
+                console.error("[ReviewProgramClient] Trainer UID missing when 'Send to Client' button clicked.")
+                toast({
+                  title: "Authentication Error",
+                  description: "Could not retrieve trainer information. Please log in again.",
+                  variant: "destructive",
+                })
+              }
               setShowSendProgramDialog(true)
             }}
             disabled={hasChanges || isSaving}

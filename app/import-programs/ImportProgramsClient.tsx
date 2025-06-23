@@ -184,13 +184,33 @@ export default function ImportProgramsClient() {
           credentials: "include",
         })
 
+        const rawResponseText = await response.text() // Capture raw response text
+        console.log("[ImportPrograms] Raw /api/auth/me response text:", rawResponseText)
+
         if (response.ok) {
-          const userData = await response.json()
-          const currentUserId = userData.uid || userData.id
-          console.log("[ImportPrograms] User authenticated:", currentUserId)
-          setUserId(currentUserId)
+          try {
+            const userData = JSON.parse(rawResponseText) // Parse the captured text
+            const currentUserId = userData.uid || userData.id
+            console.log("[ImportPrograms] User authenticated:", currentUserId)
+            setUserId(currentUserId)
+          } catch (jsonError) {
+            console.error("[ImportPrograms] Failed to parse /api/auth/me JSON:", jsonError, "Raw:", rawResponseText)
+            // Handle the case where the response is not valid JSON but status is OK
+            toast({
+              title: "Authentication Error",
+              description: "Received invalid user data. Please try logging in again.",
+              variant: "destructive",
+            })
+          }
         } else {
-          console.log("[ImportPrograms] User not authenticated")
+          console.log("[ImportPrograms] User not authenticated. Status:", response.status, "Text:", rawResponseText)
+          // Optionally, parse error message if response is not OK but is JSON
+          try {
+            const errorData = JSON.parse(rawResponseText)
+            console.error("[ImportPrograms] Auth error details:", errorData)
+          } catch (e) {
+            // Not JSON, just log raw text
+          }
         }
       } catch (error) {
         console.error("[ImportPrograms] Error checking auth:", error)
