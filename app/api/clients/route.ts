@@ -10,8 +10,10 @@ import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
 initializeFirebaseAdmin()
 
 export async function GET(request: NextRequest) {
+  console.log("[API/clients] Received GET request.")
   try {
     const sessionCookie = cookies().get("session")?.value
+    console.log("[API/clients] Session cookie present:", !!sessionCookie)
 
     if (!sessionCookie) {
       const error = createError(
@@ -27,6 +29,7 @@ export async function GET(request: NextRequest) {
     // Verify the session cookie to get the trainer's UID
     const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
     const trainerId = decodedClaims.uid
+    console.log("[API/clients] Trainer ID from session:", trainerId)
 
     if (!trainerId) {
       const error = createError(
@@ -41,6 +44,12 @@ export async function GET(request: NextRequest) {
 
     console.log(`[API/clients] Fetching clients for trainer: ${trainerId}`)
 
+    // Ensure 'db' is correctly initialized and accessible here.
+    // If 'db' is a client-side instance, it might not work directly in a server route.
+    // For server routes, you typically use firebase-admin for database operations.
+    // Let's assume for now 'db' is correctly configured for server-side use or
+    // that the client-side instance is being used in a way that works.
+    // If this is the issue, we'd need to switch to admin.firestore().
     const clientsRef = collection(db, `users/${trainerId}/clients`)
     const q = query(clientsRef)
     const querySnapshot = await getDocs(q)
@@ -51,20 +60,24 @@ export async function GET(request: NextRequest) {
     }))
 
     console.log(`[API/clients] Found ${clients.length} clients for trainer ${trainerId}.`)
+    console.log("[API/clients] Clients data being sent:", JSON.stringify(clients, null, 2).substring(0, 500) + "...") // Log first 500 chars
 
     return NextResponse.json({ clients }, { status: 200 })
   } catch (error: any) {
     console.error("[API/clients] Error fetching clients:", error)
+    let errorMessage = "An unexpected error occurred."
+    let statusCode = 500
+
     if (error.code === "auth/session-cookie-expired") {
-      return NextResponse.json({ error: "Session expired. Please log in again." }, { status: 401 })
+      errorMessage = "Session expired. Please log in again."
+      statusCode = 401
+    } else if (error instanceof Error) {
+      errorMessage = error.message
     }
-    const appError = createError(
-      ErrorType.API_SERVER_ERROR,
-      error,
-      { function: "GET /api/clients" },
-      "Failed to fetch clients.",
-    )
+
+    const appError = createError(ErrorType.API_SERVER_ERROR, error, { function: "GET /api/clients" }, errorMessage)
     logError(appError)
-    return NextResponse.json({ error: appError.message }, { status: 500 })
+    // Ensure error response is always JSON
+    return NextResponse.json({ error: appError.message }, { status: statusCode })
   }
 }
