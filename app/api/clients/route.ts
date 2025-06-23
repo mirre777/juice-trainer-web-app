@@ -1,8 +1,7 @@
 // app/api/clients/route.ts
 import { type NextRequest, NextResponse } from "next/server"
-import { collection, query, getDocs } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase" // Client-side Firebase instance
-import { getFirebaseAdminAuth, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin" // Server-side Firebase Admin
+// REMOVE: import { collection, query, getDocs } from "firebase/firestore" // Client-side Firebase instance
+import { getFirebaseAdminAuth, initializeFirebaseAdmin, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin" // Server-side Firebase Admin
 import { cookies } from "next/headers"
 import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
 
@@ -44,15 +43,10 @@ export async function GET(request: NextRequest) {
 
     console.log(`[API/clients] Fetching clients for trainer: ${trainerId}`)
 
-    // Ensure 'db' is correctly initialized and accessible here.
-    // If 'db' is a client-side instance, it might not work directly in a server route.
-    // For server routes, you typically use firebase-admin for database operations.
-    // Let's assume for now 'db' is correctly configured for server-side use or
-    // that the client-side instance is being used in a way that works.
-    // If this is the issue, we'd need to switch to admin.firestore().
-    const clientsRef = collection(db, `users/${trainerId}/clients`)
-    const q = query(clientsRef)
-    const querySnapshot = await getDocs(q)
+    // Use the Firebase Admin Firestore instance
+    const adminDb = getFirebaseAdminFirestore()
+    const clientsRef = adminDb.collection(`users/${trainerId}/clients`) // Corrected to use adminDb
+    const querySnapshot = await clientsRef.get() // No need for `query` and `getDocs` from client SDK
 
     const clients = querySnapshot.docs.map((doc) => ({
       id: doc.id,
