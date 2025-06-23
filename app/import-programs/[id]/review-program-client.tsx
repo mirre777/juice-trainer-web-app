@@ -633,6 +633,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
         <div className="flex gap-2">
+          {console.log(
+            `[ReviewProgramClient] Button disabled state check: hasChanges=${hasChanges}, isSaving=${isSaving}, isTrainerLoading=${isTrainerLoading}`,
+          )}
           <Button
             variant="ghost"
             onClick={revertChanges}
@@ -668,6 +671,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
+              console.log("Send to Client button clicked!")
               console.log(
                 "[ReviewProgramClient] 'Send to Client' button clicked. showSendProgramDialog will be set to true.",
               )
