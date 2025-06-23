@@ -181,7 +181,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
     if (showSendProgramDialog && trainer?.uid) {
       console.log(
-        "[ReviewProgramClient] Condition met: Dialog opened and trainer UID available. Calling fetchClients...",
+        `[ReviewProgramClient] Condition met: Dialog opened and trainer UID (${trainer.uid}) available. Calling fetchClients...`,
       )
       fetchClients(trainer.uid)
     } else if (showSendProgramDialog && !trainer?.uid) {
@@ -203,12 +203,15 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     try {
       const response = await fetch(`/api/clients?trainerId=${trainerId}`)
 
+      // Always get raw text first for debugging, regardless of status
+      const rawResponseText = await response.text()
+      console.log("[ReviewProgramClient] Raw API response text:", rawResponseText)
+
       if (!response.ok) {
-        const errorText = await response.text() // Get raw error text
-        console.error("[ReviewProgramClient] API response not OK:", response.status, errorText)
+        console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", rawResponseText)
         toast({
           title: "Error",
-          description: `Failed to load clients: ${response.statusText || "Server error"}`,
+          description: `Failed to load clients: ${response.statusText || "Server error"}. Details: ${rawResponseText.substring(0, 100)}`,
           variant: "destructive",
         })
         setClients([])
@@ -218,8 +221,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       // Check content type before parsing as JSON
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
-        const rawResponse = await response.text()
-        console.error("[ReviewProgramClient] API response is not JSON. Raw response:", rawResponse)
+        console.error(
+          "[ReviewProgramClient] API response is not JSON. Content-Type:",
+          contentType,
+          "Raw response:",
+          rawResponseText,
+        )
         toast({
           title: "Error",
           description: "Received unexpected response from client API. Please try again.",
@@ -231,7 +238,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       let data: { clients?: Client[]; error?: string }
       try {
-        data = await response.json()
+        data = JSON.parse(rawResponseText) // Parse the raw text we already got
         console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients)
         setClients(data.clients || [])
         if (data.clients && data.clients.length > 0) {
@@ -242,8 +249,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           console.log("[ReviewProgramClient] No clients found, selectedClientId cleared.")
         }
       } catch (jsonError) {
-        const rawResponse = await response.text() // Try to get raw text again if json() failed
-        console.error("[ReviewProgramClient] Failed to parse JSON response:", jsonError, "Raw response:", rawResponse)
+        console.error(
+          "[ReviewProgramClient] Failed to parse JSON response:",
+          jsonError,
+          "Raw response that failed parsing:",
+          rawResponseText,
+        )
         toast({
           title: "Error",
           description: "Failed to parse client data. Please try again.",
