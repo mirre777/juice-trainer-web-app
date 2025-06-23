@@ -17,6 +17,7 @@ import {
   Save,
   Send,
   ChevronUp,
+  Loader2,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -34,7 +35,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group" // Added for client selection
+import { Label } from "@/components/ui/label" // Added for client selection
+import { useToast } from "@/hooks/use-toast" // Assuming you have a toast hook
+import { useCurrentUser } from "@/hooks/use-current-user" // To get the trainer's ID
+import { sendProgramToClient } from "@/app/actions/program-assignment-actions" // Import the server action
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
+import type { Client } from "@/types/client" // Assuming you have a Client type
 
 interface ReviewProgramClientProps {
   importData: any
@@ -42,6 +49,9 @@ interface ReviewProgramClientProps {
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
   const router = useRouter()
+  const { toast } = useToast()
+  const { user: trainer } = useCurrentUser() // Get current trainer's user data
+
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
   const [isSaving, setIsSaving] = useState(false)
@@ -54,9 +64,22 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
 
+  // New state for client selection
+  const [clients, setClients] = useState<Client[]>([])
+  const [loadingClients, setLoadingClients] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [isAssigning, setIsAssigning] = useState(false)
+
   // Placeholder values as client data is not directly available in importData
-  const clientNameForModal = "Emilie Rentinger"
-  const dateForModal = "May 9, 2025" // Or format new Date()
+  // These will be replaced by actual selected client data
+  const clientNameForModal = selectedClientId
+    ? clients.find((c) => c.id === selectedClientId)?.name || "Selected Client"
+    : "Select a Client"
+  const dateForModal = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
 
   // Initialize programState from importData on component mount or importData change
   useEffect(() => {
@@ -159,6 +182,55 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setJustSaved(false)
     }
   }, [importData])
+
+  // Fetch clients when the send program dialog opens
+  useEffect(() => {
+    if (showSendProgramDialog && trainer?.uid) {
+      fetchClients(trainer.uid)
+    } else if (showSendProgramDialog && !trainer?.uid) {
+      setLoadingClients(false)
+      toast({
+        title: "Authentication Error",
+        description: "Could not retrieve trainer information. Please log in again.",
+        variant: "destructive",
+      })
+    }
+  }, [showSendProgramDialog, trainer?.uid, toast])
+
+  const fetchClients = async (trainerId: string) => {
+    setLoadingClients(true)
+    try {
+      const response = await fetch(`/api/clients?trainerId=${trainerId}`)
+      const data = await response.json()
+
+      if (response.ok) {
+        setClients(data.clients || [])
+        if (data.clients.length > 0) {
+          setSelectedClientId(data.clients[0].id) // Select first client by default
+        } else {
+          setSelectedClientId("") // No clients to select
+        }
+      } else {
+        console.error("Failed to fetch clients:", data.error)
+        toast({
+          title: "Error",
+          description: data.error || "Failed to load clients.",
+          variant: "destructive",
+        })
+        setClients([])
+      }
+    } catch (error) {
+      console.error("Error fetching clients:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while fetching clients.",
+        variant: "destructive",
+      })
+      setClients([])
+    } finally {
+      setLoadingClients(false)
+    }
+  }
 
   // Derived state for current routines based on current week
   const currentRoutines: WorkoutRoutine[] = useMemo(() => {
@@ -309,7 +381,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       importData.program = JSON.parse(JSON.stringify(programState))
     } catch (error) {
       console.error("Error saving program:", error)
-      alert("Failed to save changes. Please try again.")
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsSaving(false)
     }
@@ -438,11 +514,53 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     return { name: "Taper", color: "bg-green-100 text-green-800" }
   }
 
-  const handleSendProgram = () => {
-    // In a real application, this would trigger an API call to send the program to the client
-    console.log("Sending program to client:", programState?.program_title, "with message:", messageToClient)
-    setShowSendProgramDialog(false)
-    // Optionally, show a success toast notification
+  const handleSendProgram = async () => {
+    if (!programState || !selectedClientId) {
+      toast({
+        title: "Error",
+        description: "Please select a client to send the program.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsAssigning(true)
+    try {
+      const result = await sendProgramToClient(programState, selectedClientId)
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+        setShowSendProgramDialog(false)
+        setMessageToClient("") // Clear message after sending
+        setSelectedClientId("") // Clear selected client
+      } else {
+        toast({
+          title: "Error",
+          description: result.message,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error assigning program:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred during program assignment.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsAssigning(false)
+    }
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2)
   }
 
   if (!programState) {
@@ -811,12 +929,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       {/* Send Program Confirmation Dialog */}
       <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Confirm Sending Program</DialogTitle>
             <DialogDescription>You are about to send the following program:</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
             <Card className="p-4">
               <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
               <div className="flex items-center text-sm text-gray-600 mb-1">
@@ -837,6 +955,43 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               </div>
             </Card>
 
+            {/* Client Selection Section */}
+            <div className="space-y-2">
+              <h4 className="font-semibold text-gray-800">Select Client:</h4>
+              {loadingClients ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                  <span className="ml-2 text-gray-600">Loading clients...</span>
+                </div>
+              ) : clients.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
+              ) : (
+                <RadioGroup
+                  value={selectedClientId}
+                  onValueChange={setSelectedClientId}
+                  className="max-h-48 overflow-y-auto"
+                >
+                  {clients.map((client) => (
+                    <div
+                      key={client.id}
+                      className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    >
+                      <RadioGroupItem value={client.id} id={`client-${client.id}`} />
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
+                          {client.name}
+                        </Label>
+                        {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </RadioGroup>
+              )}
+            </div>
+
             <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
               <Info className="h-4 w-4" />
               <span>
@@ -844,12 +999,23 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               </span>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)}>
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isAssigning}>
               Cancel
             </Button>
-            <Button className="bg-lime-400 hover:bg-lime-500 text-gray-800" onClick={handleSendProgram}>
-              Send Program
+            <Button
+              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+              onClick={handleSendProgram}
+              disabled={isAssigning || !selectedClientId || !programState}
+            >
+              {isAssigning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Sending...
+                </>
+              ) : (
+                "Send Program"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
