@@ -48,7 +48,8 @@ interface ReviewProgramClientProps {
 }
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
-  console.log("[ReviewProgramClient] Component rendered.")
+  // THIS LOG SHOULD ALWAYS APPEAR ON EVERY RENDER
+  console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
   const { toast } = useToast()
   const { user: trainer } = useCurrentUser()
@@ -174,15 +175,25 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  useEffect(() => {
-    console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
-    console.log("[ReviewProgramClient] showSendProgramDialog:", showSendProgramDialog)
-    console.log("[ReviewProgramClient] trainer object:", trainer) // Log the full trainer object
+  // Log current state of dependencies right before the effect runs
+  console.log(
+    "[ReviewProgramClient] Before useEffect: showSendProgramDialog =",
+    showSendProgramDialog,
+    " | trainer =",
+    trainer,
+  )
 
-    if (showSendProgramDialog && trainer) {
+  useEffect(() => {
+    // THIS LOG SHOULD APPEAR IF THE EFFECT IS TRIGGERED
+    console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
+    console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
+    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
+
+    if (showSendProgramDialog && trainer?.uid) {
+      // Ensure trainer.uid exists
       console.log("[ReviewProgramClient] Dialog opened and trainer UID available, fetching clients...")
       fetchClients(trainer.uid)
-    } else if (showSendProgramDialog && !trainer) {
+    } else if (showSendProgramDialog && !trainer?.uid) {
       setLoadingClients(false)
       console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing. Cannot fetch clients.")
       toast({
@@ -191,7 +202,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         variant: "destructive",
       })
     }
-  }, [showSendProgramDialog, trainer, toast])
+  }, [showSendProgramDialog, trainer, toast]) // Keep trainer in dependencies for now
 
   const fetchClients = async (trainerId: string) => {
     setLoadingClients(true)
@@ -620,7 +631,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </Button>
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => setShowSendProgramDialog(true)}
+            onClick={() => {
+              // THIS LOG SHOULD APPEAR WHEN THE BUTTON IS CLICKED
+              console.log(
+                "[ReviewProgramClient] 'Send to Client' button clicked. Setting showSendProgramDialog to true.",
+              )
+              setShowSendProgramDialog(true)
+            }}
             disabled={hasChanges || isSaving}
           >
             <Send className="h-4 w-4" />
