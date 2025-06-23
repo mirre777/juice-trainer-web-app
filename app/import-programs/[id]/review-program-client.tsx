@@ -51,7 +51,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
   const { toast } = useToast()
-  const { user: trainer } = useCurrentUser()
+  const { user: trainer, loading: isTrainerLoading } = useCurrentUser() // Get loading state
 
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
@@ -78,6 +78,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     month: "long",
     day: "numeric",
   })
+
+  // Log trainer and loading state on every render
+  console.log("[ReviewProgramClient] Current trainer state:", { trainer, isTrainerLoading })
 
   useEffect(() => {
     if (importData?.program) {
@@ -174,29 +177,33 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  // Restore the original dependencies for the useEffect, as they are correctly used within the effect.
-  // The issue seems to be the useEffect not firing, not the dependencies themselves.
-  // We will add a direct call to fetchClients in the button handler.
+  // This useEffect will now only trigger when showSendProgramDialog or trainer changes.
+  // The direct call in the button onClick will ensure fetchClients runs when the button is pressed.
   useEffect(() => {
     console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
     console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
     console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
 
-    if (showSendProgramDialog && trainer?.uid) {
+    // This useEffect is primarily for reacting to changes in showSendProgramDialog
+    // and ensuring clients are fetched if the dialog is opened and trainer data is ready.
+    // The direct call in the button handler is the primary trigger.
+    if (showSendProgramDialog && trainer?.uid && clients.length === 0 && !loadingClients) {
       console.log(
-        `[ReviewProgramClient] Condition met: Dialog opened and trainer UID (${trainer.uid}) available. Calling fetchClients...`,
+        `[ReviewProgramClient] Condition met: Dialog opened, trainer UID (${trainer.uid}) available, no clients loaded. Calling fetchClients...`,
       )
       fetchClients(trainer.uid)
-    } else if (showSendProgramDialog && !trainer?.uid) {
+    } else if (showSendProgramDialog && !trainer?.uid && !isTrainerLoading) {
       setLoadingClients(false)
-      console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing. Cannot fetch clients.")
+      console.error(
+        "[ReviewProgramClient] Dialog opened but trainer UID is missing and not loading. Cannot fetch clients.",
+      )
       toast({
         title: "Authentication Error",
         description: "Could not retrieve trainer information. Please log in again.",
         variant: "destructive",
       })
     }
-  }, [showSendProgramDialog, trainer, toast]) // Restore all relevant dependencies
+  }, [showSendProgramDialog, trainer, toast, clients.length, loadingClients, isTrainerLoading])
 
   const fetchClients = async (trainerId: string) => {
     setLoadingClients(true)
@@ -662,12 +669,15 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
               console.log(
-                "[ReviewProgramClient] 'Send to Client' button clicked. Setting showSendProgramDialog to true and initiating client fetch.",
+                "[ReviewProgramClient] 'Send to Client' button clicked. showSendProgramDialog will be set to true.",
               )
+              console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid) // Log trainer UID at click
               if (trainer?.uid) {
                 fetchClients(trainer.uid) // Explicitly call fetchClients here
               } else {
-                console.error("[ReviewProgramClient] Trainer UID missing when 'Send to Client' button clicked.")
+                console.error(
+                  "[ReviewProgramClient] Trainer UID missing or loading when 'Send to Client' button clicked. Cannot fetch clients.",
+                )
                 toast({
                   title: "Authentication Error",
                   description: "Could not retrieve trainer information. Please log in again.",
@@ -676,7 +686,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               }
               setShowSendProgramDialog(true)
             }}
-            disabled={hasChanges || isSaving}
+            disabled={hasChanges || isSaving || isTrainerLoading || !trainer?.uid} // Disable if trainer is loading or not available
           >
             <Send className="h-4 w-4" />
             Send to Client
