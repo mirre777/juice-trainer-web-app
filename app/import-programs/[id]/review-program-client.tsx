@@ -217,6 +217,18 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       const rawResponseText = await response.text()
       console.log("[ReviewProgramClient] Raw API response text:", rawResponseText)
 
+      // NEW: Check if rawResponseText is empty or undefined before parsing
+      if (!rawResponseText) {
+        console.error("[ReviewProgramClient] API response text is empty or undefined. Cannot parse JSON.")
+        toast({
+          title: "Error",
+          description: "Received empty or invalid response from client API. Please try again.",
+          variant: "destructive",
+        })
+        setClients([])
+        return // Exit early
+      }
+
       if (!response.ok) {
         console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", rawResponseText)
         toast({
