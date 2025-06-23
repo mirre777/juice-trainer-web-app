@@ -80,7 +80,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   })
 
   // Log trainer and loading state on every render
-  console.log("[ReviewProgramClient] Current trainer state:", { trainer, isTrainerLoading })
+  console.log("[ReviewProgramClient] Current trainer state from useCurrentUser:", { trainer, isTrainerLoading })
 
   useEffect(() => {
     if (importData?.program) {
@@ -672,21 +672,22 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 "[ReviewProgramClient] 'Send to Client' button clicked. showSendProgramDialog will be set to true.",
               )
               console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid) // Log trainer UID at click
-              if (trainer?.uid) {
-                fetchClients(trainer.uid) // Explicitly call fetchClients here
-              } else {
-                console.error(
-                  "[ReviewProgramClient] Trainer UID missing or loading when 'Send to Client' button clicked. Cannot fetch clients.",
-                )
-                toast({
-                  title: "Authentication Error",
-                  description: "Could not retrieve trainer information. Please log in again.",
-                  variant: "destructive",
-                })
-              }
+              // Temporarily remove the conditional check for debugging
+              // if (trainer?.uid) {
+              fetchClients(trainer?.uid || "DEBUG_MISSING_UID") // Pass UID or a debug string
+              // } else {
+              //   console.error(
+              //     "[ReviewProgramClient] Trainer UID missing or loading when 'Send to Client' button clicked. Cannot fetch clients.",
+              //   )
+              //   toast({
+              //     title: "Authentication Error",
+              //     description: "Could not retrieve trainer information. Please log in again.",
+              //     variant: "destructive",
+              //   })
+              // }
               setShowSendProgramDialog(true)
             }}
-            disabled={hasChanges || isSaving || isTrainerLoading || !trainer?.uid} // Disable if trainer is loading or not available
+            disabled={hasChanges || isSaving || isTrainerLoading} // Keep disabled if trainer is loading or has unsaved changes
           >
             <Send className="h-4 w-4" />
             Send to Client
