@@ -174,6 +174,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   }, [importData])
 
   useEffect(() => {
+    console.log("[ReviewProgramClient] showSendProgramDialog changed:", showSendProgramDialog)
     if (showSendProgramDialog && trainer?.uid) {
       console.log("[ReviewProgramClient] Dialog opened, fetching clients for trainer:", trainer.uid)
       fetchClients(trainer.uid)
@@ -192,6 +193,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setLoadingClients(true)
     setClients([]) // Clear previous clients
     setSelectedClientId("") // Clear previous selection
+    console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
     try {
       const response = await fetch(`/api/clients?trainerId=${trainerId}`)
       const data = await response.json()
@@ -201,8 +203,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         setClients(data.clients || [])
         if (data.clients.length > 0) {
           setSelectedClientId(data.clients[0].id)
+          console.log("[ReviewProgramClient] First client selected:", data.clients[0].id)
         } else {
           setSelectedClientId("")
+          console.log("[ReviewProgramClient] No clients found, selectedClientId cleared.")
         }
       } else {
         console.error("[ReviewProgramClient] Failed to fetch clients from API:", data.error)
@@ -225,9 +229,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setLoadingClients(false)
       console.log(
         "[ReviewProgramClient] Finished fetching clients. Clients count:",
-        clients.length,
+        clients.length, // Note: 'clients' here might not reflect the *just updated* state due to closure, but the next log will.
         "Selected ID:",
-        selectedClientId,
+        selectedClientId, // Same note as above.
       )
     }
   }
@@ -939,29 +943,37 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               ) : clients.length === 0 ? (
                 <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
               ) : (
-                <RadioGroup
-                  value={selectedClientId}
-                  onValueChange={setSelectedClientId}
-                  className="max-h-48 overflow-y-auto"
-                >
-                  {clients.map((client) => (
-                    <div
-                      key={client.id}
-                      className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                    >
-                      <RadioGroupItem value={client.id} id={`client-${client.id}`} />
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
+                <>
+                  {console.log(
+                    "[ReviewProgramClient] Rendering RadioGroup. Clients:",
+                    clients,
+                    "Selected ID:",
+                    selectedClientId,
+                  )}
+                  <RadioGroup
+                    value={selectedClientId}
+                    onValueChange={setSelectedClientId}
+                    className="max-h-48 overflow-y-auto"
+                  >
+                    {clients.map((client) => (
+                      <div
+                        key={client.id}
+                        className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                      >
+                        <RadioGroupItem value={client.id} id={`client-${client.id}`} />
+                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
+                            {client.name}
+                          </Label>
+                          {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
-                          {client.name}
-                        </Label>
-                        {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </RadioGroup>
+                    ))}
+                  </RadioGroup>
+                </>
               )}
             </div>
 
