@@ -14,7 +14,6 @@ export function useCurrentUser() {
       // Try to get the user ID from the cookie
       const userIdFromCookie = getCookie("user_id") as string
       console.log("[useCurrentUser] User ID from cookie:", userIdFromCookie) // Added log
-
       if (userIdFromCookie) {
         setUserId(userIdFromCookie)
       } else {
