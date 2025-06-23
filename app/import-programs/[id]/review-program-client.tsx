@@ -174,26 +174,30 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
+  // TEMPORARY: Removed trainer and toast from dependencies to force effect re-run on dialog state change
   useEffect(() => {
     console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
     console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
-    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
+    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer) // Still log trainer to see its value
 
-    if (showSendProgramDialog && trainer?.uid) {
-      console.log(
-        `[ReviewProgramClient] Condition met: Dialog opened and trainer UID (${trainer.uid}) available. Calling fetchClients...`,
-      )
-      fetchClients(trainer.uid)
-    } else if (showSendProgramDialog && !trainer?.uid) {
-      setLoadingClients(false)
-      console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing. Cannot fetch clients.")
-      toast({
-        title: "Authentication Error",
-        description: "Could not retrieve trainer information. Please log in again.",
-        variant: "destructive",
-      })
+    if (showSendProgramDialog) {
+      // Only depend on showSendProgramDialog for now
+      if (trainer?.uid) {
+        console.log(
+          `[ReviewProgramClient] Condition met: Dialog opened and trainer UID (${trainer.uid}) available. Calling fetchClients...`,
+        )
+        fetchClients(trainer.uid)
+      } else {
+        setLoadingClients(false)
+        console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing. Cannot fetch clients.")
+        toast({
+          title: "Authentication Error",
+          description: "Could not retrieve trainer information. Please log in again.",
+          variant: "destructive",
+        })
+      }
     }
-  }, [showSendProgramDialog, trainer, toast])
+  }, [showSendProgramDialog]) // Only showSendProgramDialog in dependencies for this test
 
   const fetchClients = async (trainerId: string) => {
     setLoadingClients(true)
@@ -593,6 +597,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       </div>
     )
   }
+
+  // THIS LOG SHOULD APPEAR EVERY TIME THE COMPONENT RENDERS, showing the current state of the dialog
+  console.log("[ReviewProgramClient] showSendProgramDialog state at render:", showSendProgramDialog)
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
