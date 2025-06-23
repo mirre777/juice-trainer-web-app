@@ -48,7 +48,6 @@ interface ReviewProgramClientProps {
 }
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
-  // THIS LOG SHOULD ALWAYS APPEAR ON EVERY RENDER
   console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
   const { toast } = useToast()
@@ -175,23 +174,15 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  // Log current state of dependencies right before the effect runs
-  console.log(
-    "[ReviewProgramClient] Before useEffect: showSendProgramDialog =",
-    showSendProgramDialog,
-    " | trainer =",
-    trainer,
-  )
-
   useEffect(() => {
-    // THIS LOG SHOULD APPEAR IF THE EFFECT IS TRIGGERED
     console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
     console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
     console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
 
     if (showSendProgramDialog && trainer?.uid) {
-      // Ensure trainer.uid exists
-      console.log("[ReviewProgramClient] Dialog opened and trainer UID available, fetching clients...")
+      console.log(
+        "[ReviewProgramClient] Condition met: Dialog opened and trainer UID available. Calling fetchClients...",
+      )
       fetchClients(trainer.uid)
     } else if (showSendProgramDialog && !trainer?.uid) {
       setLoadingClients(false)
@@ -202,7 +193,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         variant: "destructive",
       })
     }
-  }, [showSendProgramDialog, trainer, toast]) // Keep trainer in dependencies for now
+  }, [showSendProgramDialog, trainer, toast])
 
   const fetchClients = async (trainerId: string) => {
     setLoadingClients(true)
@@ -211,29 +202,57 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
     try {
       const response = await fetch(`/api/clients?trainerId=${trainerId}`)
-      const data = await response.json()
 
-      if (response.ok) {
+      if (!response.ok) {
+        const errorText = await response.text() // Get raw error text
+        console.error("[ReviewProgramClient] API response not OK:", response.status, errorText)
+        toast({
+          title: "Error",
+          description: `Failed to load clients: ${response.statusText || "Server error"}`,
+          variant: "destructive",
+        })
+        setClients([])
+        return // Exit early if response is not OK
+      }
+
+      // Check content type before parsing as JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const rawResponse = await response.text()
+        console.error("[ReviewProgramClient] API response is not JSON. Raw response:", rawResponse)
+        toast({
+          title: "Error",
+          description: "Received unexpected response from client API. Please try again.",
+          variant: "destructive",
+        })
+        setClients([])
+        return // Exit early if not JSON
+      }
+
+      let data: { clients?: Client[]; error?: string }
+      try {
+        data = await response.json()
         console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients)
         setClients(data.clients || [])
-        if (data.clients.length > 0) {
+        if (data.clients && data.clients.length > 0) {
           setSelectedClientId(data.clients[0].id)
           console.log("[ReviewProgramClient] First client selected:", data.clients[0].id)
         } else {
           setSelectedClientId("")
           console.log("[ReviewProgramClient] No clients found, selectedClientId cleared.")
         }
-      } else {
-        console.error("[ReviewProgramClient] Failed to fetch clients from API:", data.error)
+      } catch (jsonError) {
+        const rawResponse = await response.text() // Try to get raw text again if json() failed
+        console.error("[ReviewProgramClient] Failed to parse JSON response:", jsonError, "Raw response:", rawResponse)
         toast({
           title: "Error",
-          description: data.error || "Failed to load clients.",
+          description: "Failed to parse client data. Please try again.",
           variant: "destructive",
         })
         setClients([])
       }
     } catch (error) {
-      console.error("[ReviewProgramClient] Error fetching clients:", error)
+      console.error("[ReviewProgramClient] Error fetching clients (network/unexpected):", error)
       toast({
         title: "Error",
         description: "An unexpected error occurred while fetching clients.",
@@ -242,14 +261,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setClients([])
     } finally {
       setLoadingClients(false)
-      console.log(
-        "[ReviewProgramClient] Finished fetching clients. Clients count:",
-        clients.length, // Note: 'clients' here might not reflect the *just updated* state due to closure, but the next log will.
-        "Selected ID:",
-        selectedClientId, // Same note as above.
-      )
-      console.log("[ReviewProgramClient] Current clients state after fetch:", clients) // Add this line
-      console.log("[ReviewProgramClient] Current selectedClientId state after fetch:", selectedClientId) // Add this line
+      console.log("[ReviewProgramClient] Finished fetching clients.")
     }
   }
 
@@ -632,7 +644,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
-              // THIS LOG SHOULD APPEAR WHEN THE BUTTON IS CLICKED
               console.log(
                 "[ReviewProgramClient] 'Send to Client' button clicked. Setting showSendProgramDialog to true.",
               )
