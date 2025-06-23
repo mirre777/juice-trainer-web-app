@@ -4,7 +4,8 @@ import type React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, Users, Clock } from "lucide-react"
+import { Calendar, Users, Clock, MoreHorizontal } from "lucide-react" // Import MoreHorizontal icon
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu" // Import DropdownMenu components
 
 interface Program {
   id: string
@@ -39,7 +40,7 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ program, onClick, onEd
   }
 
   return (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onClick?.(program)}>
+    <Card className="hover:shadow-md transition-shadow" onClick={() => onClick?.(program)}>
       <CardHeader>
         <div className="flex justify-between items-start">
           <CardTitle className="text-lg">{program.name}</CardTitle>
@@ -63,37 +64,41 @@ export const ProgramCard: React.FC<ProgramCardProps> = ({ program, onClick, onEd
           </div>
         </div>
 
-        <div className="flex gap-2 mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit?.(program)
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete?.(program)
-            }}
-          >
-            Delete
-          </Button>
-          <Button
-            variant="default" // Use a different variant to distinguish
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              onAssign?.(program)
-            }}
-          >
-            Assign
-          </Button>
+        <div className="flex justify-end mt-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit?.(program)
+                }}
+              >
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete?.(program)
+                }}
+              >
+                Delete
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAssign?.(program)
+                }}
+              >
+                Assign to Client
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardContent>
     </Card>
