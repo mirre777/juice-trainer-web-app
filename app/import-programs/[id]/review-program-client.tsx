@@ -16,8 +16,8 @@ import {
   Info,
   Save,
   Send,
-  ChevronUp,
   Loader2,
+  ChevronUp,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -35,13 +35,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group" // Added for client selection
-import { Label } from "@/components/ui/label" // Added for client selection
-import { useToast } from "@/hooks/use-toast" // Assuming you have a toast hook
-import { useCurrentUser } from "@/hooks/use-current-user" // To get the trainer's ID
-import { sendProgramToClient } from "@/app/actions/program-assignment-actions" // Import the server action
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { useCurrentUser } from "@/hooks/use-current-user"
+import { sendProgramToClient } from "@/app/actions/program-assignment-actions"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
-import type { Client } from "@/types/client" // Assuming you have a Client type
+import type { Client } from "@/types/client"
 
 interface ReviewProgramClientProps {
   importData: any
@@ -50,7 +50,7 @@ interface ReviewProgramClientProps {
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
   const router = useRouter()
   const { toast } = useToast()
-  const { user: trainer } = useCurrentUser() // Get current trainer's user data
+  const { user: trainer } = useCurrentUser()
 
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
@@ -64,14 +64,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
 
-  // New state for client selection
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [isAssigning, setIsAssigning] = useState(false)
 
-  // Placeholder values as client data is not directly available in importData
-  // These will be replaced by actual selected client data
   const clientNameForModal = selectedClientId
     ? clients.find((c) => c.id === selectedClientId)?.name || "Selected Client"
     : "Select a Client"
@@ -81,12 +78,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     day: "numeric",
   })
 
-  // Initialize programState from importData on component mount or importData change
   useEffect(() => {
     if (importData?.program) {
       const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
 
-      // Ensure program_weeks is a number, default to 4 if not present or invalid
       initialProgram.program_weeks =
         Number.isInteger(initialProgram.program_weeks) && initialProgram.program_weeks > 0
           ? initialProgram.program_weeks
@@ -94,7 +89,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
 
-      // Normalize data structure: Always use 'weeks' array and ensure set_numbers
       let normalizedWeeks: ExerciseWeek[] = []
 
       if (initialProgram.is_periodized) {
@@ -144,12 +138,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         initialProgram.program_weeks = 1
       }
 
-      // --- NEW: Normalize set_number for all exercises in all routines/weeks ---
       normalizedWeeks.forEach((week) => {
         week.routines?.forEach((routine) => {
           routine.exercises.forEach((exercise) => {
             if (exercise.weeks && exercise.weeks.length > 0) {
-              // For periodized programs, iterate through each week's sets
               exercise.weeks.forEach((exWeek) => {
                 if (exWeek.sets) {
                   exWeek.sets.forEach((set, setIndex) => {
@@ -160,7 +152,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 }
               })
             } else if (exercise.sets) {
-              // For non-periodized programs (or if 'weeks' is not used at exercise level), iterate through top-level sets
               exercise.sets.forEach((set, setIndex) => {
                 if (typeof set.set_number !== "number" || set.set_number <= 0) {
                   set.set_number = setIndex + 1
@@ -170,20 +161,18 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           })
         })
       })
-      // --- END NEW NORMALIZATION ---
 
       setProgramState({
         ...initialProgram,
         weeks: normalizedWeeks,
-        routines: [], // Ensure top-level routines are always empty
+        routines: [],
       })
-      setCurrentWeek(1) // Always start at week 1 for display
+      setCurrentWeek(1)
       setHasChanges(false)
       setJustSaved(false)
     }
   }, [importData])
 
-  // Fetch clients when the send program dialog opens
   useEffect(() => {
     if (showSendProgramDialog && trainer?.uid) {
       fetchClients(trainer.uid)
@@ -206,9 +195,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (response.ok) {
         setClients(data.clients || [])
         if (data.clients.length > 0) {
-          setSelectedClientId(data.clients[0].id) // Select first client by default
+          setSelectedClientId(data.clients[0].id)
         } else {
-          setSelectedClientId("") // No clients to select
+          setSelectedClientId("")
         }
       } else {
         console.error("Failed to fetch clients:", data.error)
@@ -232,17 +221,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }
 
-  // Derived state for current routines based on current week
   const currentRoutines: WorkoutRoutine[] = useMemo(() => {
     if (!programState || !programState.weeks || programState.weeks.length === 0) return []
     return programState.weeks[currentWeek - 1]?.routines || []
   }, [programState, currentWeek])
 
-  // Week navigation
   const goToPreviousWeek = () => setCurrentWeek(Math.max(1, currentWeek - 1))
   const goToNextWeek = () => setCurrentWeek(Math.min(programState?.program_weeks || 1, currentWeek + 1))
 
-  // Handle changes to program title and notes
   const handleProgramTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setProgramState((prev) => {
       if (!prev) return prev
@@ -261,7 +247,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
   }
 
-  // Handle changes to program weeks (only relevant for periodized programs)
   const handleProgramWeeksChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newWeeksCount = Number.parseInt(e.target.value, 10)
     if (isNaN(newWeeksCount) || newWeeksCount < 1) return
@@ -279,31 +264,26 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           if (currentWeeks[i]) {
             newWeeksArray.push(currentWeeks[i])
           } else {
-            // Copy the last available week's data, or create empty if no weeks exist
             const lastWeekData = currentWeeks[currentWeeks.length - 1] || { routines: [] }
             newWeeksArray.push({
               week_number: i + 1,
-              set_count: 0, // Will be derived
-              sets: [], // Will be derived
-              routines: JSON.parse(JSON.stringify(lastWeekData.routines)), // Deep copy
+              set_count: 0,
+              sets: [],
+              routines: JSON.parse(JSON.stringify(lastWeekData.routines)),
             })
           }
         }
         updatedProgram.weeks = newWeeksArray
-        // Adjust currentWeek if it's now out of bounds
         if (currentWeek > newWeeksCount) {
           setCurrentWeek(newWeeksCount)
         }
       }
-      // If not periodized, program_weeks should always be 1, so this input should be disabled.
-      // No change needed here for non-periodized as it's handled by togglePeriodization.
       return updatedProgram
     })
     setHasChanges(true)
     setJustSaved(false)
   }
 
-  // Toggle between periodized and non-periodized
   const togglePeriodization = () => {
     if (!programState) return
 
@@ -311,20 +291,18 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
 
     if (programState.is_periodized) {
-      // Switching from Periodized to Non-Periodized
-      setShowSelectWeekDialog(true) // Open dialog to select which week to keep
+      setShowSelectWeekDialog(true)
     } else {
-      // Switching from Non-Periodized to Periodized
       const currentSingleWeekRoutines = programState.weeks?.[0]?.routines || []
       const newWeeks: ExerciseWeek[] = []
-      const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4 // Use existing weeks or default to 4
+      const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4
 
       for (let i = 0; i < defaultWeeks; i++) {
         newWeeks.push({
           week_number: i + 1,
-          set_count: 0, // Will be derived from exercises
-          sets: [], // Will be derived from exercises
-          routines: JSON.parse(JSON.stringify(currentSingleWeekRoutines)), // Deep copy routines
+          set_count: 0,
+          sets: [],
+          routines: JSON.parse(JSON.stringify(currentSingleWeekRoutines)),
         })
       }
 
@@ -334,14 +312,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           ...prev,
           is_periodized: true,
           weeks: newWeeks,
-          program_weeks: defaultWeeks, // Update program_weeks
+          program_weeks: defaultWeeks,
         }
       })
-      setCurrentWeek(1) // Reset current week to 1
+      setCurrentWeek(1)
     }
   }
 
-  // Handle selection of week when switching from periodized to non-periodized
   const handleSelectWeekForNonPeriodized = (weekNumber: number) => {
     if (!programState || !programState.weeks) return
 
@@ -352,12 +329,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         return {
           ...prev,
           is_periodized: false,
-          weeks: [JSON.parse(JSON.stringify(selectedWeekData))], // Keep only the selected week
-          program_weeks: 1, // Non-periodized always has 1 week
+          weeks: [JSON.parse(JSON.stringify(selectedWeekData))],
+          program_weeks: 1,
         }
       })
       setShowSelectWeekDialog(false)
-      setCurrentWeek(1) // Reset current week for display purposes
+      setCurrentWeek(1)
       setHasChanges(true)
       setJustSaved(false)
     }
@@ -370,14 +347,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     try {
       await updateDoc(doc(db, "sheets_imports", importData.id), {
         name: programState.program_title,
-        program: programState, // Save the entire programState object
+        program: programState,
         status: "reviewed",
         updatedAt: new Date(),
       })
       setHasChanges(false)
       setJustSaved(true)
-      // Re-initialize importData to reflect the saved state for correct revert behavior
-      // In a real app, you might refetch importData or update it via a parent callback
       importData.program = JSON.parse(JSON.stringify(programState))
     } catch (error) {
       console.error("Error saving program:", error)
@@ -398,17 +373,15 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setCurrentWeek(1)
       setHasChanges(false)
       setJustSaved(false)
-      setExpandedRoutines({ "0": true }) // Reset expanded routines
+      setExpandedRoutines({ "0": true })
     }
   }
 
-  // Add empty set to exercise
   const addSet = (routineIndex: number, exerciseIndex: number) => {
     setProgramState((prev) => {
       if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
+      const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise) {
@@ -420,8 +393,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           weight: "",
           rpe: "",
           rest: "",
-          duration_sec: null, // Use duration_sec as per type
-          notes: null, // Use notes as per type
+          duration_sec: null,
+          notes: null,
         }
         if (!targetExercise.sets) targetExercise.sets = []
         targetExercise.sets.push(newSet)
@@ -432,13 +405,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
   }
 
-  // Duplicate specific set
   const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
     setProgramState((prev) => {
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise && targetExercise.sets && targetExercise.sets[setIndex]) {
@@ -459,13 +430,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
   }
 
-  // Delete set
   const deleteSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
     setProgramState((prev) => {
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise && targetExercise.sets) {
@@ -483,9 +452,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const updateSetField = (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
     setProgramState((prev) => {
       if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
+      const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const weekData = updatedProgram.weeks[currentWeek - 1]
       if (weekData && weekData.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
         weekData.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
@@ -533,8 +501,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           description: result.message,
         })
         setShowSendProgramDialog(false)
-        setMessageToClient("") // Clear message after sending
-        setSelectedClientId("") // Clear selected client
+        setMessageToClient("")
+        setSelectedClientId("")
       } else {
         toast({
           title: "Error",
@@ -632,7 +600,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => setShowSendProgramDialog(true)}
-            disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
+            disabled={hasChanges || isSaving}
           >
             <Send className="h-4 w-4" />
             Send to Client
@@ -665,15 +633,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               onChange={handleProgramWeeksChange}
               className="w-full border-transparent focus:border-lime-500"
               min={1}
-              disabled={!programState.is_periodized} // Disable if not periodized
+              disabled={!programState.is_periodized}
             />
           </div>
         </div>
 
         {/* Program Notes */}
         <div className="mb-8">
-          {" "}
-          {/* Added mb-6 here */}
           <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
             Program Notes
           </label>
@@ -713,14 +679,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       {programState.is_periodized && (
         <Card className="p-4 mb-6">
           <div className="flex items-center justify-between">
-            {" "}
-            {/* This container will push items to ends */}
             <Button variant="ghost" size="icon" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
-              <ChevronLeft className="h-6 w-6" /> {/* Increased size */}
+              <ChevronLeft className="h-6 w-6" />
             </Button>
             <div className="flex-1 text-center">
-              {" "}
-              {/* This will center the text */}
               <div className="text-lg font-semibold">
                 Week {currentWeek}/{programState.program_weeks}
               </div>
@@ -731,7 +693,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               onClick={goToNextWeek}
               disabled={currentWeek === programState.program_weeks}
             >
-              <ChevronRight className="h-6 w-6" /> {/* Increased size */}
+              <ChevronRight className="h-6 w-6" />
             </Button>
           </div>
 
@@ -1037,7 +999,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             <Button
               variant="destructive"
               onClick={() => {
-                setHasChanges(false) // Ensure changes are marked as discarded
+                setHasChanges(false)
                 router.push("/import-programs")
               }}
             >

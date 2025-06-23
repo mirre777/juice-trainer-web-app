@@ -1,166 +1,112 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { ProgramCard } from "@/components/programs/ProgramCard"
-import { NewProgramDialog } from "@/components/programs/new-program-dialog"
-import { ProgramEditor } from "@/components/programs/program-editor"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { collection, getDocs, query, doc, deleteDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
-import { useCurrentUser } from "@/hooks/use-current-user"
-import { PageSkeleton } from "@/components/shared/page-skeleton"
-import { EmptyState } from "@/components/shared/empty-state"
+import { AssignProgramDialog } from "@/components/programs/assign-program-dialog"
 import type { WorkoutProgram } from "@/types/workout-program"
-import { AssignProgramDialog } from "@/components/programs/assign-program-dialog" // Keep this import for now, but it will be removed if not used elsewhere
+
+// This is a placeholder for your actual program data fetching.
+// In a real application, this would come from a server component or API call.
+const dummyPrograms: WorkoutProgram[] = [
+  {
+    id: "prog1",
+    program_title: "Beginner Strength",
+    program_notes: "A 4-week program for new lifters.",
+    program_weeks: 4,
+    is_periodized: false,
+    routines: [
+      {
+        routine_id: "routine1",
+        routine_name: "Full Body A",
+        routine_rank: "1",
+        notes: "Focus on compound movements.",
+        exercises: [
+          {
+            exercise_id: "ex1",
+            name: "Squat",
+            exercise_category: "Legs",
+            exercise_video: "https://example.com/squat.mp4",
+            notes: "Go deep!",
+            weeks: [{ week_number: 1, sets: [{ reps: 5, weight: 50, warmup: false, rpe: 7, rest: "90s" }] }],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "prog2",
+    program_title: "Advanced Hypertrophy",
+    program_notes: "8 weeks of muscle building.",
+    program_weeks: 8,
+    is_periodized: true,
+    routines: [
+      {
+        routine_id: "routine2",
+        routine_name: "Chest & Triceps",
+        routine_rank: "1",
+        notes: "High volume day.",
+        exercises: [
+          {
+            exercise_id: "ex3",
+            name: "Bench Press",
+            exercise_category: "Chest",
+            exercise_video: "https://example.com/bench.mp4",
+            notes: "Control the eccentric.",
+            weeks: [
+              { week_number: 1, sets: [{ reps: 8, weight: 80, warmup: false, rpe: 8, rest: "120s" }] },
+              { week_number: 2, sets: [{ reps: 8, weight: 82.5, warmup: false, rpe: 8, rest: "120s" }] },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]
 
 export default function ProgramsPageClient() {
-  const { user: trainer } = useCurrentUser()
-  const { toast } = useToast()
-  const [programs, setPrograms] = useState<WorkoutProgram[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isNewProgramDialogOpen, setIsNewProgramDialogOpen] = useState(false)
-  const [editingProgram, setEditingProgram] = useState<WorkoutProgram | null>(null)
-  const [showAssignProgramDialog, setShowAssignProgramDialog] = useState(false)
-  const [programToAssign, setProgramToAssign] = useState<WorkoutProgram | null>(null)
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
+  const [selectedProgramForAssignment, setSelectedProgramForAssignment] = useState<WorkoutProgram | null>(null)
 
-  useEffect(() => {
-    if (trainer?.uid) {
-      fetchPrograms(trainer.uid)
-    } else if (!trainer?.isAnonymous) {
-      setLoading(false) // Not logged in, no programs to load
-    }
-  }, [trainer?.uid, trainer?.isAnonymous])
-
-  const fetchPrograms = async (trainerId: string) => {
-    setLoading(true)
-    try {
-      const programsRef = collection(db, `users/${trainerId}/programs`)
-      const q = query(programsRef)
-      const querySnapshot = await getDocs(q)
-      const fetchedPrograms: WorkoutProgram[] = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as WorkoutProgram),
-      }))
-      setPrograms(fetchedPrograms)
-    } catch (error) {
-      console.error("Error fetching programs:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load programs.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+  const handleAssignProgramClick = (program: WorkoutProgram) => {
+    setSelectedProgramForAssignment(program)
+    setIsAssignDialogOpen(true)
   }
 
-  const handleProgramAdded = (newProgram: WorkoutProgram) => {
-    setPrograms((prev) => [...prev, newProgram])
-    setIsNewProgramDialogOpen(false)
-    toast({
-      title: "Success",
-      description: "Program created successfully!",
-    })
+  const handleCloseAssignDialog = () => {
+    setIsAssignDialogOpen(false)
+    setSelectedProgramForAssignment(null)
   }
 
-  const handleProgramUpdated = (updatedProgram: WorkoutProgram) => {
-    setPrograms((prev) => prev.map((p) => (p.id === updatedProgram.id ? updatedProgram : p)))
-    setEditingProgram(null)
-    toast({
-      title: "Success",
-      description: "Program updated successfully!",
-    })
-  }
-
-  const handleDeleteProgram = async (programId: string) => {
-    if (!trainer?.uid) return
-
-    if (window.confirm("Are you sure you want to delete this program? This action cannot be undone.")) {
-      try {
-        await deleteDoc(doc(db, `users/${trainer.uid}/programs`, programId))
-        setPrograms((prev) => prev.filter((p) => p.id !== programId))
-        toast({
-          title: "Success",
-          description: "Program deleted successfully!",
-        })
-      } catch (error) {
-        console.error("Error deleting program:", error)
-        toast({
-          title: "Error",
-          description: "Failed to delete program.",
-          variant: "destructive",
-        })
-      }
-    }
-  }
-
-  const handleAssignProgram = (program: WorkoutProgram) => {
-    setProgramToAssign(program)
-    setShowAssignProgramDialog(true)
-  }
-
-  if (loading) {
-    return <PageSkeleton title="Programs" description="Loading your workout programs..." />
-  }
+  // In a real app, `programs` would be fetched from a server component or API
+  const programs = dummyPrograms.map((p) => ({
+    ...p,
+    createdAt: new Date(), // Dummy date for display
+    clientsAssigned: Math.floor(Math.random() * 10), // Dummy client count
+    status: "active", // Dummy status
+  }))
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Your Programs</h1>
-        <Button onClick={() => setIsNewProgramDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Program
-        </Button>
+    <main className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-6">Your Programs</h1>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {programs.map((program) => (
+          <ProgramCard
+            key={program.id}
+            program={program}
+            onClick={() => console.log("Program clicked:", program.name)}
+            onEdit={() => console.log("Edit program:", program.name)}
+            onDelete={() => console.log("Delete program:", program.name)}
+            onAssign={handleAssignProgramClick} // Pass the new handler
+          />
+        ))}
       </div>
 
-      {programs.length === 0 ? (
-        <EmptyState
-          title="No Programs Yet"
-          description="Create your first workout program to get started."
-          buttonText="Create New Program"
-          onButtonClick={() => setIsNewProgramDialogOpen(true)}
-        />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {programs.map((program) => (
-            <ProgramCard
-              key={program.id}
-              program={program}
-              onEdit={setEditingProgram}
-              onDelete={handleDeleteProgram}
-              onAssign={handleAssignProgram}
-            />
-          ))}
-        </div>
-      )}
-
-      <NewProgramDialog
-        isOpen={isNewProgramDialogOpen}
-        onClose={() => setIsNewProgramDialogOpen(false)}
-        onProgramAdded={handleProgramAdded}
+      {/* Render the Assign Program Dialog */}
+      <AssignProgramDialog
+        isOpen={isAssignDialogOpen}
+        onClose={handleCloseAssignDialog}
+        program={selectedProgramForAssignment}
       />
-
-      {editingProgram && (
-        <ProgramEditor
-          isOpen={!!editingProgram}
-          onClose={() => setEditingProgram(null)}
-          program={editingProgram}
-          onProgramUpdated={handleProgramUpdated}
-        />
-      )}
-
-      {programToAssign && (
-        <AssignProgramDialog
-          isOpen={showAssignProgramDialog}
-          onClose={() => {
-            setShowAssignProgramDialog(false)
-            setProgramToAssign(null)
-          }}
-          program={programToAssign}
-        />
-      )}
-    </div>
+    </main>
   )
 }

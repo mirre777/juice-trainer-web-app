@@ -1,9 +1,7 @@
-"use client"
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Edit, Trash2, Send } from "lucide-react"
+import { MoreHorizontal, Edit, Trash2, Send } from 'lucide-react'
 import type { WorkoutProgram } from "@/types/workout-program"
 
 interface ProgramCardProps {
