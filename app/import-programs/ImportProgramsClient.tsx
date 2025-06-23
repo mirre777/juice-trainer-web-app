@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // A
 import { Search, FileSpreadsheet, ChevronRight, X } from "lucide-react"
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react" // Added useCallback
 import { useToast } from "@/components/ui/toast-context"
 import { useDebounce } from "@/hooks/use-debounce"
 
@@ -201,6 +201,17 @@ export default function ImportProgramsClient() {
     checkAuth()
   }, [])
 
+  // Helper to mark programs as dismissed
+  const markProgramsAsDismissed = useCallback((programIds: string[]) => {
+    setDismissedNotifications((prev) => {
+      const newDismissed = new Set(prev)
+      programIds.forEach((id) => newDismissed.add(id))
+      localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(newDismissed)))
+      return newDismissed
+    })
+    setActiveToastId(null) // Clear active toast ID when dismissed
+  }, [])
+
   // Fetch user's imports from Firebase
   useEffect(() => {
     if (!userId) {
@@ -278,7 +289,7 @@ export default function ImportProgramsClient() {
         setCompletedImports(newlyCompleted)
         setIsLoadingImports(false)
 
-        // Show toast if there are newly completed imports
+        // Show toast if there are newly completed imports and no active toast
         if (newlyCompleted.length > 0 && !activeToastId) {
           showCompletionToast(newlyCompleted)
         }
@@ -293,12 +304,12 @@ export default function ImportProgramsClient() {
       console.log("[ImportPrograms] Cleaning up Firebase listener for userId:", userId)
       unsubscribe()
     }
-  }, [userId, dismissedNotifications, activeToastId])
+  }, [userId, dismissedNotifications, activeToastId, markProgramsAsDismissed]) // Added markProgramsAsDismissed to dependencies
 
-  // Persist dismissed notifications to localStorage
-  useEffect(() => {
-    localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
-  }, [dismissedNotifications])
+  // Persist dismissed notifications to localStorage - now handled by markProgramsAsDismissed
+  // useEffect(() => {
+  //   localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
+  // }, [dismissedNotifications])
 
   // Memoized search filtering
   const filteredImports = useMemo(() => {
@@ -436,6 +447,8 @@ export default function ImportProgramsClient() {
 
   // Show completion toast
   const showCompletionToast = (newlyCompleted: SheetsImport[]) => {
+    const programIdsToDismiss = newlyCompleted.map((imp) => imp.id)
+
     const title =
       newlyCompleted.length === 1
         ? `Your Program "${formatProgramName(newlyCompleted[0])}" Is Ready!`
@@ -443,13 +456,14 @@ export default function ImportProgramsClient() {
 
     const toastId = toast.success({
       title,
-      message:
+      description:
         "Your workout program is now good to go! Review it, edit if needed, and you're all set to send it out. 💪",
-      duration: null,
+      duration: null, // Keep toast open until dismissed by user
       pages: ["/programs", "/import-programs", "/demo/programs", "/demo/import-programs"],
       ctaButton: {
         text: "Show Me",
         onClick: () => {
+          markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when CTA is clicked
           if (window.location.pathname !== "/import-programs") {
             router.push("/import-programs")
             setTimeout(() => {
@@ -470,14 +484,10 @@ export default function ImportProgramsClient() {
               })
             }
           }
-
-          const newDismissed = new Set(dismissedNotifications)
-          newlyCompleted.forEach((imp) => {
-            newDismissed.add(imp.id)
-          })
-          setDismissedNotifications(newDismissed)
-          setActiveToastId(null)
         },
+      },
+      onDismiss: () => {
+        markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when 'X' or auto-dismiss occurs
       },
     })
 
