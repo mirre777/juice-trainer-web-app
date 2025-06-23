@@ -1,6 +1,6 @@
 // lib/firebase/user-service.ts
 
-import { auth, db } from "./firebase"
+import { getFirebaseAdminFirestore, getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
 import {
   collection,
   doc,
@@ -8,54 +8,13 @@ import {
   getDocs,
   query,
   where,
-  addDoc,
   setDoc,
   updateDoc,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore"
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
-
-export const createUserWithAuth = async (email: string, password: string) => {
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    const user = userCredential.user
-
-    // Create a user document in Firestore
-    const userDocRef = doc(db, "users", user.uid)
-    await setDoc(userDocRef, {
-      email: user.email,
-      uid: user.uid,
-      // Add any other initial user data here
-    })
-
-    return user
-  } catch (error: any) {
-    console.error("Error creating user:", error)
-    throw error
-  }
-}
-
-export const signInUser = async (email: string, password: string) => {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password)
-    return userCredential.user
-  } catch (error: any) {
-    console.error("Error signing in user:", error)
-    throw error
-  }
-}
-
-export const signOutUser = async () => {
-  try {
-    await signOut(auth)
-  } catch (error: any) {
-    console.error("Error signing out user:", error)
-    throw error
-  }
-}
 
 // Get user by ID
 export async function getUserById(userId: string): Promise<any | null> {
@@ -66,7 +25,7 @@ export async function getUserById(userId: string): Promise<any | null> {
       return null
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
     const [userDoc, error] = await tryCatch(() => getDoc(userRef), ErrorType.DB_READ_FAILED, {
       function: "getUserById",
       userId,
@@ -109,7 +68,7 @@ export async function getUserByEmail(email: string): Promise<any | null> {
       return null
     }
 
-    const usersRef = collection(db, "users")
+    const usersRef = collection(getFirebaseAdminFirestore(), "users")
     const q = query(usersRef, where("email", "==", email.toLowerCase()))
     const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "getUserByEmail",
@@ -167,25 +126,29 @@ export async function createUser(userData: {
     if (userData.password) {
       console.log(`[createUser] Creating Firebase Auth user for: ${userData.email}`)
 
-      const [userCredential, authError] = await tryCatch(
-        () => createUserWithEmailAndPassword(auth, userData.email, userData.password!),
+      const [userRecord, authError] = await tryCatch(
+        () =>
+          getFirebaseAdminAuth().createUser({
+            email: userData.email,
+            password: userData.password!,
+          }),
         ErrorType.AUTH_FAILED,
         { function: "createUser", email: userData.email },
       )
 
-      if (authError || !userCredential) {
+      if (authError || !userRecord) {
         console.error(`[createUser] Firebase Auth creation failed:`, authError)
         return { success: false, error: authError }
       }
 
-      userId = userCredential.user.uid
+      userId = userRecord.uid
       console.log(`[createUser] Firebase Auth user created with UID: ${userId}`)
     } else {
       // Fallback: create Firestore-only user (for existing flow compatibility)
       console.log(`[createUser] Creating Firestore-only user for: ${userData.email}`)
-      const usersRef = collection(db, "users")
+      const usersRef = getFirebaseAdminFirestore().collection("users")
       const [docRef, firestoreError] = await tryCatch(
-        () => addDoc(usersRef, { email: userData.email.toLowerCase() }),
+        () => usersRef.add({ email: userData.email.toLowerCase() }),
         ErrorType.DB_WRITE_FAILED,
         { function: "createUser", email: userData.email },
       )
@@ -216,7 +179,7 @@ export async function createUser(userData: {
       userDocData.role = userData.role
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
     const [, firestoreError] = await tryCatch(() => setDoc(userRef, userDocData), ErrorType.DB_WRITE_FAILED, {
       function: "createUser",
       userId,
@@ -258,7 +221,7 @@ export async function updateUser(userId: string, updates: any): Promise<{ succes
       return { success: false, error }
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
     const [, error] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -300,7 +263,7 @@ export async function updateUserLastLogin(userId: string): Promise<{ success: bo
       return { success: false, error }
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
     const [, error] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -347,7 +310,7 @@ export async function storeInvitationCode(
 
     console.log(`[storeInvitationCode] Storing invitation code ${inviteCode} for user ${userId}`)
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
     const [, updateError] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -398,7 +361,7 @@ export async function generateUniversalInviteCode(
     // Generate a simple 8-character code
     const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase()
 
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
     const [, error] = await tryCatch(
       () =>
         updateDoc(trainerRef, {
@@ -448,7 +411,7 @@ export async function signupWithUniversalCode(userData: {
     }
 
     // Find trainer with this universal invite code
-    const usersRef = collection(db, "users")
+    const usersRef = collection(getFirebaseAdminFirestore(), "users")
     const q = query(usersRef, where("universalInviteCode", "==", userData.universalInviteCode))
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "signupWithUniversalCode",
@@ -490,7 +453,7 @@ export async function signupWithUniversalCode(userData: {
     }
 
     // Update user with pending approval status
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
     const [, updateError] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -508,7 +471,7 @@ export async function signupWithUniversalCode(userData: {
     }
 
     // Add user to trainer's pending users list
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
     console.log(`[signupWithUniversalCode] Adding user ${userId} to trainer ${trainerId} pending list`)
 
     const [, addToPendingError] = await tryCatch(
@@ -550,7 +513,7 @@ export async function getPendingUsers(trainerId: string): Promise<any[]> {
     }
 
     // Get trainer document to get pending users list
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
     const [trainerDoc, trainerError] = await tryCatch(() => getDoc(trainerRef), ErrorType.DB_READ_FAILED, {
       function: "getPendingUsers",
       trainerId,
@@ -609,8 +572,8 @@ export async function approveUser(
       return { success: false, error }
     }
 
-    const userRef = doc(db, "users", userId)
-    const trainerRef = doc(db, "users", trainerId)
+    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
+    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
 
     if (action === "approve") {
       // Update user status to approved
@@ -660,7 +623,7 @@ export async function approveUser(
 
           if (result.success && result.clientId) {
             // Link the new client to the user
-            const clientRef = doc(db, "users", trainerId, "clients", result.clientId)
+            const clientRef = doc(getFirebaseAdminFirestore(), "users", trainerId, "clients", result.clientId)
             await updateDoc(clientRef, {
               userId: userId,
               status: "Active",
@@ -671,7 +634,7 @@ export async function approveUser(
         }
       } else if (matchToClientId) {
         // Match to existing client
-        const clientRef = doc(db, "users", trainerId, "clients", matchToClientId)
+        const clientRef = doc(getFirebaseAdminFirestore(), "users", trainerId, "clients", matchToClientId)
         const [, updateClientError] = await tryCatch(
           () =>
             updateDoc(clientRef, {
@@ -753,7 +716,7 @@ export async function updateUniversalInviteCode(
 
     // Allow empty string to clear the invite code
     if (newCode === "") {
-      const trainerRef = doc(db, "users", trainerId)
+      const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
       const [, error] = await tryCatch(
         () =>
           updateDoc(trainerRef, {
@@ -785,7 +748,7 @@ export async function updateUniversalInviteCode(
     }
 
     // Check if code is already taken by another trainer
-    const usersRef = collection(db, "users")
+    const usersRef = collection(getFirebaseAdminFirestore(), "users")
     const q = query(usersRef, where("universalInviteCode", "==", newCode.toUpperCase()))
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "updateUniversalInviteCode",
@@ -811,7 +774,7 @@ export async function updateUniversalInviteCode(
       }
     }
 
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
     const [, error] = await tryCatch(
       () =>
         updateDoc(trainerRef, {
@@ -841,7 +804,7 @@ export async function updateUniversalInviteCode(
 
 export const getUserData = async (uid: string) => {
   try {
-    const userDocRef = doc(db, "users", uid)
+    const userDocRef = doc(getFirebaseAdminFirestore(), "users", uid)
     const docSnap = await getDoc(userDocRef)
 
     if (docSnap.exists()) {
