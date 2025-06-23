@@ -683,25 +683,17 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
-              console.log("Send to Client button clicked!")
+              console.log("Send to Client button clicked! (Directly from onClick)") // NEW LOG
               console.log(
                 "[ReviewProgramClient] 'Send to Client' button clicked. showSendProgramDialog will be set to true.",
               )
               console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid) // Log trainer UID at click
-              // Temporarily remove the conditional check for debugging
-              // if (trainer?.uid) {
+
+              // Ensure fetchClients is called directly without the conditional block
               fetchClients(trainer?.uid || "DEBUG_MISSING_UID") // Pass UID or a debug string
-              // } else {
-              //   console.error(
-              //     "[ReviewProgramClient] Trainer UID missing or loading when 'Send to Client' button clicked. Cannot fetch clients.",
-              //   )
-              //   toast({
-              //     title: "Authentication Error",
-              //     description: "Could not retrieve trainer information. Please log in again.",
-              //     variant: "destructive",
-              //   })
-              // }
+
               setShowSendProgramDialog(true)
+              console.log("[ReviewProgramClient] showSendProgramDialog set to true.") // NEW LOG
             }}
             disabled={hasChanges || isSaving || isTrainerLoading} // Keep disabled if trainer is loading or has unsaved changes
           >
