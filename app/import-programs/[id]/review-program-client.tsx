@@ -48,6 +48,7 @@ interface ReviewProgramClientProps {
 }
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
+  console.log("[ReviewProgramClient] Component rendered.")
   const router = useRouter()
   const { toast } = useToast()
   const { user: trainer } = useCurrentUser()
@@ -174,20 +175,23 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   }, [importData])
 
   useEffect(() => {
-    console.log("[ReviewProgramClient] showSendProgramDialog changed:", showSendProgramDialog)
-    if (showSendProgramDialog && trainer?.uid) {
-      console.log("[ReviewProgramClient] Dialog opened, fetching clients for trainer:", trainer.uid)
+    console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
+    console.log("[ReviewProgramClient] showSendProgramDialog:", showSendProgramDialog)
+    console.log("[ReviewProgramClient] trainer object:", trainer) // Log the full trainer object
+
+    if (showSendProgramDialog && trainer) {
+      console.log("[ReviewProgramClient] Dialog opened and trainer UID available, fetching clients...")
       fetchClients(trainer.uid)
-    } else if (showSendProgramDialog && !trainer?.uid) {
+    } else if (showSendProgramDialog && !trainer) {
       setLoadingClients(false)
-      console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing.")
+      console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing. Cannot fetch clients.")
       toast({
         title: "Authentication Error",
         description: "Could not retrieve trainer information. Please log in again.",
         variant: "destructive",
       })
     }
-  }, [showSendProgramDialog, trainer?.uid, toast])
+  }, [showSendProgramDialog, trainer, toast])
 
   const fetchClients = async (trainerId: string) => {
     setLoadingClients(true)
@@ -233,6 +237,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         "Selected ID:",
         selectedClientId, // Same note as above.
       )
+      console.log("[ReviewProgramClient] Current clients state after fetch:", clients) // Add this line
+      console.log("[ReviewProgramClient] Current selectedClientId state after fetch:", selectedClientId) // Add this line
     }
   }
 
