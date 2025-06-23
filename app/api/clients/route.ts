@@ -1,114 +1,70 @@
+// app/api/clients/route.ts
 import { type NextRequest, NextResponse } from "next/server"
+import { collection, query, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase" // Client-side Firebase instance
+import { getFirebaseAdminAuth, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin" // Server-side Firebase Admin
 import { cookies } from "next/headers"
-import { createClient } from "@/lib/firebase/client-service"
-import { collection, query, where, getDocs } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
+import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
 
-export async function POST(request: NextRequest) {
-  try {
-    const cookieStore = cookies()
-    const userId = cookieStore.get("user_id")?.value
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json()
-    const { name, email, goal, program } = body
-
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 })
-    }
-
-    const result = await createClient(userId, {
-      name,
-      email: email || "",
-      goal: goal || "",
-      program: program || "",
-    })
-
-    if (result.success) {
-      return NextResponse.json({
-        success: true,
-        clientId: result.clientId,
-        message: "Client created successfully",
-      })
-    } else {
-      return NextResponse.json({ error: result.error?.message || "Failed to create client" }, { status: 500 })
-    }
-  } catch (error) {
-    console.error("Error creating client:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
+// Initialize Firebase Admin SDK if not already done
+initializeFirebaseAdmin()
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const trainerId = searchParams.get("trainerId")
-    const status = searchParams.get("status")
+    const sessionCookie = cookies().get("session")?.value
 
-    console.log(`[GET /api/clients] Request params:`, { trainerId, status })
-
-    if (!trainerId) {
-      return NextResponse.json({ error: "trainerId is required" }, { status: 400 })
+    if (!sessionCookie) {
+      const error = createError(
+        ErrorType.API_UNAUTHORIZED,
+        null,
+        { function: "GET /api/clients" },
+        "Unauthorized: No session found.",
+      )
+      logError(error)
+      return NextResponse.json({ error: error.message }, { status: 401 })
     }
 
-    // Query the trainer's clients subcollection
-    const clientsRef = collection(db, "users", trainerId, "clients")
+    // Verify the session cookie to get the trainer's UID
+    const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
+    const trainerId = decodedClaims.uid
 
-    // Simple query without orderBy to avoid index issues
-    const q = status ? query(clientsRef, where("status", "==", status)) : query(clientsRef)
+    if (!trainerId) {
+      const error = createError(
+        ErrorType.API_UNAUTHORIZED,
+        null,
+        { function: "GET /api/clients" },
+        "Unauthorized: Trainer ID not found in session.",
+      )
+      logError(error)
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
 
-    console.log(`[GET /api/clients] Querying clients for trainer: ${trainerId} with status: ${status || "all"}`)
+    console.log(`[API/clients] Fetching clients for trainer: ${trainerId}`)
 
+    const clientsRef = collection(db, `users/${trainerId}/clients`)
+    const q = query(clientsRef)
     const querySnapshot = await getDocs(q)
-    console.log(`[GET /api/clients] Found ${querySnapshot.size} clients`)
 
-    const clients = []
-    querySnapshot.forEach((doc) => {
-      const data = doc.data()
-      console.log(`[GET /api/clients] Client ${doc.id}:`, {
-        name: data.name,
-        status: data.status,
-        email: data.email,
-      })
+    const clients = querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
 
-      // Only include valid client data
-      if (data.name && typeof data.name === "string" && !data.name.includes("channel?VER=")) {
-        clients.push({
-          id: doc.id,
-          name: data.name,
-          email: data.email || "",
-          status: data.status || "Pending",
-          goal: data.goal || "",
-          notes: data.notes || "",
-          createdAt: data.createdAt,
-        })
-      }
-    })
+    console.log(`[API/clients] Found ${clients.length} clients for trainer ${trainerId}.`)
 
-    // Sort clients by creation date (client-side since we removed orderBy)
-    clients.sort((a, b) => {
-      if (!a.createdAt || !b.createdAt) return 0
-      return b.createdAt.seconds - a.createdAt.seconds
-    })
-
-    console.log(`[GET /api/clients] Returning ${clients.length} valid clients`)
-
-    return NextResponse.json({
-      success: true,
-      clients: clients,
-    })
-  } catch (error) {
-    console.error("[GET /api/clients] Error fetching clients:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error",
-        details: error.message,
-      },
-      { status: 500 },
+    return NextResponse.json({ clients }, { status: 200 })
+  } catch (error: any) {
+    console.error("[API/clients] Error fetching clients:", error)
+    if (error.code === "auth/session-cookie-expired") {
+      return NextResponse.json({ error: "Session expired. Please log in again." }, { status: 401 })
+    }
+    const appError = createError(
+      ErrorType.API_SERVER_ERROR,
+      error,
+      { function: "GET /api/clients" },
+      "Failed to fetch clients.",
     )
+    logError(appError)
+    return NextResponse.json({ error: appError.message }, { status: 500 })
   }
 }

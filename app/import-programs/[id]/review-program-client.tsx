@@ -175,9 +175,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
   useEffect(() => {
     if (showSendProgramDialog && trainer?.uid) {
+      console.log("[ReviewProgramClient] Dialog opened, fetching clients for trainer:", trainer.uid)
       fetchClients(trainer.uid)
     } else if (showSendProgramDialog && !trainer?.uid) {
       setLoadingClients(false)
+      console.error("[ReviewProgramClient] Dialog opened but trainer UID is missing.")
       toast({
         title: "Authentication Error",
         description: "Could not retrieve trainer information. Please log in again.",
@@ -188,11 +190,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
   const fetchClients = async (trainerId: string) => {
     setLoadingClients(true)
+    setClients([]) // Clear previous clients
+    setSelectedClientId("") // Clear previous selection
     try {
       const response = await fetch(`/api/clients?trainerId=${trainerId}`)
       const data = await response.json()
 
       if (response.ok) {
+        console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients)
         setClients(data.clients || [])
         if (data.clients.length > 0) {
           setSelectedClientId(data.clients[0].id)
@@ -200,7 +205,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           setSelectedClientId("")
         }
       } else {
-        console.error("Failed to fetch clients:", data.error)
+        console.error("[ReviewProgramClient] Failed to fetch clients from API:", data.error)
         toast({
           title: "Error",
           description: data.error || "Failed to load clients.",
@@ -209,7 +214,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         setClients([])
       }
     } catch (error) {
-      console.error("Error fetching clients:", error)
+      console.error("[ReviewProgramClient] Error fetching clients:", error)
       toast({
         title: "Error",
         description: "An unexpected error occurred while fetching clients.",
@@ -218,6 +223,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setClients([])
     } finally {
       setLoadingClients(false)
+      console.log(
+        "[ReviewProgramClient] Finished fetching clients. Clients count:",
+        clients.length,
+        "Selected ID:",
+        selectedClientId,
+      )
     }
   }
 
