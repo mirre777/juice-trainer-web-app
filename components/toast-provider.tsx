@@ -98,7 +98,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     <Button
                       onClick={() => {
                         toast.ctaButton?.onClick()
-                        dismissToast(toast.id) // Dismiss toast after CTA click
+                        dismissToast(toast.id) // This line ensures the toast is dismissed
                       }}
                       className="bg-black text-white hover:bg-gray-800 text-sm px-4 py-2"
                     >
