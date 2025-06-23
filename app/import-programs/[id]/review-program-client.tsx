@@ -7,11 +7,16 @@ import {
   ChevronRight,
   Copy,
   Trash2,
+  Calendar,
   RotateCcw,
   Plus,
   Check,
+  User,
+  MessageSquare,
+  Info,
   Save,
   Send,
+  Loader2,
   ChevronUp,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
@@ -22,6 +27,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { sendProgramToClient } from "@/app/actions/program-assignment-actions"
@@ -862,5 +877,188 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                         </div>
                       ))}
                     </div>
-                  ) : (\
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">No exercises found in this routine.</div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+          <div className="text-gray-400 mb-2">
+            <Calendar className="mx-auto h-12 w-12" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">No routines found</h3>
+          <p className="text-gray-500 mb-4">
+            {programState.is_periodized
+              ? `Week ${currentWeek} doesn't have any workout routines yet.`
+              : `This program doesn't have any workout routines yet.`}
+          </p>
+          <Button variant="outline">+ Add Routine</Button>
+        </div>
+      )}
+
+      {/* Send Program Confirmation Dialog */}
+      <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
+        <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>Confirm Sending Program</DialogTitle>
+            <DialogDescription>You are about to send the following program:</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
+            <Card className="p-4">
+              <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
+              <div className="flex items-center text-sm text-gray-600 mb-1">
+                <User className="h-4 w-4 mr-2" /> {clientNameForModal}
+              </div>
+              <div className="flex items-center text-sm text-gray-600 mb-3">
+                <Calendar className="h-4 w-4 mr-2" /> {dateForModal}
+              </div>
+              <div className="flex items-start text-sm text-gray-600">
+                <MessageSquare className="h-4 w-4 mr-2 mt-1" />
+                <Textarea
+                  value={messageToClient}
+                  onChange={(e) => setMessageToClient(e.target.value)}
+                  placeholder="Add a message to your client (optional)"
+                  className="flex-1 border-transparent focus:border-gray-300"
+                  rows={3}
+                />
+              </div>
+            </Card>
+
+            {/* Client Selection Section */}
+            <div className="space-y-2">
+              <h4 className="font-semibold text-gray-800">Select Client:</h4>
+              {loadingClients ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                  <span className="ml-2 text-gray-600">Loading clients...</span>
+                </div>
+              ) : clients.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
+              ) : (
+                <RadioGroup
+                  key={clients.length > 0 ? "clients-loaded" : "no-clients"} // Added key for re-rendering stability
+                  value={selectedClientId}
+                  onValueChange={setSelectedClientId}
+                  className="max-h-48 overflow-y-auto"
+                >
+                  {clients.map((client) => (
                     <div
+                      key={client.id}
+                      className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    >
+                      <RadioGroupItem value={client.id} id={`client-${client.id}`} />
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
+                          {client.name}
+                        </Label>
+                        {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </RadioGroup>
+              )}
+            </div>
+
+            <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
+              <Info className="h-4 w-4" />
+              <span>
+                We will send your client an email and app notification. They can still access their old program.
+              </span>
+            </div>
+          </div>
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isAssigning}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+              onClick={handleSendProgram}
+              disabled={isAssigning || !selectedClientId || !programState}
+            >
+              {isAssigning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Sending...
+                </>
+              ) : (
+                "Send Program"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog for Unsaved Changes */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+              Continue Editing
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setHasChanges(false)
+                router.push("/import-programs")
+              }}
+            >
+              Leave Without Saving
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Select Week Dialog for switching from Periodized to Non-Periodized */}
+      <Dialog open={showSelectWeekDialog} onOpenChange={setShowSelectWeekDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Week to Keep</DialogTitle>
+            <DialogDescription>
+              You are switching from a periodized program to a non-periodized program. Please select which week's data
+              you would like to keep as the single routine for this program.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-4">
+            {programState.weeks?.map((week) => (
+              <Button
+                key={week.week_number}
+                variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
+                onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
+              >
+                Week {week.week_number}
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedWeekForNonPeriodized !== null) {
+                  handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
+                }
+              }}
+              disabled={selectedWeekForNonPeriodized === null}
+            >
+              Confirm Selection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
