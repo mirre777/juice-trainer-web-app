@@ -940,7 +940,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
               ) : (
                 <RadioGroup
-                  key={clients.length > 0 ? "clients-loaded" : "no-clients"} // Added key for re-rendering stability
                   value={selectedClientId}
                   onValueChange={setSelectedClientId}
                   className="max-h-48 overflow-y-auto"
