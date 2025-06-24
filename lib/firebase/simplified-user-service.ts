@@ -1,4 +1,4 @@
-import { getFirebaseAdminFirestore, getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
+import { auth, db } from "./firebase" // Revert to client-side db and auth
 import {
   collection,
   doc,
@@ -12,6 +12,7 @@ import {
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore"
+import { createUserWithEmailAndPassword } from "firebase/auth" // Re-add client-side auth functions
 
 // Simplified user creation - no complex role logic
 export async function createUser(userData: {
@@ -25,14 +26,11 @@ export async function createUser(userData: {
 
     // Create Firebase Auth user if password provided
     if (userData.password) {
-      const userRecord = await getFirebaseAdminAuth().createUser({
-        email: userData.email,
-        password: userData.password,
-      })
-      userId = userRecord.uid
+      const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password) // Use client-side auth
+      userId = userCredential.user.uid
     } else {
       // Create Firestore-only user
-      const usersRef = collection(getFirebaseAdminFirestore(), "users")
+      const usersRef = collection(db, "users") // Use client-side db
       const docRef = await addDoc(usersRef, { email: userData.email.toLowerCase() })
       userId = docRef.id
     }
@@ -53,14 +51,14 @@ export async function createUser(userData: {
         userDocData.status = "pending_approval"
 
         // Add to trainer's pending list
-        const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainer.id)
+        const trainerRef = doc(db, "users", trainer.id) // Use client-side db
         await updateDoc(trainerRef, {
           pendingUsers: arrayUnion(userId),
         })
       }
     }
 
-    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     await setDoc(userRef, userDocData)
 
     return { success: true, userId }
@@ -72,7 +70,7 @@ export async function createUser(userData: {
 
 // Find trainer by their universal invite code
 async function getTrainerByInviteCode(inviteCode: string) {
-  const usersRef = collection(getFirebaseAdminFirestore(), "users")
+  const usersRef = collection(db, "users") // Use client-side db
   const q = query(usersRef, where("universalInviteCode", "==", inviteCode.toUpperCase()))
   const querySnapshot = await getDocs(q)
 
@@ -90,8 +88,8 @@ export async function approveUser(
   action: "approve" | "reject",
 ): Promise<{ success: boolean; error?: any }> {
   try {
-    const userRef = doc(getFirebaseAdminFirestore(), "users", userId)
-    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
+    const userRef = doc(db, "users", userId) // Use client-side db
+    const trainerRef = doc(db, "users", trainerId) // Use client-side db
 
     if (action === "approve") {
       // Update user status
