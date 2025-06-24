@@ -1,6 +1,6 @@
 import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 
-export const assignProgramToUser = async (userId: string, programId: string) => {
+export const assignProgramToClient = async (userId: string, programId: string) => {
   try {
     await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).set({
       userId,
@@ -9,28 +9,28 @@ export const assignProgramToUser = async (userId: string, programId: string) => 
     })
     return { success: true }
   } catch (error) {
-    console.error("Error assigning program to user:", error)
+    console.error("Error assigning program to client:", error)
     return { success: false, error: error }
   }
 }
 
-export const unassignProgramFromUser = async (userId: string, programId: string) => {
+export const unassignProgramFromClient = async (userId: string, programId: string) => {
   try {
     await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).delete()
     return { success: true }
   } catch (error) {
-    console.error("Error unassigning program from user:", error)
+    console.error("Error unassigning program from client:", error)
     return { success: false, error: error }
   }
 }
 
-export const getUserPrograms = async (userId: string) => {
+export const getClientPrograms = async (userId: string) => {
   try {
     const snapshot = await getFirebaseAdminFirestore().collection("userPrograms").where("userId", "==", userId).get()
     const programs = snapshot.docs.map((doc) => doc.data())
     return { success: true, data: programs }
   } catch (error) {
-    console.error("Error getting user programs:", error)
+    console.error("Error getting client programs:", error)
     return { success: false, error: error }
   }
 }
