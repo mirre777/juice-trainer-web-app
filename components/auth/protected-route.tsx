@@ -2,51 +2,62 @@
 
 import type React from "react"
 
-import { useRouter } from "next/router"
+import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { useSession } from "next-auth/react"
+import LoadingSpinner from "@/components/shared/loading-spinner" // Corrected import
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  requiredRoles?: string[]
+  requiredRole?: "trainer" | "client" | "admin"
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles }) => {
+export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+  const { user, loading, isAuthenticated, userRole } = useAuth()
   const router = useRouter()
-  const { status, data: session } = useSession()
 
   useEffect(() => {
-    if (status === "loading") {
-      return // Do nothing while loading
-    }
-
-    if (status === "unauthenticated") {
-      router.push("/auth/signin") // Redirect to signin page if not authenticated
-    } else if (session && requiredRoles && requiredRoles.length > 0) {
-      const userRoles = session.user?.roles || []
-      const hasRequiredRole = requiredRoles.some((role) => userRoles.includes(role))
-
-      if (!hasRequiredRole) {
-        router.push("/unauthorized") // Redirect to unauthorized page if missing required role
+    console.log(
+      "ProtectedRoute: useEffect triggered. Loading:",
+      loading,
+      "IsAuthenticated:",
+      isAuthenticated,
+      "UserRole:",
+      userRole,
+      "RequiredRole:",
+      requiredRole,
+    )
+    if (!loading) {
+      if (!isAuthenticated) {
+        console.log("ProtectedRoute: Not authenticated, redirecting to /login.")
+        router.push("/login")
+      } else if (requiredRole && userRole && userRole !== requiredRole) {
+        console.log(
+          `ProtectedRoute: User role (${userRole}) does not match required role (${requiredRole}), redirecting to /dashboard.`,
+        )
+        router.push("/dashboard")
+      } else {
+        console.log("ProtectedRoute: User authenticated and authorized. Rendering children.")
       }
+    } else {
+      console.log("ProtectedRoute: Still loading authentication state.")
     }
-  }, [status, session, router, requiredRoles])
+  }, [loading, isAuthenticated, requiredRole, userRole, router])
 
-  if (
-    status === "loading" ||
-    (session &&
-      requiredRoles &&
-      requiredRoles.length > 0 &&
-      !requiredRoles.some((role) => session.user?.roles?.includes(role)))
-  ) {
-    return <div>Loading...</div> // Or a loading spinner
+  if (loading) {
+    console.log("ProtectedRoute: Displaying loading spinner.")
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    )
   }
 
-  if (status === "authenticated") {
-    return <>{children}</>
+  if (!isAuthenticated || (requiredRole && userRole && userRole !== requiredRole)) {
+    console.log("ProtectedRoute: Not authenticated or not authorized. Returning null (waiting for redirect).")
+    return null
   }
 
-  return null // Or a fallback component
+  console.log("ProtectedRoute: Rendering children.")
+  return <>{children}</>
 }
-
-export default ProtectedRoute

@@ -1,1 +1,4 @@
-import type { AppError } from "@/lib/utils/error-handler"
+// Re-export the Firestore db instance from the firebase.ts file
+import { db } from "@/lib/firebase/firebase"
+
+export { db }

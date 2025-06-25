@@ -1,254 +1,239 @@
-import { db } from "@/lib/db"
-import { RegisterSchema } from "@/schemas"
-import type * as z from "zod"
-import bcrypt from "bcryptjs"
-import { SettingsSchema } from "@/schemas"
-import { getUserByEmail, getUserById } from "@/data/user"
-import { generateVerificationToken, generateTwoFactorToken } from "@/lib/tokens"
-import { sendVerificationEmail, sendTwoFactorEmail } from "@/lib/mail"
-import { getTwoFactorConfirmationByUserId } from "@/data/two-factor-confirmation"
-import { getTwoFactorTokenByEmail } from "@/data/two-factor-token"
+// Authentication service for handling login, signup, and session management
 
-export class AuthService {
-  static async register(values: z.infer<typeof RegisterSchema>) {
-    const validatedFields = RegisterSchema.safeParse(values)
+import { db } from "@/lib/firebase/firebase"
+import { doc, getDoc, setDoc } from "firebase/firestore"
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+} from "firebase/auth"
+import { cookies } from "next/headers"
+import { ErrorType, createError, logError } from "@/lib/utils/error-handler" // Corrected import
+import { tryCatch } from "@/lib/utils/error-handler" // Ensure tryCatch is imported
 
-    if (!validatedFields.success) {
-      return { error: "Invalid fields!" }
+// Sign in with email and password
+export async function signIn(email: string, password: string) {
+  try {
+    // Validate input
+    if (!email || !password) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "signIn" },
+        "Email and password are required",
+      )
+      logError(error)
+      return { success: false, error }
     }
 
-    const { email, password, name } = validatedFields.data
+    const auth = getAuth()
+    const [userCredential, authError] = await tryCatch(
+      () => signInWithEmailAndPassword(auth, email, password),
+      ErrorType.AUTH_INVALID_CREDENTIALS,
+      { function: "signIn", email },
+    )
 
-    const hashedPassword = await bcrypt.hash(password, 10)
-
-    const existingUser = await getUserByEmail(email)
-
-    if (existingUser) {
-      return { error: "Email already in use!" }
+    if (authError || !userCredential) {
+      return { success: false, error: authError }
     }
 
-    await db.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-      },
+    const user = userCredential.user
+
+    // Set auth cookie
+    const [token, tokenError] = await tryCatch(() => user.getIdToken(), ErrorType.AUTH_TOKEN_EXPIRED, {
+      function: "signIn",
+      uid: user.uid,
     })
 
-    const verificationToken = await generateVerificationToken(email)
-
-    await sendVerificationEmail(verificationToken.email, verificationToken.token)
-
-    return { success: "Confirmation email sent!" }
-  }
-
-  static async login(values: z.infer<typeof RegisterSchema>) {
-    const validatedFields = RegisterSchema.safeParse(values)
-
-    if (!validatedFields.success) {
-      return { error: "Invalid fields!" }
+    if (tokenError || !token) {
+      return { success: false, error: tokenError }
     }
 
-    const { email, password } = validatedFields.data
-
-    const existingUser = await getUserByEmail(email)
-
-    if (!existingUser || !existingUser.password || !existingUser.email) {
-      return { error: "Invalid credentials!" }
-    }
-
-    const passwordsMatch = await bcrypt.compare(password, existingUser.password)
-
-    if (!passwordsMatch) {
-      return { error: "Invalid credentials!" }
-    }
-
-    if (!existingUser.emailVerified) {
-      const verificationToken = await generateVerificationToken(existingUser.email)
-
-      await sendVerificationEmail(verificationToken.email, verificationToken.token)
-
-      return { success: "Confirmation email sent!" }
-    }
-
-    if (existingUser.isTwoFactorEnabled && existingUser.email) {
-      const twoFactorToken = await generateTwoFactorToken(existingUser.email)
-      await sendTwoFactorEmail(twoFactorToken.email, twoFactorToken.token)
-
-      return { twoFactor: true }
-    }
-
-    return { success: "Logged in!" }
-  }
-
-  static async verifyEmail(token: string) {
-    const existingToken = await db.verificationToken.findUnique({
-      where: { token },
+    cookies().set("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: "/",
     })
 
-    if (!existingToken) {
-      return { error: "Invalid token!" }
+    return { success: true, user }
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "signIn", email },
+      "Unexpected error during sign in",
+    )
+    logError(appError)
+    return { success: false, error: appError }
+  }
+}
+
+// Sign up with email and password
+export async function signUp(email: string, password: string, userData: any) {
+  try {
+    // Validate input
+    if (!email || !password || !userData) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "signUp" },
+        "Email, password, and user data are required",
+      )
+      logError(error)
+      return { success: false, error }
     }
 
-    const hasExpired = new Date(existingToken.expires) < new Date()
+    const auth = getAuth()
+    const [userCredential, authError] = await tryCatch(
+      () => createUserWithEmailAndPassword(auth, email, password),
+      ErrorType.AUTH_EMAIL_IN_USE,
+      { function: "signUp", email },
+    )
 
-    if (hasExpired) {
-      return { error: "Token has expired!" }
+    if (authError || !userCredential) {
+      return { success: false, error: authError }
     }
 
-    const existingUser = await getUserByEmail(existingToken.email)
+    const user = userCredential.user
 
-    if (!existingUser) {
-      return { error: "Email not found!" }
+    // Create user document in Firestore
+    const [, docError] = await tryCatch(
+      () =>
+        setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          createdAt: new Date(),
+          ...userData,
+        }),
+      ErrorType.DB_WRITE_FAILED,
+      { function: "signUp", uid: user.uid },
+    )
+
+    if (docError) {
+      // This is critical, but we've already created the auth user
+      logError(docError)
+      return { success: false, error: docError }
     }
 
-    await db.user.update({
-      where: { id: existingUser.id },
-      data: {
-        emailVerified: new Date(),
-        email: existingToken.email,
-      },
+    // Set auth cookie
+    const [token, tokenError] = await tryCatch(() => user.getIdToken(), ErrorType.AUTH_TOKEN_EXPIRED, {
+      function: "signUp",
+      uid: user.uid,
     })
 
-    await db.verificationToken.delete({
-      where: { token },
+    if (tokenError || !token) {
+      return { success: false, error: tokenError }
+    }
+
+    cookies().set("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: "/",
     })
 
-    return { success: "Email verified!" }
+    return { success: true, user }
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "signUp", email },
+      "Unexpected error during sign up",
+    )
+    logError(appError)
+    return { success: false, error: appError }
   }
+}
 
-  static async generateVerificationToken(email: string) {
-    const token = await generateVerificationToken(email)
-    return token
-  }
-
-  static async generateTwoFactorToken(email: string) {
-    const token = await generateTwoFactorToken(email)
-    return token
-  }
-
-  static async verifyTwoFactorToken(email: string, token: string) {
-    const existingToken = await getTwoFactorTokenByEmail(email)
-
-    if (!existingToken) {
-      return { error: "Invalid token!" }
-    }
-
-    if (existingToken.token !== token) {
-      return { error: "Invalid token!" }
-    }
-
-    const hasExpired = new Date(existingToken.expires) < new Date()
-
-    if (hasExpired) {
-      return { error: "Token has expired!" }
-    }
-
-    await db.twoFactorToken.delete({
-      where: { id: existingToken.id },
+// Sign out
+export async function signOut() {
+  try {
+    const auth = getAuth()
+    const [, authError] = await tryCatch(() => firebaseSignOut(auth), ErrorType.AUTH_UNAUTHORIZED, {
+      function: "signOut",
     })
 
-    const existingConfirmation = await getTwoFactorConfirmationByUserId(existingToken.userId)
-
-    if (existingConfirmation) {
-      await db.twoFactorConfirmation.delete({
-        where: { id: existingConfirmation.id },
-      })
+    if (authError) {
+      // Log but continue with cookie removal
+      logError(authError)
     }
 
-    await db.twoFactorConfirmation.create({
-      data: {
-        userId: existingToken.userId,
-      },
+    // Remove auth cookie - update this to be more explicit
+    cookies().delete("auth_token", {
+      path: "/",
+      // Make sure we're using the same cookie settings as when we set it
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
     })
 
-    return { success: "Two factor token verified!" }
+    return { success: true }
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "signOut" },
+      "Unexpected error during sign out",
+    )
+    logError(appError)
+    return { success: false, error: appError }
   }
+}
 
-  static async updateSettings(values: z.infer<typeof SettingsSchema>, userId: string) {
-    const user = await getUserById(userId)
+// Get current user
+export async function getCurrentUser() {
+  try {
+    const auth = getAuth()
+    const user = auth.currentUser
 
     if (!user) {
-      return { error: "Unauthorized" }
+      const error = createError(
+        ErrorType.AUTH_UNAUTHORIZED,
+        null,
+        { function: "getCurrentUser" },
+        "No user is signed in",
+      )
+      return { success: false, error }
     }
 
-    const validatedFields = SettingsSchema.safeParse(values)
+    // Get user data from Firestore
+    const [userDoc, docError] = await tryCatch(() => getDoc(doc(db, "users", user.uid)), ErrorType.DB_READ_FAILED, {
+      function: "getCurrentUser",
+      uid: user.uid,
+    })
 
-    if (!validatedFields.success) {
-      return { error: "Invalid fields" }
+    if (docError || !userDoc) {
+      return { success: false, error: docError }
     }
 
-    const { name, email, password, newPassword, isTwoFactorEnabled } = validatedFields.data
-
-    if (email && email !== user.email) {
-      const existingUser = await getUserByEmail(email)
-
-      if (existingUser && existingUser.id !== user.id) {
-        return { error: "Email already in use!" }
-      }
-
-      const verificationToken = await generateVerificationToken(email)
-      await sendVerificationEmail(verificationToken.email, verificationToken.token)
-
-      return { success: "Verification email sent!" }
+    if (!userDoc.exists()) {
+      const error = createError(
+        ErrorType.DB_DOCUMENT_NOT_FOUND,
+        null,
+        { function: "getCurrentUser", uid: user.uid },
+        "User document not found",
+      )
+      return { success: false, error }
     }
 
-    if (password && newPassword && user.password) {
-      const passwordsMatch = await bcrypt.compare(password, user.password)
-
-      if (!passwordsMatch) {
-        return { error: "Invalid password!" }
-      }
-
-      const hashedPassword = await bcrypt.hash(newPassword, 10)
-
-      validatedFields.data.password = hashedPassword
-      validatedFields.data.newPassword = undefined
-    }
-
-    await db.user.update({
-      where: { id: user.id },
-      data: {
-        ...validatedFields.data,
+    return {
+      success: true,
+      user: {
+        uid: user.uid,
+        email: user.email,
+        ...userDoc.data(),
       },
-    })
-
-    return { success: "Settings updated!" }
-  }
-
-  static async twoFactorLogin(token: string, userId: string) {
-    const existingToken = await db.twoFactorToken.findUnique({
-      where: { token },
-    })
-
-    if (!existingToken) {
-      return { error: "Invalid token!" }
     }
-
-    const hasExpired = new Date(existingToken.expires) < new Date()
-
-    if (hasExpired) {
-      return { error: "Token has expired!" }
-    }
-
-    if (existingToken.userId !== userId) {
-      return { error: "Unauthorized!" }
-    }
-
-    const existingConfirmation = await getTwoFactorConfirmationByUserId(existingToken.userId)
-
-    if (!existingConfirmation) {
-      return { error: "Unauthorized!" }
-    }
-
-    await db.twoFactorToken.delete({
-      where: { id: existingToken.id },
-    })
-
-    await db.twoFactorConfirmation.delete({
-      where: { id: existingConfirmation.id },
-    })
-
-    return { success: "Logged in!" }
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "getCurrentUser" },
+      "Unexpected error getting current user",
+    )
+    logError(appError)
+    return { success: false, error: appError }
   }
 }
