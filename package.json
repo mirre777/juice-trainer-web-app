@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",
-    "@hookform/resolvers": "latest",
     "@playwright/test": "latest",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-checkbox": "latest",
@@ -54,13 +53,11 @@
     "qrcode.react": "latest",
     "react": "^18",
     "react-dom": "^18",
-    "react-hook-form": "latest",
     "recharts": "latest",
     "sonner": "latest",
     "stripe": "latest",
     "tailwind-merge": "^2.5.5",
-    "tailwindcss-animate": "^1.0.7",
-    "zod": "latest"
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
