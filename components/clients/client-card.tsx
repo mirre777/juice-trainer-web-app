@@ -54,4 +54,4 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, latestWorkout }) => {
   )
 }
 
-export default ClientCard
+export { ClientCard }
