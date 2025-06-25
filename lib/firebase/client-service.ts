@@ -19,7 +19,7 @@ import {
   onSnapshot,
 } from "firebase/firestore"
 import type { Client } from "@/types/client"
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler" // Corrected import
 import { getUserById } from "@/lib/firebase/user-service"
 
 const firebaseConfig = {

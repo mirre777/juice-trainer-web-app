@@ -14,7 +14,7 @@ import {
   addDoc,
 } from "firebase/firestore"
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth" // Re-add client-side auth functions
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler" // Corrected import
 
 export const createUserWithAuth = async (email: string, password: string) => {
   try {

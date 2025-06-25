@@ -9,8 +9,7 @@ import {
   signOut as firebaseSignOut,
 } from "firebase/auth"
 import { cookies } from "next/headers"
-import { ErrorType, createError, logError } from "@/lib/utils/error-handler" // Corrected import
-import { tryCatch } from "@/lib/utils/error-handler" // Ensure tryCatch is imported
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
 // Sign in with email and password
 export async function signIn(email: string, password: string) {

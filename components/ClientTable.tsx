@@ -1,34 +1,13 @@
 // Placeholder for components/ClientTable.tsx
 import type React from "react"
 
-interface ClientTableProps {
-  clients: any[]
-}
+type ClientTableProps = {}
 
-const ClientTable: React.FC<ClientTableProps> = ({ clients }) => {
+const ClientTable: React.FC<ClientTableProps> = () => {
   return (
     <div>
-      <h2>Client Table</h2>
-      {clients.length === 0 ? (
-        <p>No clients to display.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            {clients.map((client, index) => (
-              <tr key={index}>
-                <td>{client.name}</td>
-                <td>{client.email}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <h2>Client Table Placeholder</h2>
+      <p>This component needs to be implemented.</p>
     </div>
   )
 }

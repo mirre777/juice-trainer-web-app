@@ -1,6 +1,6 @@
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import type { AppError } from "@/lib/utils/error-handler"
+import type { AppError } from "@/lib/utils/error-handler" // Corrected import
 import { createError, ErrorType, logError, tryCatch } from "@/lib/utils/error-handler"
 
 // Define a type for the subscription plan

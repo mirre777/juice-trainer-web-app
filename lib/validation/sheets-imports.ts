@@ -1,5 +1,6 @@
 // Placeholder for lib/validation/sheets-imports.ts
-import * as z from "zod"
+import { z } from "zod"
+
 export const routeContextSchema = z.object({
   params: z.object({
     id: z.string(),

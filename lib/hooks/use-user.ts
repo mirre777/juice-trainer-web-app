@@ -5,17 +5,19 @@ import { useState, useEffect } from "react"
 
 export function useUser() {
   const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     // Simulate fetching user data
     setTimeout(() => {
-      setUser({ id: "user123", name: "Demo User", email: "demo@example.com" })
-    }, 100)
+      setUser({ id: "user123", name: "John Doe", email: "john@example.com", receiveEmailNotifications: true })
+      setLoading(false)
+    }, 500)
   }, [])
 
   const updateUser = (newUserData: any) => {
-    setUser(newUserData)
+    setUser((prev: any) => ({ ...prev, ...newUserData }))
   }
 
-  return { user, updateUser }
+  return { user, loading, updateUser }
 }

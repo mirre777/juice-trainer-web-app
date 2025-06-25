@@ -15,7 +15,7 @@ import {
   serverTimestamp,
   addDoc,
 } from "firebase/firestore"
-import { ErrorType, createError, logError, tryCatch, type AppError } from "@/lib/utils/error-handler"
+import { ErrorType, createError, logError, tryCatch, type AppError } from "@/lib/utils/error-handler" // Corrected import
 
 // Interface for workout data
 export interface Workout {

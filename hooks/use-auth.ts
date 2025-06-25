@@ -10,14 +10,15 @@ export function useAuth() {
   const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simulate auth check
+    // Simulate auth loading
     setTimeout(() => {
-      const mockUser = { id: "mock-user-123", email: "test@example.com", role: "trainer" }
-      setUser(mockUser)
-      setIsAuthenticated(true)
-      setUserRole(mockUser.role)
+      // Replace with actual auth logic (e.g., Firebase auth.onAuthStateChanged)
+      const dummyUser = { uid: "123", email: "test@example.com", role: "trainer" }
+      setUser(dummyUser)
+      setIsAuthenticated(!!dummyUser)
+      setUserRole(dummyUser?.role || null)
       setLoading(false)
-    }, 100)
+    }, 1000)
   }, [])
 
   return { user, loading, isAuthenticated, userRole }

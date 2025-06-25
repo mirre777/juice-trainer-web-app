@@ -12,9 +12,9 @@ interface OverviewProps {
 export const Overview: React.FC<OverviewProps> = ({ data, search, setSearch }) => {
   return (
     <div>
-      <h1>Overview</h1>
-      <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
-      <pre>{JSON.stringify(data, null, 2)}</pre>
+      <h2>Overview Placeholder</h2>
+      <p>Data: {JSON.stringify(data)}</p>
+      <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." />
     </div>
   )
 }

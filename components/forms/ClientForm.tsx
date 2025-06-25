@@ -1,31 +1,19 @@
-"use client"
-
 // Placeholder for components/forms/ClientForm.tsx
 import type React from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
-interface ClientFormProps {
-  onSubmit: (data: any) => void
-}
+type ClientFormProps = {}
 
-const ClientForm: React.FC<ClientFormProps> = ({ onSubmit }) => {
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Mock submission
-    onSubmit({ name: "New Client", email: "new@example.com" })
-  }
-
+const ClientForm: React.FC<ClientFormProps> = () => {
   return (
-    <form onSubmit={handleSubmit}>
-      <h3>Add New Client</h3>
+    <form className="space-y-4">
       <div>
-        <label htmlFor="clientName">Name:</label>
-        <input id="clientName" type="text" />
+        <Label htmlFor="clientName">Client Name</Label>
+        <Input id="clientName" placeholder="Enter client name" />
       </div>
-      <div>
-        <label htmlFor="clientEmail">Email:</label>
-        <input id="clientEmail" type="email" />
-      </div>
-      <button type="submit">Add Client</button>
+      <Button type="submit">Submit</Button>
     </form>
   )
 }
