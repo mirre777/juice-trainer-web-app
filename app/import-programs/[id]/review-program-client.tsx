@@ -48,7 +48,6 @@ interface ReviewProgramClientProps {
 }
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
-  // Changed to default export
   console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
   const { toast } = useToast()
