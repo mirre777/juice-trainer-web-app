@@ -1,47 +1,95 @@
-import { createError, ErrorType } from "@/lib/utils/error-handler"
+import { db } from "@/lib/firebase/firebase"
+import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, query, where, getDocs } from "firebase/firestore"
+import type { ProgramAssignment } from "@/types/program-assignment"
 
-// This file would contain the logic for assigning programs to users,
-// managing program assignments, and related functionalities using Firebase.
-// Since there's no existing code, I'll provide a basic structure with some
-// placeholder functions.  This is a starting point and would need to be
-// fleshed out based on the specific requirements.
+const PROGRAM_ASSIGNMENTS_COLLECTION = "programAssignments"
 
-// Example:
-
-export const assignProgramToUser = async (userId: string, programId: string): Promise<void> => {
+export const createProgramAssignment = async (programAssignment: ProgramAssignment): Promise<ProgramAssignment> => {
   try {
-    // Placeholder:  Logic to assign the program to the user in Firebase.
-    // This might involve updating a user document with the program ID,
-    // or creating a new document in a "program_assignments" collection.
-    console.log(`Assigning program ${programId} to user ${userId}`)
-    // ... Firebase write operations here ...
+    const programAssignmentDocRef = doc(collection(db, PROGRAM_ASSIGNMENTS_COLLECTION), programAssignment.id)
+
+    await setDoc(programAssignmentDocRef, programAssignment)
+
+    return programAssignment
   } catch (error: any) {
-    console.error("Error assigning program:", error)
-    throw createError(ErrorType.InternalServerError, "Failed to assign program")
+    throw new Error(`Failed to create program assignment: ${error.message}`)
   }
 }
 
-export const unassignProgramFromUser = async (userId: string, programId: string): Promise<void> => {
+export const getProgramAssignment = async (id: string): Promise<ProgramAssignment | null> => {
   try {
-    // Placeholder: Logic to unassign the program from the user in Firebase.
-    console.log(`Unassigning program ${programId} from user ${userId}`)
-    // ... Firebase write operations here ...
+    const programAssignmentDocRef = doc(db, PROGRAM_ASSIGNMENTS_COLLECTION, id)
+    const docSnap = await getDoc(programAssignmentDocRef)
+
+    if (docSnap.exists()) {
+      return docSnap.data() as ProgramAssignment
+    } else {
+      return null
+    }
   } catch (error: any) {
-    console.error("Error unassigning program:", error)
-    throw createError(ErrorType.InternalServerError, "Failed to unassign program")
+    throw new Error(`Failed to get program assignment: ${error.message}`)
   }
 }
 
-export const getUserPrograms = async (userId: string): Promise<string[]> => {
+export const updateProgramAssignment = async (
+  id: string,
+  updates: Partial<ProgramAssignment>,
+): Promise<ProgramAssignment | null> => {
   try {
-    // Placeholder: Logic to retrieve the programs assigned to a user from Firebase.
-    console.log(`Getting programs for user ${userId}`)
-    // ... Firebase read operations here ...
-    return [] // Replace with actual program IDs
+    const programAssignmentDocRef = doc(db, PROGRAM_ASSIGNMENTS_COLLECTION, id)
+
+    await updateDoc(programAssignmentDocRef, updates)
+
+    const updatedProgramAssignment = await getProgramAssignment(id)
+    return updatedProgramAssignment
   } catch (error: any) {
-    console.error("Error getting user programs:", error)
-    throw createError(ErrorType.InternalServerError, "Failed to get user programs")
+    throw new Error(`Failed to update program assignment: ${error.message}`)
   }
 }
 
-// Add more functions as needed for program assignment management.
+export const deleteProgramAssignment = async (id: string): Promise<void> => {
+  try {
+    const programAssignmentDocRef = doc(db, PROGRAM_ASSIGNMENTS_COLLECTION, id)
+    await deleteDoc(programAssignmentDocRef)
+  } catch (error: any) {
+    throw new Error(`Failed to delete program assignment: ${error.message}`)
+  }
+}
+
+export const getProgramAssignmentsByProgramId = async (programId: string): Promise<ProgramAssignment[]> => {
+  try {
+    const programAssignmentsCollectionRef = collection(db, PROGRAM_ASSIGNMENTS_COLLECTION)
+
+    const q = query(programAssignmentsCollectionRef, where("programId", "==", programId))
+
+    const querySnapshot = await getDocs(q)
+
+    const programAssignments: ProgramAssignment[] = []
+    querySnapshot.forEach((doc) => {
+      programAssignments.push(doc.data() as ProgramAssignment)
+    })
+
+    return programAssignments
+  } catch (error: any) {
+    throw new Error(`Failed to get program assignments by programId: ${error.message}`)
+  }
+}
+
+export const getProgramAssignmentsByUserId = async (userId: string): Promise<ProgramAssignment[]> => {
+  try {
+    const programAssignmentsCollectionRef = collection(db, PROGRAM_ASSIGNMENTS_COLLECTION)
+
+    const q = query(programAssignmentsCollectionRef, where("userId", "==", userId))
+
+    const querySnapshot = await getDocs(q)
+
+    const programAssignments: ProgramAssignment[] = []
+    querySnapshot.forEach((doc) => {
+      programAssignments.push(doc.data() as ProgramAssignment)
+    })
+
+    return programAssignments
+  } catch (error: any) {
+    throw new Error(`Failed to get program assignments by userId: ${error.message}`)
+  }
+}

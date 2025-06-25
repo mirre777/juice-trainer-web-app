@@ -1,13 +1,21 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, type ReactNode, useCallback } from "react"
+import { createContext, useState, useContext, type ReactNode, useCallback } from "react"
+
 import { useToast } from "@/components/ui/use-toast"
+import { useTranslation } from "react-i18next"
+import { trackEvent } from "@/lib/utils/matomo"
+import { useSession } from "next-auth/react"
+import { api } from "@/lib/api"
 import type { AppError } from "@/lib/utils/error-handler"
 
 interface FeedbackContextProps {
-  showSuccessFeedback: (message: string) => void
-  showErrorFeedback: (error: AppError | Error | string) => void
+  isFeedbackModalOpen: boolean
+  openFeedbackModal: () => void
+  closeFeedbackModal: () => void
+  submitFeedback: (feedback: string) => Promise<void>
+  isSubmitting: boolean
 }
 
 const FeedbackContext = createContext<FeedbackContextProps | undefined>(undefined)
@@ -17,42 +25,61 @@ interface FeedbackProviderProps {
 }
 
 export const FeedbackProvider: React.FC<FeedbackProviderProps> = ({ children }) => {
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
+  const { t } = useTranslation()
+  const { data: session } = useSession()
 
-  const showSuccessFeedback = useCallback(
-    (message: string) => {
-      toast({
-        variant: "success",
-        title: "Success",
-        description: message,
-      })
-    },
-    [toast],
-  )
+  const openFeedbackModal = useCallback(() => {
+    setIsFeedbackModalOpen(true)
+  }, [])
 
-  const showErrorFeedback = useCallback(
-    (error: AppError | Error | string) => {
-      let message: string
+  const closeFeedbackModal = useCallback(() => {
+    setIsFeedbackModalOpen(false)
+  }, [])
 
-      if (typeof error === "string") {
-        message = error
-      } else if ((error as AppError).message) {
-        message = (error as AppError).message
-      } else {
-        message = error.toString()
+  const submitFeedback = useCallback(
+    async (feedback: string) => {
+      setIsSubmitting(true)
+      try {
+        await api.post("/api/feedback", { feedback })
+        toast({
+          title: t("feedback.success"),
+          description: t("feedback.success_description"),
+        })
+        trackEvent({
+          category: "Feedback",
+          action: "Submit Feedback",
+          name: "Feedback Submitted",
+        })
+        closeFeedbackModal()
+      } catch (error) {
+        const appError = error as AppError
+        toast({
+          variant: "destructive",
+          title: t("feedback.error"),
+          description: appError.message || t("feedback.error_description"),
+        })
+      } finally {
+        setIsSubmitting(false)
       }
-
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: message,
-      })
     },
-    [toast],
+    [closeFeedbackModal, t, toast, session],
   )
 
   return (
-    <FeedbackContext.Provider value={{ showSuccessFeedback, showErrorFeedback }}>{children}</FeedbackContext.Provider>
+    <FeedbackContext.Provider
+      value={{
+        isFeedbackModalOpen,
+        openFeedbackModal,
+        closeFeedbackModal,
+        submitFeedback,
+        isSubmitting,
+      }}
+    >
+      {children}
+    </FeedbackContext.Provider>
   )
 }
 

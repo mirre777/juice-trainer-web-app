@@ -1,63 +1,95 @@
-import { initializeApp } from "firebase/app"
-import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore"
-import { getAuth } from "firebase/auth"
-import { getAnalytics } from "firebase/analytics"
-import { createError, ErrorType } from "@/lib/utils/error-handler"
+import { db } from "@/lib/firebase/firebase"
+import { addDoc, collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore"
+import type { AppError } from "@/lib/utils/error-handler"
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-}
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig)
-const db = getFirestore(app)
-const auth = getAuth(app)
-let analytics
-
-if (typeof window !== "undefined") {
-  analytics = getAnalytics(app)
-}
-
-interface FeedbackData {
-  message: string
+export interface Feedback {
+  id?: string
+  userId: string
+  route: string
   rating: number
+  comment: string
+  createdAt: string
+  status: "pending" | "approved" | "rejected"
 }
 
-async function submitFeedback(feedbackData: FeedbackData): Promise<string> {
+const feedbackCollection = collection(db, "feedback")
+
+export const addFeedback = async (
+  userId: string,
+  route: string,
+  rating: number,
+  comment: string,
+): Promise<Feedback | AppError> => {
   try {
-    const feedbackCollection = collection(db, "feedback")
+    const createdAt = new Date().toISOString()
     const docRef = await addDoc(feedbackCollection, {
-      ...feedbackData,
-      createdAt: serverTimestamp(),
+      userId,
+      route,
+      rating,
+      comment,
+      createdAt,
+      status: "pending",
     })
-    return docRef.id
+
+    const newFeedback: Feedback = {
+      id: docRef.id,
+      userId,
+      route,
+      rating,
+      comment,
+      createdAt,
+      status: "pending",
+    }
+
+    return newFeedback
   } catch (error: any) {
-    console.error("Error adding feedback:", error)
-    throw createError(ErrorType.FirebaseError, "Failed to submit feedback: " + error.message)
+    return {
+      message: error.message || "Failed to add feedback",
+      status: "error",
+    }
   }
 }
 
-async function getLatestFeedback(limitCount = 5) {
+export const getFeedbackByRoute = async (route: string): Promise<Feedback[]> => {
   try {
-    const feedbackCollection = collection(db, "feedback")
-    const q = query(feedbackCollection, orderBy("createdAt", "desc"), limit(limitCount))
+    const q = query(feedbackCollection, where("route", "==", route))
     const querySnapshot = await getDocs(q)
-    const feedback: any[] = []
+    const feedback: Feedback[] = []
     querySnapshot.forEach((doc) => {
-      feedback.push({ id: doc.id, ...doc.data() })
+      feedback.push({ id: doc.id, ...doc.data() } as Feedback)
     })
     return feedback
-  } catch (error: any) {
-    console.error("Error getting feedback:", error)
-    throw createError(ErrorType.FirebaseError, "Failed to retrieve feedback: " + error.message)
+  } catch (error) {
+    console.error("Error getting feedback by route:", error)
+    return []
   }
 }
 
-export { auth, db, analytics, submitFeedback, getLatestFeedback }
-export type { FeedbackData }
+export const getAllFeedback = async (): Promise<Feedback[]> => {
+  try {
+    const querySnapshot = await getDocs(feedbackCollection)
+    const feedback: Feedback[] = []
+    querySnapshot.forEach((doc) => {
+      feedback.push({ id: doc.id, ...doc.data() } as Feedback)
+    })
+    return feedback
+  } catch (error) {
+    console.error("Error getting all feedback:", error)
+    return []
+  }
+}
+
+export const updateFeedbackStatus = async (
+  feedbackId: string,
+  status: "pending" | "approved" | "rejected",
+): Promise<void> => {
+  try {
+    const feedbackDoc = doc(db, "feedback", feedbackId)
+    await updateDoc(feedbackDoc, {
+      status: status,
+    })
+  } catch (error) {
+    console.error("Error updating feedback status:", error)
+    throw error
+  }
+}

@@ -2,70 +2,58 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
-import { Skeleton } from "@/components/ui/skeleton"
-import { OverviewHeader } from "@/components/overview/overview-header"
-import { OverviewList } from "@/components/overview/overview-list"
-import { api } from "@/convex/_generated/api"
-import { useQuery } from "convex/react"
-import { Empty } from "@/components/empty"
-import { SearchResults } from "@/components/search-results"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
+import { toast } from "sonner"
+
+import { Overview } from "@/components/overview/Overview"
+import { SkeletonOverview } from "@/components/overview/SkeletonOverview"
+import { useAuth } from "@/hooks/use-auth"
+import { useDebounce } from "@/hooks/use-debounce"
+import { api } from "@/lib/api"
+import { cn } from "@/lib/utils"
+import type { AppError } from "@/lib/utils/error-handler"
 
 interface OverviewPageClientProps {
-  orgId: string
-  query?: string
+  className?: string
 }
 
-const OverviewPageClient: React.FC<OverviewPageClientProps> = ({ orgId, query }) => {
-  const router = useRouter()
-  const { data: documents } = useQuery(api.documents.get, {
-    orgId,
-    query,
-  })
-  const { status } = useSession()
-  const [isCreating, setIsCreating] = useState(false)
+export const OverviewPageClient: React.FC<OverviewPageClientProps> = ({ className }) => {
+  const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<AppError | null>(null)
+  const [data, setData] = useState<any>(null)
+  const [search, setSearch] = useState(searchParams.get("search") || "")
+  const debouncedSearch = useDebounce(search, 500)
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/")
+    const fetchData = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const response = await api.get(`/api/overview?search=${debouncedSearch}`)
+        setData(response.data)
+      } catch (error: any) {
+        setError(error)
+        toast.error(error?.message || "Something went wrong")
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [status, router])
 
-  const onCreate = () => {
-    setIsCreating(true)
-  }
+    fetchData()
+  }, [debouncedSearch])
 
-  if (status === "loading") {
-    return (
-      <div>
-        <Skeleton className="h-14 w-[200px]" />
-        <div className="mt-4">
-          <Skeleton className="h-32 w-[200px]" />
-        </div>
-      </div>
-    )
-  }
-
-  if (!documents && query) {
-    return <SearchResults isCreating={isCreating} onCreate={onCreate} />
-  }
-
-  if (!documents?.length && !query) {
-    return <Empty isCreating={isCreating} onCreate={onCreate} />
+  if (!user) {
+    return null
   }
 
   return (
-    <div className="h-full">
-      <OverviewHeader onCreate={onCreate} />
-      {!!documents?.length ? (
-        <OverviewList documents={documents} />
-      ) : (
-        <SearchResults isCreating={isCreating} onCreate={onCreate} />
-      )}
+    <div className={cn("w-full", className)}>
+      {isLoading && <SkeletonOverview />}
+      {!isLoading && data && <Overview data={data} search={search} setSearch={setSearch} />}
     </div>
   )
 }
-
-export default OverviewPageClient

@@ -4,9 +4,10 @@ import { useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { useMutation } from "@tanstack/react-query"
-import { sendFeedback } from "@/lib/api/feedback"
 import { useToast } from "@/components/ui/use-toast"
+import { useMutation } from "@tanstack/react-query"
+import { createFeedback } from "@/lib/api/feedback"
+import { Smile } from "lucide-react"
 import type { AppError } from "@/lib/utils/error-handler"
 
 const FloatingFeedbackButton = () => {
@@ -15,20 +16,21 @@ const FloatingFeedbackButton = () => {
   const { toast } = useToast()
 
   const { mutate: submitFeedback, isLoading } = useMutation({
-    mutationFn: sendFeedback,
+    mutationFn: createFeedback,
     onSuccess: () => {
       toast({
-        title: "Feedback sent!",
+        title: "Feedback submitted!",
         description: "Thank you for your feedback.",
       })
       setOpen(false)
       setFeedbackText("")
     },
-    onError: (error: AppError) => {
+    onError: (error) => {
+      const appError = error as AppError
       toast({
-        title: "Something went wrong.",
-        description: error.message,
         variant: "destructive",
+        title: "Error submitting feedback",
+        description: appError.message || "Something went wrong. Please try again.",
       })
     },
   })
@@ -36,35 +38,42 @@ const FloatingFeedbackButton = () => {
   const handleSubmit = () => {
     if (feedbackText.trim() === "") {
       toast({
-        title: "Please enter your feedback.",
         variant: "destructive",
+        title: "Feedback cannot be empty",
+        description: "Please provide some feedback before submitting.",
       })
       return
     }
-    submitFeedback(feedbackText)
+
+    submitFeedback({ text: feedbackText })
   }
 
   return (
     <>
-      <Button className="fixed bottom-4 right-4 z-50" onClick={() => setOpen(true)}>
-        Feedback
+      <Button
+        variant="secondary"
+        className="fixed bottom-4 right-4 z-50 rounded-full p-2 shadow-lg hover:bg-secondary/80"
+        onClick={() => setOpen(true)}
+        aria-label="Open feedback form"
+      >
+        <Smile className="h-6 w-6" />
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Send Feedback</DialogTitle>
-            <DialogDescription>We appreciate your feedback! Please let us know how we can improve.</DialogDescription>
+            <DialogTitle>Send us feedback</DialogTitle>
+            <DialogDescription>Help us improve our service by sharing your thoughts.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <Textarea
-              placeholder="Enter your feedback here..."
+              placeholder="Tell us what you think..."
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
             />
           </div>
           <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading ? "Sending..." : "Send Feedback"}
+            {isLoading ? "Submitting..." : "Submit Feedback"}
           </Button>
         </DialogContent>
       </Dialog>

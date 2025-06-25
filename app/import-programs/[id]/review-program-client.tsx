@@ -1,147 +1,144 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { ProgramSchemaType } from "@/lib/schemas/program-schema"
+import { toast } from "@/components/ui/use-toast"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { useEffect, useState } from "react"
-import { useToast } from "@/components/ui/use-toast"
+import type { Program } from "@prisma/client"
+import { Pencil, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useSearchParams } from "next/navigation"
-import { Skeleton } from "@/components/ui/skeleton"
-import type { AppError } from "@/lib/utils/error-handler"
+import { useState } from "react"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
+
+interface ReviewProgramClientProps {
+  program: Program
+}
 
 const formSchema = z.object({
   name: z.string().min(2, {
     message: "Program name must be at least 2 characters.",
   }),
-  description: z.string().optional(),
 })
 
-interface ReviewProgramClientProps {
-  programId: string
-}
-
-export default function ReviewProgramClient({ programId }: ReviewProgramClientProps) {
-  const [program, setProgram] = useState<ProgramSchemaType | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const { toast } = useToast()
+export const ReviewProgramClient = ({ program }: ReviewProgramClientProps) => {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const importId = searchParams.get("importId")
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
-      description: "",
+      name: program?.name || "",
     },
   })
 
-  useEffect(() => {
-    const fetchProgram = async () => {
-      setIsLoading(true)
-      try {
-        const response = await fetch(`/api/programs/${programId}`)
-        if (!response.ok) {
-          const error = (await response.json()) as AppError
-          throw new Error(error.message)
-        }
-        const data = (await response.json()) as ProgramSchemaType
-        setProgram(data)
-        form.setValue("name", data.name)
-        form.setValue("description", data.description || "")
-      } catch (error: any) {
-        toast({
-          title: "Error!",
-          description: error.message,
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchProgram()
-  }, [programId, form, toast])
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const response = await fetch(`/api/programs/${programId}`, {
+      setLoading(true)
+      const response = await fetch(`/api/programs/${program.id}`, {
         method: "PATCH",
         body: JSON.stringify(values),
       })
 
       if (!response.ok) {
-        const error = (await response.json()) as AppError
-        throw new Error(error.message)
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to update program")
       }
 
       toast({
-        title: "Success!",
+        title: "Success",
         description: "Program updated successfully.",
       })
-      router.push(`/programs`)
+      router.refresh()
+      setOpen(false)
     } catch (error: any) {
+      console.error("Error updating program:", error)
       toast({
-        title: "Error!",
-        description: error.message,
         variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to update program.",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <Skeleton className="h-6 w-80" />
-          </CardTitle>
-          <CardDescription>
-            <Skeleton className="h-4 w-50" />
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="description">Description</Label>
-            <Skeleton className="h-24 w-full" />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Skeleton className="h-10 w-24" />
-        </CardFooter>
-      </Card>
-    )
+  const onDelete = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/programs/${program.id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to delete program")
+      }
+
+      toast({
+        title: "Success",
+        description: "Program deleted successfully.",
+      })
+      router.refresh()
+      router.push(`/import-programs`)
+    } catch (error: any) {
+      console.error("Error deleting program:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to delete program.",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Review Program</CardTitle>
-        <CardDescription>Review the program details and make any necessary changes.</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="name">Name</Label>
-          <Input id="name" placeholder="Program name" {...form.register("name")} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="description">Description</Label>
-          <Input id="description" placeholder="Program description" {...form.register("description")} />
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button onClick={form.handleSubmit(onSubmit)}>Update Program</Button>
-      </CardFooter>
-    </Card>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="ghost">
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit program</DialogTitle>
+            <DialogDescription>Make changes to your program here. Click save when you're done.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Name
+                </Label>
+                <Input id="name" placeholder="Program name" className="col-span-3" {...form.register("name")} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={loading}>
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Button variant="destructive" onClick={() => onDelete()} disabled={loading}>
+        <Trash2 className="mr-2 h-4 w-4" />
+        Delete
+      </Button>
+    </>
   )
 }

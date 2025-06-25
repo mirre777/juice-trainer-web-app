@@ -1,15 +1,16 @@
 import Link from "next/link"
+import type { AppError } from "@/lib/utils/error-handler"
 
-export default function NotFound() {
+export default function NotFound({ error }: { error: AppError }) {
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
-      <h1 className="text-4xl font-bold text-gray-800 mb-4">404 - Not Found</h1>
-      <p className="text-lg text-gray-600 mb-8">The import program you are looking for does not exist.</p>
+    <div className="flex flex-col items-center justify-center h-full">
+      <h1 className="text-4xl font-bold text-gray-800">404 - Not Found</h1>
+      <p className="text-gray-600 mt-4">Could not find the import program with the specified ID.</p>
       <Link
         href="/import-programs"
-        className="px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+        className="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75"
       >
-        Go back to Import Programs
+        Back to Import Programs
       </Link>
     </div>
   )

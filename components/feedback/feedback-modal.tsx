@@ -13,106 +13,98 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { cn } from "@/lib/utils"
+import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
-import { createFeedback } from "@/lib/actions/feedback.actions"
+import { Icons } from "../icons"
+import { sendFeedback } from "@/lib/api/feedback"
 import type { AppError } from "@/lib/utils/error-handler"
 
-const formSchema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address." }),
-  feedback: z.string().min(10, { message: "Feedback must be at least 10 characters." }),
-})
+interface FeedbackModalProps {
+  className?: string
+}
 
-export function FeedbackModal() {
-  const { toast } = useToast()
+export function FeedbackModal({ className }: FeedbackModalProps) {
   const [open, setOpen] = useState(false)
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      email: "",
-      feedback: "",
+  const [email, setEmail] = useState("")
+  const [feedback, setFeedback] = useState("")
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const { mutate: submitFeedback } = useMutation({
+    mutationFn: async () => {
+      setIsLoading(true)
+      try {
+        await sendFeedback({ email, feedback })
+        toast({
+          title: "Feedback sent!",
+          description: "Thank you for your feedback.",
+        })
+        setOpen(false)
+        setEmail("")
+        setFeedback("")
+      } catch (error: any) {
+        const appError = error as AppError
+        toast({
+          title: "Something went wrong.",
+          description: appError.message || "Failed to send feedback.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
     },
   })
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      const result = await createFeedback(values)
-
-      if ("error" in result) {
-        const appError = result as AppError
-        toast({
-          variant: "destructive",
-          title: "Error submitting feedback.",
-          description: appError.error,
-        })
-      } else {
-        toast({
-          title: "Feedback submitted successfully!",
-          description: "Thanks for your feedback.",
-        })
-        form.reset()
-        setOpen(false)
-      }
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error submitting feedback.",
-        description: error.message,
-      })
-    }
-  }
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button variant="outline">Give Feedback</Button>
+        <Button variant="outline" className={cn(className)}>
+          Feedback
+        </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>We value your feedback!</AlertDialogTitle>
+          <AlertDialogTitle>Send us your feedback</AlertDialogTitle>
           <AlertDialogDescription>
-            Please provide your feedback below. Your input helps us improve our services.
+            We appreciate your feedback. Please let us know how we can improve.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="example@email.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="email" className="text-right">
+              Email
+            </Label>
+            <Input
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="col-span-3"
+              type="email"
             />
-            <FormField
-              control={form.control}
-              name="feedback"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Feedback</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Tell us what you think..." className="resize-none" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="feedback" className="text-right">
+              Feedback
+            </Label>
+            <Textarea
+              id="feedback"
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              className="col-span-3"
             />
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction type="submit">Submit</AlertDialogAction>
-            </AlertDialogFooter>
-          </form>
-        </Form>
+          </div>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => submitFeedback()} disabled={isLoading}>
+            {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
+            Submit
+          </AlertDialogAction>
+        </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   )

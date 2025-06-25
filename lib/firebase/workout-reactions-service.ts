@@ -1,113 +1,115 @@
-import { type AppError, createError, ErrorType } from "@/lib/utils/error-handler"
-
 import { db } from "@/lib/firebase/firebase"
-import {
-  type DocumentData,
-  type FirestoreDataConverter,
-  type QueryDocumentSnapshot,
-  type SnapshotOptions,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore"
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where } from "firebase/firestore"
+import type { AppError } from "@/lib/utils/error-handler"
 
 export type WorkoutReaction = {
-  workoutId: string
   userId: string
-  reaction: "like" | "dislike"
+  workoutId: string
+  reactionType: "like" | "love" | "celebrate" | "insightful" | "curious"
   createdAt: Date
-  updatedAt: Date
 }
 
-const workoutReactionsConverter: FirestoreDataConverter<WorkoutReaction> = {
-  toFirestore: (reaction: WorkoutReaction): DocumentData => {
-    return {
-      workoutId: reaction.workoutId,
-      userId: reaction.userId,
-      reaction: reaction.reaction,
-      createdAt: reaction.createdAt,
-      updatedAt: reaction.updatedAt,
-    }
-  },
-  fromFirestore: (snapshot: QueryDocumentSnapshot, options: SnapshotOptions): WorkoutReaction => {
-    const data = snapshot.data(options)
-    return {
-      workoutId: data.workoutId,
-      userId: data.userId,
-      reaction: data.reaction,
-      createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate(),
-    }
-  },
-}
+const WORKOUT_REACTIONS_COLLECTION = "workoutReactions"
 
-const workoutReactionsCollection = collection(db, "workoutReactions").withConverter(workoutReactionsConverter)
-
-export const getWorkoutReaction = async (
-  workoutId: string,
-  userId: string,
-): Promise<WorkoutReaction | AppError | null> => {
+export const getWorkoutReaction = async (userId: string, workoutId: string): Promise<WorkoutReaction | null> => {
   try {
-    const workoutReactionDoc = doc(workoutReactionsCollection, `${workoutId}-${userId}`)
-    const workoutReactionSnap = await getDoc(workoutReactionDoc)
+    const reactionDocRef = doc(db, WORKOUT_REACTIONS_COLLECTION, `${userId}_${workoutId}`)
+    const reactionDocSnap = await getDoc(reactionDocRef)
 
-    if (!workoutReactionSnap.exists()) {
+    if (reactionDocSnap.exists()) {
+      const reactionData = reactionDocSnap.data() as Omit<WorkoutReaction, "createdAt">
+      return {
+        ...reactionData,
+        createdAt: reactionData.createdAt.toDate(),
+      } as WorkoutReaction
+    } else {
       return null
     }
-
-    return workoutReactionSnap.data()
   } catch (error: any) {
-    return createError(ErrorType.GetWorkoutReactionError, error.message)
+    console.error("Error getting workout reaction:", error)
+    throw {
+      status: "error",
+      message: `Failed to get workout reaction: ${error.message}`,
+      error,
+    } as AppError
   }
 }
 
-export const createWorkoutReaction = async (workoutReaction: WorkoutReaction): Promise<WorkoutReaction | AppError> => {
+export const createWorkoutReaction = async (workoutReaction: WorkoutReaction): Promise<void> => {
   try {
-    const workoutReactionDoc = doc(workoutReactionsCollection, `${workoutReaction.workoutId}-${workoutReaction.userId}`)
+    const reactionDocRef = doc(
+      db,
+      WORKOUT_REACTIONS_COLLECTION,
+      `${workoutReaction.userId}_${workoutReaction.workoutId}`,
+    )
 
-    await setDoc(workoutReactionDoc, workoutReaction)
-
-    return workoutReaction
+    await setDoc(reactionDocRef, workoutReaction)
   } catch (error: any) {
-    return createError(ErrorType.CreateWorkoutReactionError, error.message)
+    console.error("Error creating workout reaction:", error)
+    throw {
+      status: "error",
+      message: `Failed to create workout reaction: ${error.message}`,
+      error,
+    } as AppError
   }
 }
 
 export const updateWorkoutReaction = async (
-  workoutId: string,
   userId: string,
-  reaction: "like" | "dislike",
-): Promise<WorkoutReaction | AppError> => {
+  workoutId: string,
+  reactionType: WorkoutReaction["reactionType"],
+): Promise<void> => {
   try {
-    const workoutReactionDoc = doc(workoutReactionsCollection, `${workoutId}-${userId}`)
+    const reactionDocRef = doc(db, WORKOUT_REACTIONS_COLLECTION, `${userId}_${workoutId}`)
 
-    const workoutReaction = await getWorkoutReaction(workoutId, userId)
+    await updateDoc(reactionDocRef, { reactionType })
+  } catch (error: any) {
+    console.error("Error updating workout reaction:", error)
+    throw {
+      status: "error",
+      message: `Failed to update workout reaction: ${error.message}`,
+      error,
+    } as AppError
+  }
+}
 
-    if (!workoutReaction) {
-      return createError(ErrorType.UpdateWorkoutReactionError, "Workout reaction not found")
-    }
+export const deleteWorkoutReaction = async (userId: string, workoutId: string): Promise<void> => {
+  try {
+    const reactionDocRef = doc(db, WORKOUT_REACTIONS_COLLECTION, `${userId}_${workoutId}`)
 
-    if ((workoutReaction as AppError).message) {
-      return workoutReaction as AppError
-    }
+    await deleteDoc(reactionDocRef)
+  } catch (error: any) {
+    console.error("Error deleting workout reaction:", error)
+    throw {
+      status: "error",
+      message: `Failed to delete workout reaction: ${error.message}`,
+      error,
+    } as AppError
+  }
+}
 
-    const updatedWorkoutReaction: WorkoutReaction = {
-      workoutId: workoutId,
-      userId: userId,
-      reaction: reaction,
-      createdAt: (workoutReaction as WorkoutReaction).createdAt,
-      updatedAt: new Date(),
-    }
+export const getWorkoutReactionsByWorkoutId = async (workoutId: string): Promise<WorkoutReaction[]> => {
+  try {
+    const reactionsCollectionRef = collection(db, WORKOUT_REACTIONS_COLLECTION)
+    const q = query(reactionsCollectionRef, where("workoutId", "==", workoutId))
+    const querySnapshot = await getDocs(q)
 
-    await updateDoc(workoutReactionDoc, {
-      reaction: updatedWorkoutReaction.reaction,
-      updatedAt: updatedWorkoutReaction.updatedAt,
+    const reactions: WorkoutReaction[] = []
+    querySnapshot.forEach((doc) => {
+      const reactionData = doc.data() as Omit<WorkoutReaction, "createdAt">
+      reactions.push({
+        ...reactionData,
+        createdAt: reactionData.createdAt.toDate(),
+      } as WorkoutReaction)
     })
 
-    return updatedWorkoutReaction
+    return reactions
   } catch (error: any) {
-    return createError(ErrorType.UpdateWorkoutReactionError, error.message)
+    console.error("Error getting workout reactions by workoutId:", error)
+    throw {
+      status: "error",
+      message: `Failed to get workout reactions by workoutId: ${error.message}`,
+      error,
+    } as AppError
   }
 }
