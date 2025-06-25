@@ -33,6 +33,9 @@ export async function middleware(request: NextRequest) {
   const authCookie = request.cookies.get("auth_token")
   const token = authCookie?.value
 
+  console.log(`[Middleware] Raw cookies header: ${request.headers.get("cookie")}`)
+  console.log(`[Middleware] Auth cookie object: ${JSON.stringify(authCookie)}`)
+
   console.log(`[Middleware] Path: ${path}`)
   console.log(`[Middleware] Is public path: ${isPublicPath}`)
   console.log(`[Middleware] Is shared workout path: ${isSharedWorkoutPath}`)

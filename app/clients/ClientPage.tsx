@@ -8,7 +8,7 @@ import { PageLayout } from "@/components/shared/page-layout"
 import { ClientList } from "@/components/clients/ClientList"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { Button } from "@/components/ui/button"
-import { LoadingSpinner } from "@/components/shared/loading-spinner" // Updated import
+import { LoadingSpinner } from "@/components/shared/loading-spinner" // Updated to named import
 import { EmptyState } from "@/components/shared/empty-state"
 import { useToast } from "@/hooks/use-toast"
 

@@ -1,5 +1,5 @@
 import type React from "react"
-import { LoadingSpinner } from "@/components/shared/loading-spinner" // Updated import
+import { LoadingSpinner } from "@/components/shared/loading-spinner" // Updated to named import
 
 type ImportProgramsClientProps = {}
 

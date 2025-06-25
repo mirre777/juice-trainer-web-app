@@ -15,7 +15,9 @@ export async function GET(request: NextRequest) {
     const authCookie = request.cookies.get("auth_token")
     const token = authCookie?.value
 
+    console.log(`[API/clients] Auth cookie value: ${token ? token.substring(0, 20) + "..." : "N/A"}`)
     if (!token) {
+      console.log("[API/clients] No token found in cookies.")
       const error = createError(
         ErrorType.API_UNAUTHORIZED,
         null,
@@ -28,16 +30,17 @@ export async function GET(request: NextRequest) {
 
     let trainerId: string
     try {
+      console.log("[API/clients] Attempting to verify Firebase ID token...")
       const decodedClaims = await getFirebaseAdminAuth().verifyIdToken(token)
       trainerId = decodedClaims.uid
-      console.log(`[API/clients] Token verified. Trainer ID: ${trainerId}`)
+      console.log(`[API/clients] Token verified successfully. Trainer ID: ${trainerId}`)
     } catch (tokenError: any) {
-      console.error("[API/clients] Firebase ID token verification failed:", tokenError)
+      console.error("[API/clients] Firebase ID token verification failed:", tokenError.code, tokenError.message)
       const error = createError(
         ErrorType.AUTH_TOKEN_INVALID,
         tokenError,
         { function: "GET /api/clients" },
-        "Unauthorized: Invalid or expired authentication token.",
+        `Unauthorized: Invalid or expired authentication token. Details: ${tokenError.message}`,
       )
       logError(error)
       return NextResponse.json({ error: error.message }, { status: 401 })
