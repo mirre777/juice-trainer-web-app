@@ -1,67 +1,75 @@
 "use client"
 
 import { useState } from "react"
-import { usePathname } from "next/navigation"
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { toast } from "sonner"
+import { useMutation } from "@tanstack/react-query"
+import { sendFeedback } from "@/lib/api/feedback"
+import { useToast } from "@/components/ui/use-toast"
+import type { AppError } from "@/lib/utils/error-handler"
 
-export function FloatingFeedbackButton() {
-  const pathname = usePathname()
+const FloatingFeedbackButton = () => {
   const [open, setOpen] = useState(false)
-  const [feedback, setFeedback] = useState("")
+  const [feedbackText, setFeedbackText] = useState("")
+  const { toast } = useToast()
 
-  // Don't show on auth pages, landing page, or invite pages
-  if (pathname === "/login" || pathname === "/signup" || pathname === "/" || pathname.startsWith("/invite/")) {
-    return null
-  }
-
-  const handleSubmit = async () => {
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        body: JSON.stringify({ feedback, pathname }),
+  const { mutate: submitFeedback, isLoading } = useMutation({
+    mutationFn: sendFeedback,
+    onSuccess: () => {
+      toast({
+        title: "Feedback sent!",
+        description: "Thank you for your feedback.",
       })
-
-      if (!res.ok) {
-        toast.error("Something went wrong. Please try again.")
-        return
-      }
-
       setOpen(false)
-      setFeedback("")
-      toast.success("Thank you for your feedback!")
-    } catch (error) {
-      toast.error("Something went wrong. Please try again.")
+      setFeedbackText("")
+    },
+    onError: (error: AppError) => {
+      toast({
+        title: "Something went wrong.",
+        description: error.message,
+        variant: "destructive",
+      })
+    },
+  })
+
+  const handleSubmit = () => {
+    if (feedbackText.trim() === "") {
+      toast({
+        title: "Please enter your feedback.",
+        variant: "destructive",
+      })
+      return
     }
+    submitFeedback(feedbackText)
   }
 
   return (
     <>
+      <Button className="fixed bottom-4 right-4 z-50" onClick={() => setOpen(true)}>
+        Feedback
+      </Button>
+
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Send Feedback</DialogTitle>
-            <DialogDescription>Let us know how we can improve. Your feedback is valuable to us.</DialogDescription>
+            <DialogDescription>We appreciate your feedback! Please let us know how we can improve.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <Textarea
-              placeholder="Write your feedback here."
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="Enter your feedback here..."
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
             />
           </div>
-          <Button type="submit" onClick={handleSubmit}>
-            Submit Feedback
+          <Button onClick={handleSubmit} disabled={isLoading}>
+            {isLoading ? "Sending..." : "Send Feedback"}
           </Button>
         </DialogContent>
       </Dialog>
-
-      <Button variant="secondary" className="fixed bottom-4 right-4 rounded-full" onClick={() => setOpen(true)}>
-        Feedback
-      </Button>
     </>
   )
 }
+
+export default FloatingFeedbackButton

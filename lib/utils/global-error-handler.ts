@@ -1,54 +1,24 @@
-"use client"
+import { createError, ErrorType } from "@/lib/utils/error-handler"
 
-import { ErrorType, handleClientError } from "./error-handler"
+export const globalErrorHandler = (err: any, req: any, res: any, next: any) => {
+  console.error(err.stack)
 
-// Initialize global error handlers
-export function initializeGlobalErrorHandlers() {
-  if (typeof window === "undefined") {
-    return // Skip on server
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({
+      status: err.status,
+      message: err.message,
+      errorType: err.errorType,
+      ...(process.env.NODE_ENV === "development" ? { stack: err.stack } : {}),
+    })
   }
 
-  // Handle uncaught exceptions
-  window.addEventListener("error", (event) => {
-    const appError = handleClientError(event.error, {
-      component: "GlobalErrorHandler",
-      operation: "uncaughtException",
-      message: "Uncaught exception",
-      errorType: ErrorType.UNKNOWN_ERROR,
-    })
+  // Handle unexpected errors
+  const unexpectedError = createError(ErrorType.INTERNAL_SERVER_ERROR, "Internal Server Error", 500, "error")
 
-    console.error("Uncaught exception:", appError)
-
-    // Prevent default browser error handling
-    event.preventDefault()
+  return res.status(unexpectedError.statusCode).json({
+    status: unexpectedError.status,
+    message: unexpectedError.message,
+    errorType: unexpectedError.errorType,
+    ...(process.env.NODE_ENV === "development" ? { stack: err.stack } : {}),
   })
-
-  // Handle unhandled promise rejections
-  window.addEventListener("unhandledrejection", (event) => {
-    const appError = handleClientError(event.reason, {
-      component: "GlobalErrorHandler",
-      operation: "unhandledRejection",
-      message: "Unhandled promise rejection",
-      errorType: ErrorType.UNKNOWN_ERROR,
-    })
-
-    console.error("Unhandled promise rejection:", appError)
-
-    // Prevent default browser error handling
-    event.preventDefault()
-  })
-
-  // Log when initialized
-  console.log("Global error handlers initialized")
-}
-
-// Create a client component to initialize error handlers
-export function GlobalErrorHandler() {
-  // Initialize on mount
-  if (typeof window !== "undefined") {
-    initializeGlobalErrorHandlers()
-  }
-
-  // This component doesn't render anything
-  return null
 }

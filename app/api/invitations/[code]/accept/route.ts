@@ -1,73 +1,80 @@
-import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
-import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore" // Keep these for type inference if needed, but use admin db
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
 
-export async function POST(req: Request, { params }: { params: { code: string } }) {
-  const { code } = params
+import { supabaseAdmin } from "@/lib/supabase-admin"
+import { type AppError, createError, ErrorType } from "@/lib/utils/error-handler"
 
-  console.log(`[Accept Invitation] 🎯 Processing acceptance for code: ${code}`)
+export const dynamic = "force-dynamic"
 
-  if (!code) {
-    console.log(`[Accept Invitation] ❌ Missing invite code`)
-    return NextResponse.json({ error: "Missing invite code" }, { status: 400 })
-  }
+export async function POST(_: NextRequest, { params }: { params: { code: string } }): Promise<NextResponse> {
+  const supabase = createRouteHandlerClient({ cookies })
 
   try {
-    const data = await req.json()
-    const { clientInfo } = data
+    const { code } = params
 
-    console.log(`[Accept Invitation] 📝 Client info:`, clientInfo)
-
-    // Find trainer with this universal invite code
-    const usersRef = collection(getFirebaseAdminFirestore(), "users")
-    const q = query(usersRef, where("universalInviteCode", "==", code))
-    const querySnapshot = await getDocs(q)
-
-    if (querySnapshot.empty) {
-      console.log(`[Accept Invitation] ❌ Invalid invite code: ${code}`)
-      return NextResponse.json({ error: "Invalid invite code" }, { status: 404 })
+    if (!code) {
+      throw createError(ErrorType.BadRequest, "Missing invitation code")
     }
 
-    const trainerDoc = querySnapshot.docs[0]
-    const trainerId = trainerDoc.id
-    const trainerData = trainerDoc.data()
+    // 1. Verify the invitation code
+    const { data: invitation, error: invitationError } = await supabaseAdmin
+      .from("invitations")
+      .select("id, email, organization_id")
+      .eq("code", code)
+      .single()
 
-    console.log(`[Accept Invitation] ✅ Found trainer: ${trainerData.name || trainerId}`)
-
-    // Create an invitation acceptance record with regular timestamp
-    const now = new Date().toISOString()
-    const acceptanceData = {
-      inviteCode: code,
-      trainerId: trainerId,
-      trainerName: trainerData.name || trainerData.firstName || "Unknown Trainer",
-      clientInfo: clientInfo,
-      status: "accepted",
-      acceptedAt: now, // Use regular timestamp instead of serverTimestamp()
-      createdAt: now,
+    if (invitationError) {
+      throw createError(ErrorType.InternalServerError, `Failed to verify invitation code: ${invitationError.message}`)
     }
 
-    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
+    if (!invitation) {
+      throw createError(ErrorType.NotFound, "Invalid invitation code")
+    }
 
-    // Add to accepted invitations array AND set status field
-    const currentAcceptedInvitations = trainerData.acceptedInvitations || []
-    const newAcceptedInvitations = [...currentAcceptedInvitations, acceptanceData]
+    // 2. Get the current user
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
 
-    await updateDoc(trainerRef, {
-      acceptedInvitations: newAcceptedInvitations,
-      lastInviteAcceptedAt: serverTimestamp(), // serverTimestamp() only at top level
-      updatedAt: serverTimestamp(),
+    if (userError) {
+      throw createError(ErrorType.InternalServerError, `Failed to get user: ${userError.message}`)
+    }
+
+    if (!user) {
+      throw createError(ErrorType.Unauthorized, "Unauthorized")
+    }
+
+    // 3. Check if the user's email matches the invitation email
+    if (user.email !== invitation.email) {
+      throw createError(ErrorType.Forbidden, "Email does not match invitation")
+    }
+
+    // 4. Add the user to the organization
+    const { error: orgUserError } = await supabaseAdmin.from("organization_users").insert({
+      organization_id: invitation.organization_id,
+      user_id: user.id,
     })
 
-    console.log(`[Accept Invitation] ✅ Invitation accepted successfully for trainer: ${trainerId}`)
+    if (orgUserError) {
+      throw createError(ErrorType.InternalServerError, `Failed to add user to organization: ${orgUserError.message}`)
+    }
 
-    return NextResponse.json({
-      success: true,
-      message: "Invitation accepted successfully",
-      trainerId: trainerId,
-      trainerName: trainerData.name || trainerData.firstName || "Unknown Trainer",
-    })
+    // 5. Invalidate the invitation
+    const { error: invalidateError } = await supabaseAdmin
+      .from("invitations")
+      .update({ status: "accepted" })
+      .eq("id", invitation.id)
+
+    if (invalidateError) {
+      throw createError(ErrorType.InternalServerError, `Failed to invalidate invitation: ${invalidateError.message}`)
+    }
+
+    return NextResponse.json({ message: "Invitation accepted" }, { status: 200 })
   } catch (error) {
-    console.error("[Accept Invitation] ❌ Error accepting invitation:", error)
-    return NextResponse.json({ error: "Failed to accept invitation" }, { status: 500 })
+    console.error(error)
+    const appError = error as AppError
+    return NextResponse.json({ message: appError.message }, { status: appError.status })
   }
 }

@@ -1,94 +1,150 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { subscribeToClients } from "@/lib/firebase/client-service"
-import { useCurrentUser } from "@/hooks/use-current-user"
-import type { Client } from "@/types/client"
-import { PageLayout } from "@/components/shared/page-layout"
-import { ClientList } from "@/components/clients/ClientList"
-import { AddClientModal } from "@/components/clients/add-client-modal"
+import ClientTable from "@/components/ClientTable"
+import ClientToolbar from "@/components/ClientToolbar"
 import { Button } from "@/components/ui/button"
-import { LoadingSpinner } from "@/components/shared/loading-spinner" // Updated to named import
-import { EmptyState } from "@/components/shared/empty-state"
-import { useToast } from "@/hooks/use-toast"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { PlusIcon } from "@radix-ui/react-icons"
+import { useToast } from "@/components/ui/use-toast"
+import { createClient } from "@/lib/actions/client.actions"
+import { revalidatePath } from "next/cache"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import type { AppError } from "@/lib/utils/error-handler"
 
-export default function ClientPage() {
-  const { user, loading: userLoading, uid: trainerUid } = useCurrentUser()
-  const [clients, setClients] = useState<Client[]>([])
-  const [loadingClients, setLoadingClients] = useState(true)
-  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
+const formSchema = z.object({
+  name: z.string().min(2, {
+    message: "Client name must be at least 2 characters.",
+  }),
+  email: z.string().email({
+    message: "Please enter a valid email.",
+  }),
+  phone: z.string().min(10, {
+    message: "Phone number must be at least 10 digits.",
+  }),
+})
+
+const ClientPage = () => {
   const { toast } = useToast()
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+    },
+  })
 
-  useEffect(() => {
-    console.log("ClientPage: useEffect triggered. UserLoading:", userLoading, "TrainerUID:", trainerUid)
-    if (!userLoading && trainerUid) {
-      console.log("ClientPage: User loaded, trainerUid is present. Setting up client subscription.")
-      setLoadingClients(true)
-      const unsubscribe = subscribeToClients(trainerUid, (fetchedClients, error) => {
-        if (error) {
-          console.error("ClientPage: Error subscribing to clients:", error)
-          toast({
-            title: "Error",
-            description: "Failed to load clients. Please try again.",
-            variant: "destructive",
-          })
-          setClients([])
-        } else {
-          console.log("ClientPage: Clients updated. Number of clients:", fetchedClients.length)
-          setClients(fetchedClients)
-        }
-        setLoadingClients(false)
-        console.log("ClientPage: LoadingClients set to false.")
-      })
-
-      return () => {
-        console.log("ClientPage: Unsubscribing from clients on cleanup.")
-        unsubscribe()
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    try {
+      const res = await createClient(values)
+      if ((res as AppError)?.error) {
+        return toast({
+          title: "Something went wrong.",
+          description: (res as AppError).error,
+          variant: "destructive",
+        })
       }
-    } else if (!userLoading && !trainerUid) {
-      console.log("ClientPage: User not logged in or trainerUid is null/undefined. Not fetching clients.")
-      setLoadingClients(false)
-      setClients([])
+
+      toast({
+        title: "Success!",
+        description: "Client created.",
+      })
+      form.reset()
+      setOpen(false)
+      revalidatePath("/clients")
+    } catch (error: any) {
+      toast({
+        title: "Something went wrong.",
+        description: error.message,
+        variant: "destructive",
+      })
     }
-  }, [userLoading, trainerUid, toast])
-
-  const handleClientAdded = () => {
-    setIsAddClientModalOpen(false)
-    toast({
-      title: "Success",
-      description: "Client added successfully!",
-    })
   }
 
-  if (userLoading || loadingClients) {
-    console.log("ClientPage: Displaying loading spinner for user or clients.")
-    return (
-      <PageLayout title="Clients">
-        <div className="flex justify-center items-center h-full">
-          <LoadingSpinner />
-        </div>
-      </PageLayout>
-    )
-  }
-
-  console.log("ClientPage: Rendering client list or empty state. Clients count:", clients.length)
   return (
-    <PageLayout title="Clients" actions={<Button onClick={() => setIsAddClientModalOpen(true)}>Add Client</Button>}>
-      {clients.length === 0 ? (
-        <EmptyState
-          title="No Clients Yet"
-          description="Add your first client to get started."
-          action={<Button onClick={() => setIsAddClientModalOpen(true)}>Add Client</Button>}
-        />
-      ) : (
-        <ClientList clients={clients} />
-      )}
-      <AddClientModal
-        isOpen={isAddClientModalOpen}
-        onClose={() => setIsAddClientModalOpen(false)}
-        onClientAdded={handleClientAdded}
-        trainerId={trainerUid || ""}
-      />
-    </PageLayout>
+    <div>
+      <div className="md:flex md:items-center md:justify-between">
+        <div className="mb-4 md:mb-0">
+          <h1 className="text-3xl font-semibold">Clients</h1>
+          <p className="text-gray-500">Manage your clients.</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusIcon className="mr-2 h-4 w-4" /> Add Client
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add Client</DialogTitle>
+              <DialogDescription>Add a new client to your list.</DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Client Name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="mail@example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="123-456-7890" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit">Submit</Button>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <ClientToolbar />
+      <ClientTable />
+    </div>
   )
 }
+
+export default ClientPage

@@ -1,41 +1,35 @@
-export interface RateLimitOptions {
-  interval: number
-  uniqueTokenPerInterval: number
+import { createError, ErrorType } from "@/lib/utils/error-handler"
+import type { NextApiResponse } from "next"
+import { LRUCache } from "lru-cache"
+
+type Options = {
+  uniqueTokenPerInterval?: number
+  interval?: number
 }
 
-interface RateLimiterResponse {
-  check: (limit: number, token: string) => Promise<void>
+function getIP(req: any): string {
+  return req.ip || req.headers["x-real-ip"] || req.headers["x-forwarded-for"] || req.connection.remoteAddress
 }
 
-// Simple in-memory rate limiter
-export function rateLimit(options: RateLimitOptions): RateLimiterResponse {
-  const tokenCache = new Map<string, number[]>()
-
-  // Clean up old entries every interval
-  setInterval(() => {
-    const now = Date.now()
-    for (const [token, timestamps] of tokenCache.entries()) {
-      const validTimestamps = timestamps.filter((timestamp) => now - timestamp < options.interval)
-      if (validTimestamps.length === 0) {
-        tokenCache.delete(token)
-      } else {
-        tokenCache.set(token, validTimestamps)
-      }
-    }
-  }, options.interval)
+export default function rateLimit(options?: Options) {
+  const tokenCache = new LRUCache({
+    max: options?.uniqueTokenPerInterval || 500,
+    ttl: options?.interval || 60000,
+  })
 
   return {
-    check: (limit: number, token: string) => {
-      const now = Date.now()
-      const timestamps = tokenCache.get(token) || []
-      const validTimestamps = timestamps.filter((timestamp) => now - timestamp < options.interval)
+    check: (res: NextApiResponse, limit: number, token: string): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const tokenCount = tokenCache.get(token) as number | undefined
+        if (tokenCount === undefined) {
+          tokenCache.set(token, 1)
+        } else if (tokenCount < limit) {
+          tokenCache.set(token, tokenCount + 1)
+        } else {
+          return reject(createError("Too Many Requests", ErrorType.TOO_MANY_REQUESTS))
+        }
 
-      if (validTimestamps.length >= limit) {
-        return Promise.reject(new Error("Rate limit exceeded"))
-      }
-
-      tokenCache.set(token, [...validTimestamps, now])
-      return Promise.resolve()
-    },
+        resolve()
+      }),
   }
 }

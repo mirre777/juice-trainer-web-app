@@ -1,56 +1,65 @@
-import { NextResponse } from "next/server"
-import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
-import { doc, getDoc, updateDoc } from "firebase/firestore" // Keep these for type inference if needed, but use admin db
-import { db } from "@/lib/firebase/firebase"
+import { type NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+import { authOptions } from "@/lib/auth"
+import { db } from "@/lib/db"
+import { createError, ErrorType } from "@/lib/utils/error-handler"
+
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
-    const docRef = doc(db, "sheets_imports", id)
-    const docSnap = await getDoc(docRef)
+    const session = await getServerSession(authOptions)
 
-    if (!docSnap.exists()) {
-      return NextResponse.json({ message: "Import not found" }, { status: 404 })
+    if (!session) {
+      return NextResponse.json(createError(ErrorType.Unauthorized, "Unauthorized"), { status: 401 })
     }
 
-    return NextResponse.json({ id: docSnap.id, ...docSnap.data() })
-  } catch (error) {
-    console.error("Error fetching sheets import:", error)
-    return NextResponse.json({ message: "Failed to fetch sheets import" }, { status: 500 })
+    const sheetImport = await db.sheetsImport.findUnique({
+      where: {
+        id: params.id,
+        userId: session.user.id,
+      },
+    })
+
+    if (!sheetImport) {
+      return NextResponse.json(createError(ErrorType.NotFound, "Sheet import not found"), { status: 404 })
+    }
+
+    return NextResponse.json(sheetImport)
+  } catch (error: any) {
+    console.error(error)
+    return NextResponse.json(createError(ErrorType.InternalServerError, error.message), { status: 500 })
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
-    const body = await request.json()
-    const docRef = doc(getFirebaseAdminFirestore(), "sheets_imports", id)
+    const session = await getServerSession(authOptions)
 
-    // Only allow updating 'name' and 'status' for now
-    const updateData: { name?: string; status?: string } = {}
-    if (body.name !== undefined) {
-      updateData.name = body.name
-    }
-    if (body.status !== undefined) {
-      updateData.status = body.status
-    }
-    if (body.program !== undefined) {
-      updateData.program = body.program
+    if (!session) {
+      return NextResponse.json(createError(ErrorType.Unauthorized, "Unauthorized"), { status: 401 })
     }
 
-    if (Object.keys(updateData).length === 0) {
-      return NextResponse.json({ message: "No valid fields to update" }, { status: 400 })
-    }
-
-    await updateDoc(docRef, {
-      ...updateData,
-      updatedAt: new Date(), // Update timestamp
+    const sheetImport = await db.sheetsImport.findUnique({
+      where: {
+        id: params.id,
+        userId: session.user.id,
+      },
     })
 
-    const updatedDocSnap = await getDoc(docRef)
-    return NextResponse.json({ message: "Import updated successfully", data: updatedDocSnap.data() })
-  } catch (error) {
-    console.error("Error updating sheets import:", error)
-    return NextResponse.json({ message: "Failed to update sheets import" }, { status: 500 })
+    if (!sheetImport) {
+      return NextResponse.json(createError(ErrorType.NotFound, "Sheet import not found"), { status: 404 })
+    }
+
+    await db.sheetsImport.delete({
+      where: {
+        id: params.id,
+        userId: session.user.id,
+      },
+    })
+
+    return NextResponse.json({ message: "Sheet import deleted" })
+  } catch (error: any) {
+    console.error(error)
+    return NextResponse.json(createError(ErrorType.InternalServerError, error.message), { status: 500 })
   }
 }

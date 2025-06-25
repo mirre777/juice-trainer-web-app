@@ -1,17 +1,49 @@
-import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
-import { FinancePageLayout } from "@/components/finance/finance-page-layout"
+"use client"
 
-const FinancePageClient = () => {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Wrap the main content with ComingSoonOverlay */}
-      <ComingSoonOverlay message="Finance Dashboard Coming Soon">
-        <main className="container mx-auto px-4 py-8">
-          <FinancePageLayout isDemo={false} />
-        </main>
-      </ComingSoonOverlay>
-    </div>
-  )
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { toast } from "sonner"
+
+import { getFinanceData } from "@/lib/actions/finance"
+import type { FinanceData } from "@/lib/types"
+import { handleError } from "@/lib/utils/error-handler"
+import type { AppError } from "@/lib/utils/error-handler"
+
+interface Props {
+  children: React.ReactNode
+}
+
+const FinancePageClient = ({ children }: Props) => {
+  const searchParams = useSearchParams()
+  const ticker = searchParams.get("ticker")
+  const [financeData, setFinanceData] = useState<FinanceData | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!ticker) {
+        return
+      }
+
+      setIsLoading(true)
+      try {
+        const data = await getFinanceData(ticker)
+        setFinanceData(data)
+      } catch (error) {
+        const appError = error as AppError
+        handleError(appError)
+        toast.error(appError.message || "Failed to fetch finance data.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [ticker])
+
+  return <>{children}</>
 }
 
 export default FinancePageClient
