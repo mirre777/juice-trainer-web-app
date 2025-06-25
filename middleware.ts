@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin" // Import getFirebaseAdminAuth
+// Removed: import { getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/api/auth/") ||
     path.startsWith("/demo/") // Demo routes remain public
 
-  // Get the token from the cookies - FIX: Look for 'auth_token'
+  // Get the token from the cookies
   const authCookie = request.cookies.get("auth_token")
   const token = authCookie?.value
 
@@ -75,26 +75,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/overview", request.url))
   }
 
-  // For protected paths, verify the token and set x-user-id header
-  if (!isPublicPath && token) {
-    try {
-      const decodedClaims = await getFirebaseAdminAuth().verifyIdToken(token)
-      const trainerId = decodedClaims.uid
-      console.log(`[Middleware] Token verified. Trainer ID: ${trainerId}`)
-
-      const response = NextResponse.next()
-      response.headers.set("x-user-id", trainerId)
-      console.log(`[Middleware] x-user-id header set for path: ${path}`)
-      return response
-    } catch (error: any) {
-      console.error(`[Middleware] Token verification failed for path ${path}:`, error.message)
-      // If token verification fails, clear the cookie and redirect to login
-      const response = NextResponse.redirect(new URL("/login", request.url))
-      response.cookies.delete("auth_token", { path: "/" })
-      return response
-    }
-  }
-
+  // Middleware will no longer verify the token or set x-user-id.
+  // API routes will handle token verification and user ID extraction.
   console.log(`[Middleware] Allowing request to proceed for path: ${path}`)
   return NextResponse.next()
 }

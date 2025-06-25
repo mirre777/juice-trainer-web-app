@@ -1,51 +1,80 @@
 "use server"
 
-import { assignProgramToClient } from "@/lib/firebase/program-assignment-service"
-import type { WorkoutProgram } from "@/types/workout-program"
 import { getFirebaseAdminAuth, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
+import { createError, ErrorType, logError, type AppError } from "@/lib/utils/error-handler" // Corrected import
+import type { WorkoutProgram } from "@/types/workout-program"
 import { cookies } from "next/headers"
 
-// Initialize Firebase Admin SDK if not already done
+// Initialize Firebase Admin SDK
 initializeFirebaseAdmin()
 
-/**
- * Server Action to send a program to a specific client.
- * @param programData The WorkoutProgram object (from the trainer's imported program).
- * @param clientId The document ID of the client under the trainer's 'clients' subcollection.
- * @returns A success or error message.
- */
-export async function sendProgramToClient(programData: WorkoutProgram, clientId: string) {
+export async function sendProgramToClient(
+  program: WorkoutProgram,
+  clientId: string,
+): Promise<{ success: boolean; message: string; error?: AppError }> {
+  const cookieStore = cookies()
+  const idToken = cookieStore.get("auth_token")?.value
+
+  if (!idToken) {
+    const error = createError(
+      ErrorType.AUTH_UNAUTHORIZED,
+      null,
+      { action: "sendProgramToClient" },
+      "Authentication token missing.",
+    )
+    logError(error)
+    return { success: false, message: "Authentication required.", error }
+  }
+
+  let trainerId: string
   try {
-    const sessionCookie = cookies().get("session")?.value
+    const decodedToken = await getFirebaseAdminAuth().verifyIdToken(idToken)
+    trainerId = decodedToken.uid
+  } catch (e: any) {
+    const error = createError(
+      ErrorType.AUTH_TOKEN_INVALID,
+      e,
+      { action: "sendProgramToClient" },
+      "Invalid or expired authentication token.",
+    )
+    logError(error)
+    return { success: false, message: "Authentication failed. Please log in again.", error }
+  }
 
-    if (!sessionCookie) {
-      return { success: false, message: "Unauthorized: No session found." }
-    }
+  const firestore = getFirebaseAdminFirestore()
 
-    // Verify the session cookie to get the trainer's UID
-    const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
-    const trainerId = decodedClaims.uid
+  try {
+    // 1. Save the program to the trainer's programs collection
+    const programRef = firestore.collection(`users/${trainerId}/workoutPrograms`).doc()
+    await programRef.set({
+      ...program,
+      id: programRef.id, // Ensure the ID is stored within the document
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+      assignedTo: clientId, // Mark as assigned to this client
+    })
 
-    if (!trainerId) {
-      return { success: false, message: "Unauthorized: Trainer ID not found in session." }
-    }
+    // 2. Assign the program to the client
+    const clientRef = firestore.collection(`users/${trainerId}/clients`).doc(clientId)
+    await clientRef.update({
+      assignedProgramId: programRef.id,
+      assignedProgramName: program.program_title, // Store the name for easy display
+      assignedAt: firestore.FieldValue.serverTimestamp(),
+    })
 
-    console.log(`[Server Action] Trainer ${trainerId} attempting to assign program to client ${clientId}`)
+    // 3. (Optional) Send notification to client - placeholder
+    console.log(`Program ${program.program_title} (${programRef.id}) assigned to client ${clientId}`)
 
-    const result = await assignProgramToClient(trainerId, clientId, programData)
-
-    if (result.success) {
-      return { success: true, message: "Program successfully assigned to client!", programId: result.programId }
-    } else {
-      console.error("Failed to assign program:", result.error)
-      return { success: false, message: result.error?.message || "Failed to assign program to client." }
-    }
-  } catch (error: any) {
-    console.error("Error in sendProgramToClient Server Action:", error)
-    // Handle specific Firebase Admin SDK errors if needed, e.g., session cookie expired
-    if (error.code === "auth/session-cookie-expired") {
-      return { success: false, message: "Your session has expired. Please log in again." }
-    }
-    return { success: false, message: error.message || "An unexpected error occurred during program assignment." }
+    return { success: true, message: `Program "${program.program_title}" assigned successfully!` }
+  } catch (e: any) {
+    const error = createError(
+      ErrorType.DB_WRITE_FAILED,
+      e,
+      { action: "sendProgramToClient", trainerId, clientId, programTitle: program.program_title },
+      "Failed to assign program to client.",
+    )
+    logError(error)
+    return { success: false, message: "Failed to assign program. Please try again.", error }
   }
 }

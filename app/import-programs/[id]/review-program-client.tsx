@@ -1126,7 +1126,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       </Dialog>
 
       {/* Select Week Dialog for switching from Periodized to Non-Periodized */}
-      <Dialog open={showSelectWeekDialog} onOpenChange={setShowSelectWeekDialog}>
+      <Dialog open={showSelectWeekDialog} onOnOpenChange={setShowSelectWeekDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Select Week to Keep</DialogTitle>

@@ -1,5 +1,6 @@
-import { doc, updateDoc, arrayUnion, serverTimestamp, getDoc } from "firebase/firestore"
+import { doc, updateDoc, arrayUnion, serverTimestamp, getDoc, arrayRemove } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
+import { createError, ErrorType, logError, type AppError } from "@/lib/utils/error-handler" // Corrected import
 
 // Add type guards and validation functions
 function isValidEmoji(emoji: unknown): emoji is string {
@@ -399,70 +400,83 @@ export function getLatestComment(workout: { comments?: WorkoutComment[] }): Work
  * Add reaction to workout document
  */
 export async function addReactionToWorkout(
-  workoutDocPath: string,
-  emoji: string,
-  trainerId = "trainer_unknown",
-): Promise<void> {
+  userId: string,
+  workoutId: string,
+  reaction: { emoji: string; reactorId: string; reactorName: string; timestamp: any },
+): Promise<[boolean, AppError | null]> {
   try {
-    console.log(`[WorkoutReactions] Adding reaction ${emoji} to workout at ${workoutDocPath}`)
-
-    const workoutRef = doc(db, workoutDocPath)
-
-    // Check if document exists
-    const docSnap = await getDoc(workoutRef)
-    if (!docSnap.exists()) {
-      throw new Error(`Workout document doesn't exist at path: ${workoutDocPath}`)
-    }
-
-    // Add reaction
+    const workoutRef = doc(db, "users", userId, "workouts", workoutId)
     await updateDoc(workoutRef, {
-      reactions: arrayUnion({
-        emoji,
-        trainerId,
-        timestamp: new Date(),
-      }),
-      updatedAt: serverTimestamp(),
+      reactions: arrayUnion(reaction),
     })
+    return [true, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_WRITE_FAILED,
+      error,
+      { service: "Firebase", operation: "addReaction", userId, workoutId },
+      "Failed to add reaction to workout.",
+    )
+    logError(appError)
+    return [false, appError]
+  }
+}
 
-    console.log(`[WorkoutReactions] Reaction added successfully`)
-  } catch (error) {
-    console.error(`[WorkoutReactions] Error adding reaction:`, error)
-    throw error
+export async function removeReactionFromWorkout(
+  userId: string,
+  workoutId: string,
+  reaction: { emoji: string; reactorId: string; reactorName: string; timestamp: any },
+): Promise<[boolean, AppError | null]> {
+  try {
+    const workoutRef = doc(db, "users", userId, "workouts", workoutId)
+    await updateDoc(workoutRef, {
+      reactions: arrayRemove(reaction),
+    })
+    return [true, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_WRITE_FAILED,
+      error,
+      { service: "Firebase", operation: "removeReaction", userId, workoutId },
+      "Failed to remove reaction from workout.",
+    )
+    logError(appError)
+    return [false, appError]
   }
 }
 
 /**
  * Add comment to workout document
  */
-export async function addCommentToWorkout(
-  workoutDocPath: string,
-  comment: string,
-  trainerId = "trainer_unknown",
-): Promise<void> {
-  try {
-    console.log(`[WorkoutReactions] Adding comment to workout at ${workoutDocPath}`)
+// export async function addCommentToWorkout(
+//   workoutDocPath: string,
+//   comment: string,
+//   trainerId = "trainer_unknown",
+// ): Promise<void> {
+//   try {
+//     console.log(`[WorkoutReactions] Adding comment to workout at ${workoutDocPath}`)
 
-    const workoutRef = doc(db, workoutDocPath)
+//     const workoutRef = doc(db, workoutDocPath)
 
-    // Check if document exists
-    const docSnap = await getDoc(workoutRef)
-    if (!docSnap.exists()) {
-      throw new Error(`Workout document doesn't exist at path: ${workoutDocPath}`)
-    }
+//     // Check if document exists
+//     const docSnap = await getDoc(workoutRef)
+//     if (!docSnap.exists()) {
+//       throw new Error(`Workout document doesn't exist at path: ${workoutDocPath}`)
+//     }
 
-    // Add comment
-    await updateDoc(workoutRef, {
-      comments: arrayUnion({
-        comment: comment.trim(),
-        trainerId,
-        timestamp: new Date(),
-      }),
-      updatedAt: serverTimestamp(),
-    })
+//     // Add comment
+//     await updateDoc(workoutRef, {
+//       comments: arrayUnion({
+//         comment: comment.trim(),
+//         trainerId,
+//         timestamp: new Date(),
+//       }),
+//       updatedAt: serverTimestamp(),
+//     })
 
-    console.log(`[WorkoutReactions] Comment added successfully`)
-  } catch (error) {
-    console.error(`[WorkoutReactions] Error adding comment:`, error)
-    throw error
-  }
-}
+//     console.log(`[WorkoutReactions] Comment added successfully`)
+//   } catch (error) {
+//     console.error(`[WorkoutReactions] Error adding comment:`, error)
+//     throw error
+//   }
+// }

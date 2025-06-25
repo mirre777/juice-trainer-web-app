@@ -1,124 +1,82 @@
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
-import type { FirebaseWorkout } from "@/lib/firebase/workout-service"
-
-// Helper function to format Firestore timestamp strings
-function formatFirestoreDate(dateString: string | undefined): string {
-  if (!dateString) return "N/A"
-
-  try {
-    // Check if the dateString is a Firestore timestamp object with seconds and nanoseconds
-    if (typeof dateString === "object" && dateString !== null) {
-      const timestamp = dateString as any
-      if (timestamp.seconds && timestamp.nanoseconds) {
-        // Convert Firestore timestamp to JavaScript Date
-        const date = new Date(timestamp.seconds * 1000)
-        return date.toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
-      }
-    }
-
-    // Try to parse as a date string
-    const date = new Date(dateString)
-    if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    }
-
-    return "Invalid date format"
-  } catch (error) {
-    console.error("Error formatting date:", error)
-    return "Error formatting date"
-  }
-}
+import { db } from "./firebase"
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore"
+import { createError, ErrorType, logError, type AppError } from "@/lib/utils/error-handler" // Corrected import
+import type { WorkoutProgram } from "@/types/workout-program"
 
 export async function getSharedWorkout(
   userId: string,
   workoutId: string,
-): Promise<{ workout: FirebaseWorkout | null; error: any }> {
+): Promise<[WorkoutProgram | null, AppError | null]> {
   try {
-    console.log(`[shared-workout-service] Fetching workout ${workoutId} for user ${userId}`)
+    const workoutRef = doc(db, "users", userId, "workouts", workoutId)
+    const workoutSnap = await getDoc(workoutRef)
 
-    if (!userId || !workoutId) {
-      return {
-        workout: null,
-        error: { message: "User ID and workout ID are required" },
-      }
+    if (!workoutSnap.exists()) {
+      const error = createError(
+        ErrorType.DB_DOCUMENT_NOT_FOUND,
+        null,
+        { userId, workoutId },
+        "Shared workout not found.",
+      )
+      logError(error)
+      return [null, error]
     }
 
-    // Fetch the workout directly from the user's workouts collection
-    const workoutRef = doc(db, `users/${userId}/workouts/${workoutId}`)
-    const workoutDoc = await getDoc(workoutRef)
+    return [workoutSnap.data() as WorkoutProgram, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_READ_FAILED,
+      error,
+      { userId, workoutId, service: "Firebase" },
+      "Failed to fetch shared workout.",
+    )
+    logError(appError)
+    return [null, appError]
+  }
+}
 
-    if (!workoutDoc.exists()) {
-      console.log(`[shared-workout-service] Workout not found: ${workoutId}`)
-      return { workout: null, error: null }
-    }
+export async function addCommentToSharedWorkout(
+  userId: string,
+  workoutId: string,
+  comment: { text: string; authorId: string; authorName: string; timestamp: any },
+): Promise<[boolean, AppError | null]> {
+  try {
+    const workoutRef = doc(db, "users", userId, "workouts", workoutId)
+    await updateDoc(workoutRef, {
+      comments: arrayUnion(comment),
+    })
+    return [true, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_WRITE_FAILED,
+      error,
+      { userId, workoutId, service: "Firebase", operation: "addComment" },
+      "Failed to add comment to shared workout.",
+    )
+    logError(appError)
+    return [false, appError]
+  }
+}
 
-    const data = workoutDoc.data()
-    console.log("[shared-workout-service] Raw workout data:", data)
-
-    // Format the workout data
-    const workout: FirebaseWorkout = {
-      id: workoutDoc.id,
-      name: data.name || "Workout",
-      notes: data.notes || "",
-      startedAt: data.startedAt || "N/A",
-      completedAt: data.completedAt || null,
-      createdAt: data.createdAt || "N/A",
-      duration: data.duration || 0,
-      status: data.status || "completed",
-      exercises: data.exercises || [],
-
-      // Derived fields for UI
-      day: "N/A",
-      focus: data.name || "Workout",
-      clientName: data.clientName || "User",
-      date: formatFirestoreDate(data.startedAt),
-      progress: {
-        completed: data.status === "completed" ? 1 : 0,
-        total: 1,
-      },
-    }
-
-    // Add personal records if any exercise has a significant weight
-    if (data.exercises && data.exercises.length > 0) {
-      const personalRecords = []
-
-      for (const exercise of data.exercises) {
-        if (exercise.sets && exercise.sets.length > 0) {
-          // Find the set with the highest weight
-          const maxWeightSet = exercise.sets.reduce(
-            (prev, current) => (current.weight > prev.weight ? current : prev),
-            exercise.sets[0],
-          )
-
-          if (maxWeightSet && maxWeightSet.weight > 0) {
-            personalRecords.push({
-              exercise: exercise.name,
-              weight: `${maxWeightSet.weight} kg`,
-              reps: maxWeightSet.reps,
-              date: formatFirestoreDate(data.completedAt || data.startedAt),
-              isPR: true,
-            })
-          }
-        }
-      }
-
-      if (personalRecords.length > 0) {
-        workout.personalRecords = personalRecords
-      }
-    }
-
-    return { workout, error: null }
-  } catch (error) {
-    console.error("[shared-workout-service] Error fetching shared workout:", error)
-    return { workout: null, error }
+export async function removeCommentFromSharedWorkout(
+  userId: string,
+  workoutId: string,
+  comment: { text: string; authorId: string; authorName: string; timestamp: any },
+): Promise<[boolean, AppError | null]> {
+  try {
+    const workoutRef = doc(db, "users", userId, "workouts", workoutId)
+    await updateDoc(workoutRef, {
+      comments: arrayRemove(comment),
+    })
+    return [true, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_WRITE_FAILED,
+      error,
+      { userId, workoutId, service: "Firebase", operation: "removeComment" },
+      "Failed to remove comment from shared workout.",
+    )
+    logError(appError)
+    return [false, appError]
   }
 }

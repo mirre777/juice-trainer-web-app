@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getFirebaseAdminFirestore, initializeFirebaseAdmin, getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
-import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
+import { createError, ErrorType, logError } from "@/lib/utils/error-handler" // Corrected import for AppError
 
 // Initialize Firebase Admin SDK if not already done
 initializeFirebaseAdmin()

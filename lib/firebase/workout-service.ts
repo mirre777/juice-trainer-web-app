@@ -12,7 +12,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { ErrorType, createError, logError, tryCatch, type AppError } from "@/lib/utils/error-handler"
 
 // Interface for workout data
 export interface Workout {
@@ -891,5 +891,151 @@ export async function getLatestWorkoutForUser(
     )
     logError(appError)
     return { workout: null, error: appError }
+  }
+}
+
+export type WorkoutProgram = {
+  id?: string
+  name: string
+  description?: string
+  weeks: ExerciseWeek[]
+  createdAt?: any
+  updatedAt?: any
+}
+
+export type WorkoutRoutine = {
+  id?: string
+  name: string
+  exercises: any[]
+  createdAt?: any
+  updatedAt?: any
+}
+
+export type ExerciseWeek = {
+  id?: string
+  weekNumber: number
+  days: any[]
+  createdAt?: any
+  updatedAt?: any
+}
+
+export async function getWorkoutProgram(
+  userId: string,
+  programId: string,
+): Promise<[WorkoutProgram | null, AppError | null]> {
+  try {
+    const programRef = doc(db, "users", userId, "workoutPrograms", programId)
+    const programSnap = await getDoc(programRef)
+
+    if (!programSnap.exists()) {
+      const error = createError(
+        ErrorType.DB_DOCUMENT_NOT_FOUND,
+        null,
+        { userId, programId },
+        "Workout program not found.",
+      )
+      logError(error)
+      return [null, error]
+    }
+
+    return [programSnap.data() as WorkoutProgram, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_READ_FAILED,
+      error,
+      { userId, programId, service: "Firebase" },
+      "Failed to fetch workout program.",
+    )
+    logError(appError)
+    return [null, appError]
+  }
+}
+
+export async function getAllWorkoutPrograms(userId: string): Promise<[WorkoutProgram[], AppError | null]> {
+  try {
+    const programsRef = collection(db, "users", userId, "workoutPrograms")
+    const q = query(programsRef, orderBy("createdAt", "desc"))
+    const querySnapshot = await getDocs(q)
+
+    const programs: WorkoutProgram[] = querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as WorkoutProgram[]
+
+    return [programs, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_READ_FAILED,
+      error,
+      { userId, service: "Firebase" },
+      "Failed to fetch all workout programs.",
+    )
+    logError(appError)
+    return [null, appError]
+  }
+}
+
+export async function createWorkoutProgram(
+  userId: string,
+  program: WorkoutProgram,
+): Promise<[string | null, AppError | null]> {
+  try {
+    const programsRef = collection(db, "users", userId, "workoutPrograms")
+    const docRef = await addDoc(programsRef, {
+      ...program,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+    return [docRef.id, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_WRITE_FAILED,
+      error,
+      { userId, service: "Firebase", operation: "createWorkoutProgram" },
+      "Failed to create workout program.",
+    )
+    logError(appError)
+    return [null, appError]
+  }
+}
+
+export async function updateWorkoutProgram(
+  userId: string,
+  programId: string,
+  programData: Partial<WorkoutProgram>,
+): Promise<[boolean, AppError | null]> {
+  try {
+    const programRef = doc(db, "users", userId, "workoutPrograms", programId)
+    await updateDoc(programRef, {
+      ...programData,
+      updatedAt: serverTimestamp(),
+    })
+    return [true, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_WRITE_FAILED,
+      error,
+      { userId, programId, service: "Firebase", operation: "updateWorkoutProgram" },
+      "Failed to update workout program.",
+    )
+    logError(appError)
+    return [false, appError]
+  }
+}
+
+export async function deleteWorkoutProgram(userId: string, programId: string): Promise<[boolean, AppError | null]> {
+  try {
+    const programRef = doc(db, "users", userId, "workoutPrograms", programId)
+    await deleteDoc(programRef)
+    return [true, null]
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.DB_DELETE_FAILED,
+      error,
+      { userId, programId, service: "Firebase", operation: "deleteWorkoutProgram" },
+      "Failed to delete workout program.",
+    )
+    logError(appError)
+    return [false, appError]
   }
 }
