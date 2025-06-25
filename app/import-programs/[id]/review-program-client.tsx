@@ -212,7 +212,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
     try {
       const response = await fetch(`/api/clients?trainerId=${trainerId}`, {
-        credentials: "include", // ADDED THIS LINE
+        credentials: "include",
       })
 
       // Always get raw text first for debugging, regardless of status
@@ -233,9 +233,18 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       if (!response.ok) {
         console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", rawResponseText)
+        let errorDescription = `Failed to load clients: ${response.statusText || "Server error"}.`
+        try {
+          const errorData = JSON.parse(rawResponseText)
+          if (errorData.error) {
+            errorDescription = errorData.error // Use the specific error message from the server
+          }
+        } catch (e) {
+          // If parsing fails, stick to generic message
+        }
         toast({
           title: "Error",
-          description: `Failed to load clients: ${response.statusText || "Server error"}. Details: ${rawResponseText.substring(0, 100)}`,
+          description: errorDescription,
           variant: "destructive",
         })
         setClients([])

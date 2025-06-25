@@ -7,10 +7,13 @@ initializeFirebaseAdmin()
 
 export async function GET(request: NextRequest) {
   console.log("[API/clients] Received GET request.")
+  console.log("[API/clients] Request URL:", request.url)
+  console.log("[API/clients] Request Headers:", JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2))
+
   try {
     // Attempt to get trainerId from headers set by middleware
     const trainerId = request.headers.get("x-user-id")
-    console.log("[API/clients] Trainer ID from request headers:", trainerId)
+    console.log("[API/clients] Trainer ID from request headers (x-user-id):", trainerId)
 
     if (!trainerId) {
       // If x-user-id is not present, it means the middleware either didn't run,
@@ -45,8 +48,6 @@ export async function GET(request: NextRequest) {
     let errorMessage = "An unexpected error occurred."
     const statusCode = 500
 
-    // Specific error handling for session issues is now primarily handled by middleware.
-    // This catch block handles other potential Firestore or generic errors.
     if (error instanceof Error) {
       errorMessage = error.message
     }

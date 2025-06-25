@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin" // Import getFirebaseAdminAuth
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // Check if the path matches the userId/workoutId pattern (two segments with no specific prefix)
@@ -28,7 +29,7 @@ export function middleware(request: NextRequest) {
     path.startsWith("/api/auth/") ||
     path.startsWith("/demo/") // Demo routes remain public
 
-  // Get the token from the cookies
+  // Get the token from the cookies - FIX: Look for 'auth_token'
   const authCookie = request.cookies.get("auth_token")
   const token = authCookie?.value
 
@@ -36,6 +37,7 @@ export function middleware(request: NextRequest) {
   console.log(`[Middleware] Is public path: ${isPublicPath}`)
   console.log(`[Middleware] Is shared workout path: ${isSharedWorkoutPath}`)
   console.log(`[Middleware] Auth cookie exists: ${!!authCookie}`)
+  console.log(`[Middleware] Auth token (truncated): ${token ? token.substring(0, 20) + "..." : "N/A"}`)
 
   // Handle redirects from old invite URL format to new format
   const { pathname, searchParams } = request.nextUrl
@@ -73,11 +75,27 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/overview", request.url))
   }
 
-  // For protected paths, we need to check if user has trainer role
-  // This will be handled by a separate API call in the frontend for now
-  // Later we can optimize this by including role in the JWT token
+  // For protected paths, verify the token and set x-user-id header
+  if (!isPublicPath && token) {
+    try {
+      const decodedClaims = await getFirebaseAdminAuth().verifyIdToken(token)
+      const trainerId = decodedClaims.uid
+      console.log(`[Middleware] Token verified. Trainer ID: ${trainerId}`)
 
-  console.log(`[Middleware] Allowing request to proceed`)
+      const response = NextResponse.next()
+      response.headers.set("x-user-id", trainerId)
+      console.log(`[Middleware] x-user-id header set for path: ${path}`)
+      return response
+    } catch (error: any) {
+      console.error(`[Middleware] Token verification failed for path ${path}:`, error.message)
+      // If token verification fails, clear the cookie and redirect to login
+      const response = NextResponse.redirect(new URL("/login", request.url))
+      response.cookies.delete("auth_token", { path: "/" })
+      return response
+    }
+  }
+
+  console.log(`[Middleware] Allowing request to proceed for path: ${path}`)
   return NextResponse.next()
 }
 
