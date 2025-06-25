@@ -1,63 +1,30 @@
-import { db } from "./firebase"
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore"
-import { createError, ErrorType, logError, type AppError } from "@/lib/utils/error-handler" // Corrected import
-import type { UserProfile } from "@/types/index"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase"
 
-export async function getUserProfile(userId: string): Promise<[UserProfile | null, AppError | null]> {
+export interface UserData {
+  name?: string
+  email?: string
+  image?: string
+  displayName?: string
+}
+
+export async function getUserData(userId: string): Promise<{ user: UserData | null; error: string | null }> {
   try {
-    const docRef = doc(db, "userProfiles", userId)
-    const docSnap = await getDoc(docRef)
+    console.log(`[getUserData] Fetching user data for userId: ${userId}`)
 
-    if (docSnap.exists()) {
-      return [docSnap.data() as UserProfile, null]
-    } else {
-      return [null, null] // No profile found
+    const userDoc = await getDoc(doc(db, "users", userId))
+
+    if (!userDoc.exists()) {
+      console.log(`[getUserData] User document not found for userId: ${userId}`)
+      return { user: null, error: "User not found" }
     }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_READ_FAILED,
-      error,
-      { service: "Firebase", operation: "getUserProfile", userId },
-      "Failed to fetch user profile.",
-    )
-    logError(appError)
-    return [null, appError]
-  }
-}
 
-export async function createUserProfile(userId: string, profileData: UserProfile): Promise<[boolean, AppError | null]> {
-  try {
-    const docRef = doc(db, "userProfiles", userId)
-    await setDoc(docRef, profileData)
-    return [true, null]
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_WRITE_FAILED,
-      error,
-      { service: "Firebase", operation: "createUserProfile", userId, profileData },
-      "Failed to create user profile.",
-    )
-    logError(appError)
-    return [false, appError]
-  }
-}
+    const userData = userDoc.data() as UserData
+    console.log(`[getUserData] Successfully fetched user data:`, userData)
 
-export async function updateUserProfile(
-  userId: string,
-  profileData: Partial<UserProfile>,
-): Promise<[boolean, AppError | null]> {
-  try {
-    const docRef = doc(db, "userProfiles", userId)
-    await updateDoc(docRef, profileData)
-    return [true, null]
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_WRITE_FAILED,
-      error,
-      { service: "Firebase", operation: "updateUserProfile", userId, profileData },
-      "Failed to update user profile.",
-    )
-    logError(appError)
-    return [false, appError]
+    return { user: userData, error: null }
+  } catch (error) {
+    console.error(`[getUserData] Error fetching user data for userId ${userId}:`, error)
+    return { user: null, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
