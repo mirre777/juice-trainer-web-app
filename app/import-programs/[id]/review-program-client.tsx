@@ -211,7 +211,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setSelectedClientId("") // Clear previous selection
     console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
     try {
-      const response = await fetch(`/api/clients?trainerId=${trainerId}`, {
+      // Removed trainerId from query params as it's now handled by server-side token verification
+      const response = await fetch(`/api/clients`, {
         credentials: "include",
       })
 
@@ -701,7 +702,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid) // Log trainer UID at click
 
               // Ensure fetchClients is called directly without the conditional block
-              fetchClients(trainer?.uid || "DEBUG_MISSING_UID") // Pass UID or a debug string
+              // No need to pass trainerId here, as the API route will get it from the cookie
+              fetchClients(trainer?.uid || "DEBUG_MISSING_UID") // Still pass for logging/debugging client-side
 
               setShowSendProgramDialog(true)
               console.log("[ReviewProgramClient] showSendProgramDialog set to true.") // NEW LOG

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getFirebaseAdminFirestore, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
+import { getFirebaseAdminFirestore, initializeFirebaseAdmin, getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
 import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
 
 // Initialize Firebase Admin SDK if not already done
@@ -11,18 +11,33 @@ export async function GET(request: NextRequest) {
   console.log("[API/clients] Request Headers:", JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2))
 
   try {
-    // Attempt to get trainerId from headers set by middleware
-    const trainerId = request.headers.get("x-user-id")
-    console.log("[API/clients] Trainer ID from request headers (x-user-id):", trainerId)
+    // Get the auth_token from the cookies
+    const authCookie = request.cookies.get("auth_token")
+    const token = authCookie?.value
 
-    if (!trainerId) {
-      // If x-user-id is not present, it means the middleware either didn't run,
-      // or the session cookie was invalid/missing. Treat as unauthorized.
+    if (!token) {
       const error = createError(
         ErrorType.API_UNAUTHORIZED,
         null,
         { function: "GET /api/clients" },
-        "Unauthorized: Trainer ID not found in headers. Please ensure you are logged in.",
+        "Unauthorized: No authentication token found.",
+      )
+      logError(error)
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
+
+    let trainerId: string
+    try {
+      const decodedClaims = await getFirebaseAdminAuth().verifyIdToken(token)
+      trainerId = decodedClaims.uid
+      console.log(`[API/clients] Token verified. Trainer ID: ${trainerId}`)
+    } catch (tokenError: any) {
+      console.error("[API/clients] Firebase ID token verification failed:", tokenError)
+      const error = createError(
+        ErrorType.AUTH_TOKEN_INVALID,
+        tokenError,
+        { function: "GET /api/clients" },
+        "Unauthorized: Invalid or expired authentication token.",
       )
       logError(error)
       return NextResponse.json({ error: error.message }, { status: 401 })
