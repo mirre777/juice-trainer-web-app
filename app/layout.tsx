@@ -4,6 +4,7 @@ import ClientLayout from "./ClientLayout"
 import { DemoBanner } from "@/components/demo-banner"
 import { ToastProvider } from "@/components/ui/toast-context"
 import "./globals.css"
+import { AuthProvider } from "@/context/AuthContext" // Import AuthProvider
 
 // Initialize the Sen font
 const sen = Sen({
@@ -24,15 +25,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${sen.variable} ${inter.variable}`}>
       <body>
-        <ToastProvider>
-          <DemoBanner />
-          <ClientLayout>{children}</ClientLayout>
-        </ToastProvider>
+        <AuthProvider>
+          {" "}
+          {/* Wrap the entire app with AuthProvider */}
+          <ToastProvider>
+            <DemoBanner />
+            <ClientLayout>{children}</ClientLayout>
+          </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   )
 }
 
 export const metadata = {
-      generator: 'v0.dev'
-    };
+  generator: "v0.dev",
+}
