@@ -1,8 +1,93 @@
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler" // Corrected import
+import type { AppError } from "@/lib/utils/error-handler"
+import { createError, ErrorType, logError, tryCatch } from "@/lib/utils/error-handler"
 
-export type SubscriptionPlan = "trainer_basic" | "trainer_pro" | "trainer_elite"
+// Define a type for the subscription plan
+export type SubscriptionPlan = {
+  id: string
+  name: string
+  price: number
+  currency: string
+  interval: "month" | "year" | "week" | "day"
+  status: "active" | "inactive" | "canceled" | "trialing"
+  startDate: Date
+  endDate?: Date
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
+  // Add other fields as needed
+}
+
+// Function to get user's subscription plan
+export async function getUserSubscriptionPlan(
+  userId: string,
+): Promise<{ plan: SubscriptionPlan | null; error?: AppError }> {
+  try {
+    console.log(`[getUserSubscriptionPlan] Fetching subscription plan for user: ${userId}`)
+
+    if (!userId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "getUserSubscriptionPlan" },
+        "User ID is required",
+      )
+      logError(error)
+      return { plan: null, error }
+    }
+
+    const userRef = doc(db, "users", userId)
+    const [userDoc, error] = await tryCatch(() => getDoc(userRef), ErrorType.DB_READ_FAILED, {
+      function: "getUserSubscriptionPlan",
+      userId,
+    })
+
+    if (error || !userDoc) {
+      console.error(`[getUserSubscriptionPlan] Error fetching user document for ${userId}:`, error)
+      return { plan: null, error }
+    }
+
+    if (!userDoc.exists()) {
+      console.warn(`[getUserSubscriptionPlan] User document not found for UID: ${userId}`)
+      return {
+        plan: null,
+        error: createError(
+          ErrorType.DB_DOCUMENT_NOT_FOUND,
+          null,
+          { function: "getUserSubscriptionPlan", userId },
+          "User not found",
+        ),
+      }
+    }
+
+    const userData = userDoc.data()
+    const subscriptionData = userData?.subscription as SubscriptionPlan | undefined
+
+    if (subscriptionData) {
+      console.log(`[getUserSubscriptionPlan] Found subscription data for ${userId}:`, subscriptionData)
+      // Convert Firestore Timestamps to Date objects if necessary
+      const plan: SubscriptionPlan = {
+        ...subscriptionData,
+        startDate: subscriptionData.startDate?.toDate ? subscriptionData.startDate.toDate() : new Date(), // Handle Timestamp conversion
+        endDate: subscriptionData.endDate?.toDate ? subscriptionData.endDate.toDate() : undefined,
+      }
+      return { plan }
+    } else {
+      console.log(`[getUserSubscriptionPlan] No active subscription found for user: ${userId}`)
+      return { plan: null }
+    }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "getUserSubscriptionPlan", userId },
+      "Unexpected error fetching user subscription plan",
+    )
+    logError(appError)
+    console.error(`[getUserSubscriptionPlan] Unexpected error:`, error)
+    return { plan: null, error: appError }
+  }
+}
 
 // Set default subscription plan for new users
 export async function setDefaultSubscriptionPlan(userId: string): Promise<{ success: boolean; error?: any }> {
@@ -52,76 +137,54 @@ export async function setDefaultSubscriptionPlan(userId: string): Promise<{ succ
   }
 }
 
-// Update user subscription plan
+// Function to update user's subscription plan
 export async function updateSubscriptionPlan(
   userId: string,
-  plan: SubscriptionPlan,
-): Promise<{ success: boolean; error?: any }> {
+  planData: Partial<SubscriptionPlan>,
+): Promise<{ success: boolean; error?: AppError }> {
   try {
-    if (!userId || !plan) {
+    console.log(`[updateSubscriptionPlan] Updating subscription plan for user: ${userId} with data:`, planData)
+
+    if (!userId) {
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
         { function: "updateSubscriptionPlan" },
-        "User ID and plan are required",
+        "User ID is required",
       )
       logError(error)
       return { success: false, error }
     }
 
-    console.log(`[updateSubscriptionPlan] Updating plan for user ${userId} to: ${plan}`)
-
     const userRef = doc(db, "users", userId)
     const [, updateError] = await tryCatch(
       () =>
         updateDoc(userRef, {
-          subscriptionPlan: plan,
-          subscriptionUpdatedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          subscription: {
+            ...planData,
+            updatedAt: serverTimestamp(), // Add or update timestamp
+          },
         }),
       ErrorType.DB_WRITE_FAILED,
-      { function: "updateSubscriptionPlan", userId, plan },
+      { function: "updateSubscriptionPlan", userId, planData },
     )
 
     if (updateError) {
-      console.error(`[updateSubscriptionPlan] ❌ Failed to update plan:`, updateError)
+      console.error(`[updateSubscriptionPlan] Error updating subscription document for ${userId}:`, updateError)
       return { success: false, error: updateError }
     }
 
-    console.log(`[updateSubscriptionPlan] ✅ Successfully updated plan for user ${userId} to: ${plan}`)
+    console.log(`[updateSubscriptionPlan] Successfully updated subscription plan for user: ${userId}`)
     return { success: true }
   } catch (error) {
-    console.error("[updateSubscriptionPlan] ❌ Unexpected error:", error)
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "updateSubscriptionPlan", userId, plan },
-      "Unexpected error updating subscription plan",
+      { function: "updateSubscriptionPlan", userId, planData },
+      "Unexpected error updating user subscription plan",
     )
     logError(appError)
+    console.error(`[updateSubscriptionPlan] Unexpected error:`, error)
     return { success: false, error: appError }
-  }
-}
-
-// Get user subscription plan
-export async function getUserSubscriptionPlan(userId: string): Promise<SubscriptionPlan | null> {
-  try {
-    if (!userId) {
-      console.error("User ID is required")
-      return null
-    }
-
-    const { getUserById } = await import("./user-service")
-    const userData = await getUserById(userId)
-
-    if (!userData) {
-      console.error("User not found")
-      return null
-    }
-
-    return userData.subscriptionPlan || "trainer_basic"
-  } catch (error) {
-    console.error("Error getting user subscription plan:", error)
-    return null
   }
 }
