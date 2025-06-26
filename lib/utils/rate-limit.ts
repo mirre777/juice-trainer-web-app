@@ -1,50 +1,41 @@
-import { LRUCache } from "lru-cache"
-import type { AppError } from "@/lib/utils/error-handler"
-
-type Options = {
-  uniqueTokenPerInterval?: number
-  interval?: number
+export interface RateLimitOptions {
+  interval: number
+  uniqueTokenPerInterval: number
 }
 
-export function rateLimit(options?: Options) {
-  const tokenCache = new LRUCache<string, number[]>({
-    max: options?.uniqueTokenPerInterval || 500,
-    ttl: options?.interval || 60000,
-  })
+interface RateLimiterResponse {
+  check: (limit: number, token: string) => Promise<void>
+}
+
+// Simple in-memory rate limiter
+export function rateLimit(options: RateLimitOptions): RateLimiterResponse {
+  const tokenCache = new Map<string, number[]>()
+
+  // Clean up old entries every interval
+  setInterval(() => {
+    const now = Date.now()
+    for (const [token, timestamps] of tokenCache.entries()) {
+      const validTimestamps = timestamps.filter((timestamp) => now - timestamp < options.interval)
+      if (validTimestamps.length === 0) {
+        tokenCache.delete(token)
+      } else {
+        tokenCache.set(token, validTimestamps)
+      }
+    }
+  }, options.interval)
 
   return {
-    async check(
-      limit: number,
-      token: string,
-    ): Promise<
-      | {
-          success: true
-        }
-      | {
-          success: false
-          error: AppError
-        }
-    > {
-      const tokenCount: (number | undefined)[] = tokenCache.get(token) || [0]
-      if (tokenCount[0] === 0) {
-        tokenCache.set(token, [1])
-      } else {
-        tokenCache.set(token, [tokenCount[0]! + 1])
+    check: (limit: number, token: string) => {
+      const now = Date.now()
+      const timestamps = tokenCache.get(token) || []
+      const validTimestamps = timestamps.filter((timestamp) => now - timestamp < options.interval)
+
+      if (validTimestamps.length >= limit) {
+        return Promise.reject(new Error("Rate limit exceeded"))
       }
 
-      const currentUsage = tokenCache.get(token)
-
-      return currentUsage![0]! > limit
-        ? {
-            success: false,
-            error: {
-              message: "Too many requests",
-              status: 429,
-            },
-          }
-        : {
-            success: true,
-          }
+      tokenCache.set(token, [...validTimestamps, now])
+      return Promise.resolve()
     },
   }
 }

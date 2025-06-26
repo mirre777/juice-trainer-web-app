@@ -1,16 +1,17 @@
+import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import type { AppError } from "@/lib/utils/error-handler"
+import { Frown } from "lucide-react"
 
-export default function NotFound({ error }: { error: AppError }) {
+export default function NotFound() {
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <h1 className="text-4xl font-bold text-gray-800">404 - Not Found</h1>
-      <p className="text-gray-600 mt-4">Could not find the import program with the specified ID.</p>
-      <Link
-        href="/import-programs"
-        className="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75"
-      >
-        Back to Import Programs
+    <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center bg-gray-50 px-4 py-12 text-center">
+      <Frown className="mb-6 h-24 w-24 text-gray-400" />
+      <h1 className="mb-3 text-3xl font-bold text-gray-900">Program Not Found</h1>
+      <p className="mb-8 text-gray-600">
+        We couldn't find the workout program you're looking for. It might have been deleted or the link is incorrect.
+      </p>
+      <Link href="/import-programs">
+        <Button className="bg-lime-500 hover:bg-lime-600 text-white">Go to Import Programs</Button>
       </Link>
     </div>
   )

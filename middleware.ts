@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-// Removed: import { getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
   // Check if the path matches the userId/workoutId pattern (two segments with no specific prefix)
@@ -33,14 +32,10 @@ export async function middleware(request: NextRequest) {
   const authCookie = request.cookies.get("auth_token")
   const token = authCookie?.value
 
-  console.log(`[Middleware] Raw cookies header: ${request.headers.get("cookie")}`)
-  console.log(`[Middleware] Auth cookie object: ${JSON.stringify(authCookie)}`)
-
   console.log(`[Middleware] Path: ${path}`)
   console.log(`[Middleware] Is public path: ${isPublicPath}`)
   console.log(`[Middleware] Is shared workout path: ${isSharedWorkoutPath}`)
   console.log(`[Middleware] Auth cookie exists: ${!!authCookie}`)
-  console.log(`[Middleware] Auth token (truncated): ${token ? token.substring(0, 20) + "..." : "N/A"}`)
 
   // Handle redirects from old invite URL format to new format
   const { pathname, searchParams } = request.nextUrl
@@ -78,9 +73,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/overview", request.url))
   }
 
-  // Middleware will no longer verify the token or set x-user-id.
-  // API routes will handle token verification and user ID extraction.
-  console.log(`[Middleware] Allowing request to proceed for path: ${path}`)
+  // For protected paths, we need to check if user has trainer role
+  // This will be handled by a separate API call in the frontend for now
+  // Later we can optimize this by including role in the JWT token
+
+  console.log(`[Middleware] Allowing request to proceed`)
   return NextResponse.next()
 }
 

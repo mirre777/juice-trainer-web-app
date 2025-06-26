@@ -10,7 +10,6 @@ import { fetchClients } from "@/lib/firebase/client-service"
 import { ClientRequests } from "@/components/dashboard-alt/client-requests"
 import Image from "next/image"
 import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
-import LoadingSpinner from "@/components/shared/loading-spinner" // Corrected import
 
 // We'll fetch real data in production, but have fallbacks
 const defaultRevenue = {
@@ -266,7 +265,7 @@ const OverviewPageClient: React.FC = () => {
       <main className="py-8">
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <LoadingSpinner />
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#CCFF00]"></div>
           </div>
         ) : (
           <div className="max-w-7xl mx-auto">

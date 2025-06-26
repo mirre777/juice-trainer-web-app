@@ -1,7 +1,5 @@
 "use client"
 
-import { Input } from "@/components/ui/input"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -161,7 +159,7 @@ export default function SettingsPageClient() {
                 <div className="space-y-4 flex-1">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <Input
+                    <input
                       type="text"
                       value={userData.name}
                       onChange={(e) => setUserData((prev) => ({ ...prev, name: e.target.value }))}
@@ -171,7 +169,7 @@ export default function SettingsPageClient() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <Input
+                    <input
                       type="email"
                       value={userData.email}
                       onChange={(e) => setUserData((prev) => ({ ...prev, email: e.target.value }))}
@@ -181,7 +179,7 @@ export default function SettingsPageClient() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <Input
+                    <input
                       type="tel"
                       value={userData.phone}
                       onChange={(e) => setUserData((prev) => ({ ...prev, phone: e.target.value }))}
@@ -191,7 +189,7 @@ export default function SettingsPageClient() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Invite Code</label>
-                    <Input
+                    <input
                       type="text"
                       value={inviteCode}
                       onChange={(e) => setInviteCode(e.target.value.toUpperCase())}

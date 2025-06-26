@@ -1,21 +1,18 @@
-import { db } from "@/lib/firebase/firebase"
 import {
   collection,
   doc,
-  setDoc,
   getDoc,
+  getDocs,
+  addDoc,
   updateDoc,
   deleteDoc,
-  getDocs,
   query,
-  where,
   orderBy,
   limit,
-  startAfter,
   serverTimestamp,
-  addDoc,
 } from "firebase/firestore"
-import { ErrorType, createError, logError, tryCatch, type AppError } from "@/lib/utils/error-handler" // Corrected import
+import { db } from "@/lib/firebase/firebase"
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
 // Interface for workout data
 export interface Workout {
@@ -127,147 +124,6 @@ function formatFirestoreDate(dateString: string | undefined): string {
   }
 }
 
-const WORKOUTS_COLLECTION = "workouts"
-
-export const createWorkout = async (
-  userId: string,
-  workoutData: Omit<Workout, "id" | "createdAt" | "updatedAt">,
-): Promise<Workout> => {
-  try {
-    const workoutsCollection = collection(db, WORKOUTS_COLLECTION)
-    const workoutDocRef = doc(workoutsCollection) // Generates a unique ID
-    const now = new Date()
-
-    const workout: Workout = {
-      id: workoutDocRef.id,
-      userId,
-      ...workoutData,
-      createdAt: now,
-      updatedAt: now,
-    }
-
-    await setDoc(workoutDocRef, workout)
-    return workout
-  } catch (error: any) {
-    console.error("Error creating workout:", error)
-    throw {
-      status: 500,
-      message: "Failed to create workout",
-      error: error.message,
-    } as AppError
-  }
-}
-
-export const getWorkout = async (workoutId: string): Promise<Workout | null> => {
-  try {
-    const workoutDocRef = doc(db, WORKOUTS_COLLECTION, workoutId)
-    const workoutDoc = await getDoc(workoutDocRef)
-
-    if (workoutDoc.exists()) {
-      return workoutDoc.data() as Workout
-    } else {
-      return null
-    }
-  } catch (error: any) {
-    console.error("Error getting workout:", error)
-    throw {
-      status: 500,
-      message: "Failed to get workout",
-      error: error.message,
-    } as AppError
-  }
-}
-
-export const updateWorkout = async (
-  workoutId: string,
-  workoutData: Partial<Omit<Workout, "id" | "userId" | "createdAt">>,
-): Promise<Workout> => {
-  try {
-    const workoutDocRef = doc(db, WORKOUTS_COLLECTION, workoutId)
-    const workoutDoc = await getDoc(workoutDocRef)
-
-    if (!workoutDoc.exists()) {
-      throw {
-        status: 404,
-        message: "Workout not found",
-      } as AppError
-    }
-
-    const now = new Date()
-    await updateDoc(workoutDocRef, { ...workoutData, updatedAt: now })
-
-    // Fetch the updated document to return
-    const updatedWorkoutDoc = await getDoc(workoutDocRef)
-    return updatedWorkoutDoc.data() as Workout
-  } catch (error: any) {
-    console.error("Error updating workout:", error)
-    throw {
-      status: error.status || 500,
-      message: error.message || "Failed to update workout",
-      error: error.error,
-    } as AppError
-  }
-}
-
-export const deleteWorkout = async (workoutId: string): Promise<void> => {
-  try {
-    const workoutDocRef = doc(db, WORKOUTS_COLLECTION, workoutId)
-    await deleteDoc(workoutDocRef)
-  } catch (error: any) {
-    console.error("Error deleting workout:", error)
-    throw {
-      status: 500,
-      message: "Failed to delete workout",
-      error: error.message,
-    } as AppError
-  }
-}
-
-export const listWorkoutsByUser = async (
-  userId: string,
-  pageSize: number,
-  cursor?: string,
-): Promise<{ workouts: Workout[]; nextCursor?: string }> => {
-  try {
-    const workoutsCollection = collection(db, WORKOUTS_COLLECTION)
-
-    let q
-    if (cursor) {
-      const cursorDoc = await getDoc(doc(db, WORKOUTS_COLLECTION, cursor))
-      if (!cursorDoc.exists()) {
-        return { workouts: [], nextCursor: undefined }
-      }
-      q = query(
-        workoutsCollection,
-        where("userId", "==", userId),
-        orderBy("createdAt"),
-        startAfter(cursorDoc),
-        limit(pageSize),
-      )
-    } else {
-      q = query(workoutsCollection, where("userId", "==", userId), orderBy("createdAt"), limit(pageSize))
-    }
-
-    const querySnapshot = await getDocs(q)
-    const workouts: Workout[] = []
-    querySnapshot.forEach((doc) => {
-      workouts.push(doc.data() as Workout)
-    })
-
-    const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1]
-    const nextCursor = lastVisible ? lastVisible.id : undefined
-
-    return { workouts, nextCursor }
-  } catch (error: any) {
-    console.error("Error listing workouts:", error)
-    throw {
-      status: 500,
-      message: "Failed to list workouts",
-      error: error.message,
-    } as AppError
-  }
-}
-
 // Get all workouts for a specific client
 export async function getClientWorkouts(trainerId: string, clientId: string): Promise<Workout[]> {
   try {
@@ -336,13 +192,13 @@ export async function getClientWorkouts(trainerId: string, clientId: string): Pr
 }
 
 // Get a specific workout by ID
-export async function getWorkoutById(trainerId: string, clientId: string, workoutId: string): Promise<Workout | null> {
+export async function getWorkout(trainerId: string, clientId: string, workoutId: string): Promise<Workout | null> {
   try {
     if (!trainerId || !clientId || !workoutId) {
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
-        { function: "getWorkoutById" },
+        { function: "getWorkout" },
         "Trainer ID, client ID, and workout ID are required",
       )
       logError(error)
@@ -351,7 +207,7 @@ export async function getWorkoutById(trainerId: string, clientId: string, workou
 
     const workoutRef = doc(db, "users", trainerId, "clients", clientId, "workouts", workoutId)
     const [workoutDoc, error] = await tryCatch(() => getDoc(workoutRef), ErrorType.DB_READ_FAILED, {
-      function: "getWorkoutById",
+      function: "getWorkout",
       trainerId,
       clientId,
       workoutId,
@@ -365,7 +221,7 @@ export async function getWorkoutById(trainerId: string, clientId: string, workou
       const error = createError(
         ErrorType.DB_DOCUMENT_NOT_FOUND,
         null,
-        { function: "getWorkoutById", trainerId, clientId, workoutId },
+        { function: "getWorkout", trainerId, clientId, workoutId },
         "Workout not found",
       )
       logError(error)
@@ -392,7 +248,7 @@ export async function getWorkoutById(trainerId: string, clientId: string, workou
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "getWorkoutById", trainerId, clientId, workoutId },
+      { function: "getWorkout", trainerId, clientId, workoutId },
       "Unexpected error fetching workout",
     )
     logError(appError)
@@ -401,7 +257,7 @@ export async function getWorkoutById(trainerId: string, clientId: string, workou
 }
 
 // Create a new workout for a client
-export async function createClientWorkout(
+export async function createWorkout(
   trainerId: string,
   clientId: string,
   workoutData: Partial<Workout>,
@@ -411,7 +267,7 @@ export async function createClientWorkout(
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
-        { function: "createClientWorkout" },
+        { function: "createWorkout" },
         "Trainer ID and client ID are required",
       )
       logError(error)
@@ -423,7 +279,7 @@ export async function createClientWorkout(
       const error = createError(
         ErrorType.API_VALIDATION_FAILED,
         null,
-        { function: "createClientWorkout" },
+        { function: "createWorkout" },
         "Workout name is required",
       )
       logError(error)
@@ -446,7 +302,7 @@ export async function createClientWorkout(
     const [newWorkoutRef, error] = await tryCatch(
       () => addDoc(workoutsCollectionRef, workoutDocData),
       ErrorType.DB_WRITE_FAILED,
-      { function: "createClientWorkout", trainerId, clientId },
+      { function: "createWorkout", trainerId, clientId },
     )
 
     if (error || !newWorkoutRef) {
@@ -466,7 +322,7 @@ export async function createClientWorkout(
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "createClientWorkout", trainerId, clientId },
+      { function: "createWorkout", trainerId, clientId },
       "Unexpected error creating workout",
     )
     logError(appError)
@@ -475,7 +331,7 @@ export async function createClientWorkout(
 }
 
 // Update a workout
-export async function updateClientWorkout(
+export async function updateWorkout(
   trainerId: string,
   clientId: string,
   workoutId: string,
@@ -486,7 +342,7 @@ export async function updateClientWorkout(
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
-        { function: "updateClientWorkout" },
+        { function: "updateWorkout" },
         "Trainer ID, client ID, and workout ID are required",
       )
       logError(error)
@@ -505,7 +361,7 @@ export async function updateClientWorkout(
           updatedAt: serverTimestamp(),
         }),
       ErrorType.DB_WRITE_FAILED,
-      { function: "updateClientWorkout", trainerId, clientId, workoutId },
+      { function: "updateWorkout", trainerId, clientId, workoutId },
     )
 
     if (updateError) {
@@ -517,7 +373,7 @@ export async function updateClientWorkout(
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "updateClientWorkout", trainerId, clientId, workoutId, updates },
+      { function: "updateWorkout", trainerId, clientId, workoutId, updates },
       "Unexpected error updating workout",
     )
     logError(appError)
@@ -526,7 +382,7 @@ export async function updateClientWorkout(
 }
 
 // Delete a workout
-export async function deleteClientWorkout(
+export async function deleteWorkout(
   trainerId: string,
   clientId: string,
   workoutId: string,
@@ -536,7 +392,7 @@ export async function deleteClientWorkout(
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
-        { function: "deleteClientWorkout" },
+        { function: "deleteWorkout" },
         "Trainer ID, client ID, and workout ID are required",
       )
       logError(error)
@@ -546,7 +402,7 @@ export async function deleteClientWorkout(
     const workoutRef = doc(db, "users", trainerId, "clients", clientId, "workouts", workoutId)
 
     const [, deleteError] = await tryCatch(() => deleteDoc(workoutRef), ErrorType.DB_DELETE_FAILED, {
-      function: "deleteClientWorkout",
+      function: "deleteWorkout",
       trainerId,
       clientId,
       workoutId,
@@ -561,7 +417,7 @@ export async function deleteClientWorkout(
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "deleteClientWorkout", trainerId, clientId, workoutId },
+      { function: "deleteWorkout", trainerId, clientId, workoutId },
       "Unexpected error deleting workout",
     )
     logError(appError)
@@ -1035,151 +891,5 @@ export async function getLatestWorkoutForUser(
     )
     logError(appError)
     return { workout: null, error: appError }
-  }
-}
-
-export type WorkoutProgram = {
-  id?: string
-  name: string
-  description?: string
-  weeks: ExerciseWeek[]
-  createdAt?: any
-  updatedAt?: any
-}
-
-export type WorkoutRoutine = {
-  id?: string
-  name: string
-  exercises: any[]
-  createdAt?: any
-  updatedAt?: any
-}
-
-export type ExerciseWeek = {
-  id?: string
-  weekNumber: number
-  days: any[]
-  createdAt?: any
-  updatedAt?: any
-}
-
-export async function getWorkoutProgram(
-  userId: string,
-  programId: string,
-): Promise<[WorkoutProgram | null, AppError | null]> {
-  try {
-    const programRef = doc(db, "users", userId, "workoutPrograms", programId)
-    const programSnap = await getDoc(programRef)
-
-    if (!programSnap.exists()) {
-      const error = createError(
-        ErrorType.DB_DOCUMENT_NOT_FOUND,
-        null,
-        { userId, programId },
-        "Workout program not found.",
-      )
-      logError(error)
-      return [null, error]
-    }
-
-    return [programSnap.data() as WorkoutProgram, null]
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_READ_FAILED,
-      error,
-      { userId, programId, service: "Firebase" },
-      "Failed to fetch workout program.",
-    )
-    logError(appError)
-    return [null, appError]
-  }
-}
-
-export async function getAllWorkoutPrograms(userId: string): Promise<[WorkoutProgram[], AppError | null]> {
-  try {
-    const programsRef = collection(db, "users", userId, "workoutPrograms")
-    const q = query(programsRef, orderBy("createdAt", "desc"))
-    const querySnapshot = await getDocs(q)
-
-    const programs: WorkoutProgram[] = querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as WorkoutProgram[]
-
-    return [programs, null]
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_READ_FAILED,
-      error,
-      { userId, service: "Firebase" },
-      "Failed to fetch all workout programs.",
-    )
-    logError(appError)
-    return [null, appError]
-  }
-}
-
-export async function createWorkoutProgram(
-  userId: string,
-  program: WorkoutProgram,
-): Promise<[string | null, AppError | null]> {
-  try {
-    const programsRef = collection(db, "users", userId, "workoutPrograms")
-    const docRef = await addDoc(programsRef, {
-      ...program,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
-    return [docRef.id, null]
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_WRITE_FAILED,
-      error,
-      { userId, service: "Firebase", operation: "createWorkoutProgram" },
-      "Failed to create workout program.",
-    )
-    logError(appError)
-    return [null, appError]
-  }
-}
-
-export async function updateWorkoutProgram(
-  userId: string,
-  programId: string,
-  programData: Partial<WorkoutProgram>,
-): Promise<[boolean, AppError | null]> {
-  try {
-    const programRef = doc(db, "users", userId, "workoutPrograms", programId)
-    await updateDoc(programRef, {
-      ...programData,
-      updatedAt: serverTimestamp(),
-    })
-    return [true, null]
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_WRITE_FAILED,
-      error,
-      { userId, programId, service: "Firebase", operation: "updateWorkoutProgram" },
-      "Failed to update workout program.",
-    )
-    logError(appError)
-    return [false, appError]
-  }
-}
-
-export async function deleteWorkoutProgram(userId: string, programId: string): Promise<[boolean, AppError | null]> {
-  try {
-    const programRef = doc(db, "users", userId, "workoutPrograms", programId)
-    await deleteDoc(programRef)
-    return [true, null]
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.DB_DELETE_FAILED,
-      error,
-      { userId, programId, service: "Firebase", operation: "deleteWorkoutProgram" },
-      "Failed to delete workout program.",
-    )
-    logError(appError)
-    return [false, appError]
   }
 }

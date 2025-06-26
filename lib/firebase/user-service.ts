@@ -1,3 +1,5 @@
+// lib/firebase/user-service.ts
+
 import { auth, db } from "./firebase" // Revert to client-side db and auth
 import {
   collection,
@@ -14,7 +16,7 @@ import {
   addDoc,
 } from "firebase/firestore"
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth" // Re-add client-side auth functions
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler" // Corrected import
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
 export const createUserWithAuth = async (email: string, password: string) => {
   try {

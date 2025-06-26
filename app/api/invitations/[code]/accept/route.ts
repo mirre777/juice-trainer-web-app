@@ -1,69 +1,73 @@
+import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
+import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore" // Keep these for type inference if needed, but use admin db
 import { NextResponse } from "next/server"
 
-import { db } from "@/lib/db"
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server"
+export async function POST(req: Request, { params }: { params: { code: string } }) {
+  const { code } = params
 
-export async function GET(req: Request, { params }: { params: { code: string } }) {
+  console.log(`[Accept Invitation] 🎯 Processing acceptance for code: ${code}`)
+
+  if (!code) {
+    console.log(`[Accept Invitation] ❌ Missing invite code`)
+    return NextResponse.json({ error: "Missing invite code" }, { status: 400 })
+  }
+
   try {
-    const { getUser } = getKindeServerSession()
-    const user = getUser()
+    const data = await req.json()
+    const { clientInfo } = data
 
-    if (!user) {
-      return new NextResponse("Unauthorized", { status: 401 })
+    console.log(`[Accept Invitation] 📝 Client info:`, clientInfo)
+
+    // Find trainer with this universal invite code
+    const usersRef = collection(getFirebaseAdminFirestore(), "users")
+    const q = query(usersRef, where("universalInviteCode", "==", code))
+    const querySnapshot = await getDocs(q)
+
+    if (querySnapshot.empty) {
+      console.log(`[Accept Invitation] ❌ Invalid invite code: ${code}`)
+      return NextResponse.json({ error: "Invalid invite code" }, { status: 404 })
     }
 
-    const { code } = params
+    const trainerDoc = querySnapshot.docs[0]
+    const trainerId = trainerDoc.id
+    const trainerData = trainerDoc.data()
 
-    if (!code) {
-      return new NextResponse("Missing code", { status: 400 })
+    console.log(`[Accept Invitation] ✅ Found trainer: ${trainerData.name || trainerId}`)
+
+    // Create an invitation acceptance record with regular timestamp
+    const now = new Date().toISOString()
+    const acceptanceData = {
+      inviteCode: code,
+      trainerId: trainerId,
+      trainerName: trainerData.name || trainerData.firstName || "Unknown Trainer",
+      clientInfo: clientInfo,
+      status: "accepted",
+      acceptedAt: now, // Use regular timestamp instead of serverTimestamp()
+      createdAt: now,
     }
 
-    const invitation = await db.invitation.findUnique({
-      where: {
-        code,
-      },
+    const trainerRef = doc(getFirebaseAdminFirestore(), "users", trainerId)
+
+    // Add to accepted invitations array AND set status field
+    const currentAcceptedInvitations = trainerData.acceptedInvitations || []
+    const newAcceptedInvitations = [...currentAcceptedInvitations, acceptanceData]
+
+    await updateDoc(trainerRef, {
+      acceptedInvitations: newAcceptedInvitations,
+      lastInviteAcceptedAt: serverTimestamp(), // serverTimestamp() only at top level
+      updatedAt: serverTimestamp(),
     })
 
-    if (!invitation) {
-      return new NextResponse("Invitation not found", { status: 404 })
-    }
+    console.log(`[Accept Invitation] ✅ Invitation accepted successfully for trainer: ${trainerId}`)
 
-    if (invitation.email !== user.email) {
-      return new NextResponse("Unauthorized", { status: 401 })
-    }
-
-    const organization = await db.organization.findUnique({
-      where: {
-        id: invitation.organizationId,
-      },
+    return NextResponse.json({
+      success: true,
+      message: "Invitation accepted successfully",
+      trainerId: trainerId,
+      trainerName: trainerData.name || trainerData.firstName || "Unknown Trainer",
     })
-
-    if (!organization) {
-      return new NextResponse("Organization not found", { status: 404 })
-    }
-
-    await db.organization.update({
-      where: {
-        id: organization.id,
-      },
-      data: {
-        users: {
-          connect: {
-            id: user.id,
-          },
-        },
-      },
-    })
-
-    await db.invitation.delete({
-      where: {
-        code,
-      },
-    })
-
-    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[INVITATION_ACCEPT]", error)
-    return new NextResponse("Internal error", { status: 500 })
+    console.error("[Accept Invitation] ❌ Error accepting invitation:", error)
+    return NextResponse.json({ error: "Failed to accept invitation" }, { status: 500 })
   }
 }

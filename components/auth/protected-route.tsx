@@ -2,62 +2,94 @@
 
 import type React from "react"
 
-import { useAuth } from "@/context/AuthContext"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
-import LoadingSpinner from "@/components/shared/loading-spinner" // Corrected import
+import LoadingSpinner from "@/components/shared/loading-spinner"
+import { FloatingFeedbackButton } from "@/components/feedback/floating-feedback-button"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  requiredRole?: "trainer" | "client" | "admin"
+  requiredRole?: string
+  fallbackPath?: string
 }
 
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { user, loading, isAuthenticated, userRole } = useAuth()
+export function ProtectedRoute({
+  children,
+  requiredRole = "trainer",
+  fallbackPath = "/mobile-app-success",
+}: ProtectedRouteProps) {
   const router = useRouter()
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    console.log(
-      "ProtectedRoute: useEffect triggered. Loading:",
-      loading,
-      "IsAuthenticated:",
-      isAuthenticated,
-      "UserRole:",
-      userRole,
-      "RequiredRole:",
-      requiredRole,
-    )
-    if (!loading) {
-      if (!isAuthenticated) {
-        console.log("ProtectedRoute: Not authenticated, redirecting to /login.")
-        router.push("/login")
-      } else if (requiredRole && userRole && userRole !== requiredRole) {
-        console.log(
-          `ProtectedRoute: User role (${userRole}) does not match required role (${requiredRole}), redirecting to /dashboard.`,
-        )
-        router.push("/dashboard")
-      } else {
-        console.log("ProtectedRoute: User authenticated and authorized. Rendering children.")
-      }
-    } else {
-      console.log("ProtectedRoute: Still loading authentication state.")
-    }
-  }, [loading, isAuthenticated, requiredRole, userRole, router])
+    const checkUserRole = async () => {
+      try {
+        console.log(`[ProtectedRoute] Checking user role, required: ${requiredRole}`)
 
-  if (loading) {
-    console.log("ProtectedRoute: Displaying loading spinner.")
+        const response = await fetch("/api/auth/me", {
+          credentials: "include", // Ensure cookies are sent
+        })
+
+        if (!response.ok) {
+          console.log(`[ProtectedRoute] Failed to get user data (${response.status}), redirecting to login`)
+          router.push("/login")
+          return
+        }
+
+        const userData = await response.json()
+        console.log(`[ProtectedRoute] User data:`, userData)
+
+        const userRole = userData.role || null
+        const hasRequiredRole = userRole === requiredRole
+
+        console.log(
+          `[ProtectedRoute] User role: "${userRole}", required: "${requiredRole}", authorized: ${hasRequiredRole}`,
+        )
+
+        if (hasRequiredRole) {
+          setIsAuthorized(true)
+          setUserId(userData.uid || userData.id) // Set user ID for feedback button
+        } else {
+          console.log(`[ProtectedRoute] User not authorized, redirecting to ${fallbackPath}`)
+          router.push(fallbackPath)
+          return
+        }
+      } catch (error) {
+        console.error("[ProtectedRoute] Error checking user role:", error)
+        router.push("/login")
+        return
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkUserRole()
+  }, [requiredRole, fallbackPath, router])
+
+  // Show loading while checking authorization
+  if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <LoadingSpinner />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="mt-4 text-gray-600">Checking permissions...</p>
+        </div>
       </div>
     )
   }
 
-  if (!isAuthenticated || (requiredRole && userRole && userRole !== requiredRole)) {
-    console.log("ProtectedRoute: Not authenticated or not authorized. Returning null (waiting for redirect).")
+  // Don't render anything if not authorized (will redirect)
+  if (isAuthorized !== true) {
     return null
   }
 
-  console.log("ProtectedRoute: Rendering children.")
-  return <>{children}</>
+  // Only render children when explicitly authorized
+  return (
+    <>
+      {children}
+      <FloatingFeedbackButton userId={userId} />
+    </>
+  )
 }

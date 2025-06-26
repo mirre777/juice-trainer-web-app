@@ -1,7 +1,7 @@
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { notFound } from "next/navigation"
-import ReviewProgramClient from "./review-program-client.tsx"
+import ReviewProgramClient from "./review-program-client"
 
 interface PageProps {
   params: {

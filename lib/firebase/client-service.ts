@@ -1,9 +1,5 @@
 // lib/firebase/client-service.ts
-
-import { initializeApp } from "firebase/app"
-import { getAuth, GoogleAuthProvider } from "firebase/auth"
 import {
-  getFirestore,
   collection,
   doc,
   getDoc,
@@ -18,26 +14,10 @@ import {
   serverTimestamp,
   onSnapshot,
 } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase" // Revert to client-side db
 import type { Client } from "@/types/client"
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler" // Corrected import
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 import { getUserById } from "@/lib/firebase/user-service"
-
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-}
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig)
-const auth = getAuth(app)
-const db = getFirestore(app)
-
-const googleAuthProvider = new GoogleAuthProvider()
 
 // Helper function to get initials from name
 function getInitials(name: string): string {
@@ -102,7 +82,7 @@ export async function checkDuplicateEmail(
 
     console.log(`[checkDuplicateEmail] Checking for duplicate email: ${email} for trainer: ${trainerId}`)
 
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients") // Use client-side db
     const q = query(clientsCollectionRef, where("email", "==", email.toLowerCase().trim()))
 
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
@@ -154,7 +134,7 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
   console.log(`[REALTIME] Setting up real-time listener for trainer: ${trainerUid}`)
 
   try {
-    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients") // Use client-side db
     const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
 
     // Create a single subscription and return the unsubscribe function
@@ -199,6 +179,7 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
         console.error("[REALTIME] Subscription error:", error)
         callback([], appError)
       },
+      // Add this option to ensure we get the most up-to-date data
       { includeMetadataChanges: true },
     )
 
@@ -233,7 +214,7 @@ export async function fetchClients(trainerUid: string): Promise<Client[]> {
       return []
     }
 
-    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients") // Use client-side db
     const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
 
     console.log("Executing Firestore query...")
@@ -286,7 +267,7 @@ export async function getClient(trainerId: string, clientId: string): Promise<Cl
       return null
     }
 
-    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    const clientRef = doc(db, "users", trainerId, "clients", clientId) // Use client-side db
     const [clientDoc, error] = await tryCatch(() => getDoc(clientRef), ErrorType.DB_READ_FAILED, {
       function: "getClient",
       trainerId,
@@ -340,7 +321,7 @@ export async function deleteClient(trainerId: string, clientId: string): Promise
     }
 
     // 1. Get the client document to verify it exists
-    const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId)
+    const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId) // Use client-side db
     const [clientDoc, getError] = await tryCatch(() => getDoc(clientRef), ErrorType.DB_READ_FAILED, {
       function: "deleteClient",
       trainerId,
@@ -445,7 +426,7 @@ export async function createClient(
     }
 
     // Create a new client document
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients") // Use client-side db
     try {
       const newClientRef = await addDoc(clientsCollectionRef, clientDocData)
       console.log("Client document created with ID:", newClientRef.id)
@@ -456,7 +437,7 @@ export async function createClient(
       })
 
       // Add client to trainer's clients array
-      const trainerRef = doc(db, "users", trainerId)
+      const trainerRef = doc(db, "users", trainerId) // Use client-side db
       await updateDoc(trainerRef, {
         clients: arrayUnion(newClientRef.id),
         updatedAt: serverTimestamp(),
@@ -493,6 +474,7 @@ export async function getTrainerName(trainerId: string): Promise<string> {
     }
 
     // Use the existing getUserById function
+    // NOTE: getUserById in user-service.ts will now use client-side db
     const userData = await getUserById(trainerId)
 
     if (!userData) {
@@ -557,7 +539,7 @@ export async function updateClient(
     // Remove any fields that shouldn't be directly updated
     const { id, initials, ...validUpdates } = sanitizedUpdates
 
-    const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId)
+    const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId) // Use client-side db
 
     const [, updateError] = await tryCatch(
       () =>
@@ -608,7 +590,7 @@ export async function processInvitation(
     }
 
     // Find the client with this invitation code across all trainers
-    const clientsRef = collection(db, "users")
+    const clientsRef = collection(db, "users") // Use client-side db
     const trainersSnapshot = await getDocs(clientsRef)
 
     let clientData = null
@@ -621,7 +603,7 @@ export async function processInvitation(
 
     for (const trainerDoc of trainersSnapshot.docs) {
       try {
-        const trainerClientsRef = collection(db, "users", trainerDoc.id, "clients")
+        const trainerClientsRef = collection(db, "users", trainerDoc.id, "clients") // Use client-side db
         const q = query(trainerClientsRef, where("inviteCode", "==", inviteCode))
 
         console.log(`[processInvitation] Checking trainer: ${trainerDoc.id}`)
@@ -661,7 +643,7 @@ export async function processInvitation(
     console.log(`[processInvitation] Updated client ${clientId} status to Active and added userId: ${userId}`)
 
     // Add the trainer to the user's trainers list
-    const userRef = doc(collection(db, "users"), userId)
+    const userRef = doc(collection(db, "users"), userId) // Use client-side db
     await updateDoc(userRef, {
       trainers: arrayUnion(trainerId),
       updatedAt: serverTimestamp(),
@@ -697,7 +679,7 @@ export async function findClientByInvitationCode(
     }
 
     // Find the client with this invitation code across all trainers
-    const clientsRef = collection(db, "users")
+    const clientsRef = collection(db, "users") // Use client-side db
     const trainersSnapshot = await getDocs(clientsRef)
 
     console.log(`[findClientByInvitationCode] Searching across ${trainersSnapshot.size} trainers`)
@@ -705,7 +687,7 @@ export async function findClientByInvitationCode(
     // Search through each trainer's clients subcollection
     for (const trainerDoc of trainersSnapshot.docs) {
       try {
-        const trainerClientsRef = collection(db, "users", trainerDoc.id, "clients")
+        const trainerClientsRef = collection(db, "users", trainerDoc.id, "clients") // Use client-side db
         const q = query(trainerClientsRef, where("inviteCode", "==", inviteCode))
 
         console.log(`[findClientByInvitationCode] Checking trainer: ${trainerDoc.id}`)
@@ -757,7 +739,7 @@ export async function checkExistingClientProfile(
       return { success: false, error }
     }
 
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients") // Use client-side db
     const q = query(clientsCollectionRef, where("userId", "==", userId))
 
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
@@ -806,7 +788,7 @@ export async function replaceTemporaryClient(
     }
 
     // Get the temporary client data
-    const tempClientRef = doc(collection(db, "users", trainerId, "clients"), temporaryClientId)
+    const tempClientRef = doc(collection(db, "users", trainerId, "clients"), temporaryClientId) // Use client-side db
     const [tempClientDoc, tempClientError] = await tryCatch(() => getDoc(tempClientRef), ErrorType.DB_READ_FAILED, {
       function: "replaceTemporaryClient",
       trainerId,
@@ -839,7 +821,7 @@ export async function replaceTemporaryClient(
 
     if (exists && clientId) {
       // Update the existing client with any new data from the temporary client
-      const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId)
+      const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId) // Use client-side db
       const [, updateError] = await tryCatch(
         () =>
           updateDoc(clientRef, {
@@ -911,7 +893,7 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
     }
 
     // Get all users with invitation codes
-    const usersRef = collection(db, "users")
+    const usersRef = collection(db, "users") // Use client-side db
     const userQuery = query(usersRef, where("inviteCode", "!=", ""))
     const usersSnapshot = await getDocs(userQuery)
 
@@ -929,7 +911,7 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
     })
 
     // Get all clients for this trainer
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients") // Use client-side db
     const clientsSnapshot = await getDocs(clientsCollectionRef)
 
     console.log(`[linkPendingClientsWithUsers] Found ${clientsSnapshot.size} clients for trainer ${trainerId}`)
@@ -967,7 +949,7 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
         console.log(`[linkPendingClientsWithUsers] Updated client ${clientId} with user ID ${userId}`)
 
         // Add the trainer to the user's trainers list
-        const userRef = doc(db, "users", userId)
+        const userRef = doc(db, "users", userId) // Use client-side db
         await updateDoc(userRef, {
           trainers: arrayUnion(trainerId),
           updatedAt: serverTimestamp(),
@@ -993,7 +975,7 @@ export async function getPendingClients(trainerId: string): Promise<Client[]> {
       return []
     }
 
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients") // Use client-side db
     const q = query(clientsCollectionRef, where("status", "==", "Pending"), orderBy("createdAt", "desc"))
 
     const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
@@ -1043,7 +1025,7 @@ export async function processLoginInvitation(
     }
 
     // Find trainer with this universal invite code
-    const usersRef = collection(db, "users")
+    const usersRef = collection(db, "users") // Use client-side db
     const q = query(usersRef, where("universalInviteCode", "==", invitationCode))
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "processLoginInvitation",
@@ -1073,7 +1055,7 @@ export async function processLoginInvitation(
     console.log(`[processLoginInvitation] Found trainer: ${trainerId}`)
 
     // Update user with pending approval status
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     const [, updateUserError] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -1092,7 +1074,7 @@ export async function processLoginInvitation(
     }
 
     // Add user to trainer's pending users list
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(db, "users", trainerId) // Use client-side db
     console.log(`[processLoginInvitation] Adding user ${userId} to trainer ${trainerId} pending list`)
 
     const [, addToPendingError] = await tryCatch(
@@ -1125,5 +1107,3 @@ export async function processLoginInvitation(
     }
   }
 }
-
-export { auth, db, googleAuthProvider }

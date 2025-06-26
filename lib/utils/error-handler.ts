@@ -68,7 +68,6 @@ export enum ErrorType {
 }
 
 export interface AppError {
-  // This is the definition, no change needed here.
   type: ErrorType
   message: string
   originalError?: any

@@ -1,40 +1,65 @@
 "use client"
 
-import React, { useState } from "react"
-import type { AppError } from "@/lib/utils/error-handler"
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { handleClientError, type AppError } from "@/lib/utils/error-handler"
+import { useToast } from "@/hooks/use-toast"
 
-interface Props {
-  children: React.ReactNode
-}
-
-const ErrorHandlingExample = ({ children }: Props) => {
+export function ErrorHandlingExample() {
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
+  const { toast } = useToast()
 
-  const handleError = (err: AppError) => {
-    setError(err)
-  }
+  const handleRiskyOperation = async () => {
+    setLoading(true)
+    setError(null)
 
-  if (error) {
-    return (
-      <div>
-        <h1>An error occurred:</h1>
-        <p>{error.message}</p>
-        {error.details && <p>Details: {error.details}</p>}
-        <button onClick={() => setError(null)}>Clear Error</button>
-      </div>
-    )
+    try {
+      // Your async operation here
+      const response = await fetch("/api/some-endpoint")
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      // Handle success
+      toast({
+        title: "Success!",
+        description: "Operation completed successfully",
+      })
+    } catch (err) {
+      // Use our error handler
+      const appError = handleClientError(err, {
+        component: "ErrorHandlingExample",
+        operation: "handleRiskyOperation",
+      })
+
+      setError(appError)
+
+      // Show toast notification with the error
+      toast({
+        title: "Error",
+        description: appError.message,
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div>
-      {React.Children.map(children, (child) => {
-        if (React.isValidElement(child)) {
-          return React.cloneElement(child, { handleError: handleError })
-        }
-        return child
-      })}
+    <div className="space-y-4">
+      <Button onClick={handleRiskyOperation} disabled={loading}>
+        {loading ? "Processing..." : "Perform Operation"}
+      </Button>
+
+      {error && (
+        <div className="p-4 bg-red-50 text-red-800 rounded-md">
+          <p className="font-medium">{error.message}</p>
+          <p className="text-sm text-red-600">Error code: {error.type}</p>
+        </div>
+      )}
     </div>
   )
 }
-
-export default ErrorHandlingExample

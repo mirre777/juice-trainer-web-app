@@ -1,46 +1,41 @@
+// app/api/clients/route.ts
 import { type NextRequest, NextResponse } from "next/server"
-import { getFirebaseAdminFirestore, initializeFirebaseAdmin, getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
-import { createError, ErrorType, logError } from "@/lib/utils/error-handler" // Corrected import for AppError
+// REMOVE: import { collection, query, getDocs } from "firebase/firestore" // Client-side Firebase instance
+import { getFirebaseAdminAuth, initializeFirebaseAdmin, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin" // Server-side Firebase Admin
+import { cookies } from "next/headers"
+import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
 
 // Initialize Firebase Admin SDK if not already done
 initializeFirebaseAdmin()
 
 export async function GET(request: NextRequest) {
   console.log("[API/clients] Received GET request.")
-  console.log("[API/clients] Request URL:", request.url)
-  console.log("[API/clients] Request Headers:", JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2))
-
   try {
-    // Get the auth_token from the cookies
-    const authCookie = request.cookies.get("auth_token")
-    const token = authCookie?.value
+    const sessionCookie = cookies().get("session")?.value
+    console.log("[API/clients] Session cookie present:", !!sessionCookie)
 
-    console.log(`[API/clients] Auth cookie value: ${token ? token.substring(0, 20) + "..." : "N/A"}`)
-    if (!token) {
-      console.log("[API/clients] No token found in cookies.")
+    if (!sessionCookie) {
       const error = createError(
         ErrorType.API_UNAUTHORIZED,
         null,
         { function: "GET /api/clients" },
-        "Unauthorized: No authentication token found.",
+        "Unauthorized: No session found.",
       )
       logError(error)
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
 
-    let trainerId: string
-    try {
-      console.log("[API/clients] Attempting to verify Firebase ID token...")
-      const decodedClaims = await getFirebaseAdminAuth().verifyIdToken(token)
-      trainerId = decodedClaims.uid
-      console.log(`[API/clients] Token verified successfully. Trainer ID: ${trainerId}`)
-    } catch (tokenError: any) {
-      console.error("[API/clients] Firebase ID token verification failed:", tokenError.code, tokenError.message)
+    // Verify the session cookie to get the trainer's UID
+    const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
+    const trainerId = decodedClaims.uid
+    console.log("[API/clients] Trainer ID from session:", trainerId)
+
+    if (!trainerId) {
       const error = createError(
-        ErrorType.AUTH_TOKEN_INVALID,
-        tokenError,
+        ErrorType.API_UNAUTHORIZED,
+        null,
         { function: "GET /api/clients" },
-        `Unauthorized: Invalid or expired authentication token. Details: ${tokenError.message}`,
+        "Unauthorized: Trainer ID not found in session.",
       )
       logError(error)
       return NextResponse.json({ error: error.message }, { status: 401 })
@@ -48,9 +43,10 @@ export async function GET(request: NextRequest) {
 
     console.log(`[API/clients] Fetching clients for trainer: ${trainerId}`)
 
+    // Use the Firebase Admin Firestore instance
     const adminDb = getFirebaseAdminFirestore()
-    const clientsRef = adminDb.collection(`users/${trainerId}/clients`)
-    const querySnapshot = await clientsRef.get()
+    const clientsRef = adminDb.collection(`users/${trainerId}/clients`) // Corrected to use adminDb
+    const querySnapshot = await clientsRef.get() // No need for `query` and `getDocs` from client SDK
 
     const clients = querySnapshot.docs.map((doc) => ({
       id: doc.id,
@@ -58,20 +54,24 @@ export async function GET(request: NextRequest) {
     }))
 
     console.log(`[API/clients] Found ${clients.length} clients for trainer ${trainerId}.`)
-    console.log("[API/clients] Clients data being sent:", JSON.stringify(clients, null, 2).substring(0, 500) + "...")
+    console.log("[API/clients] Clients data being sent:", JSON.stringify(clients, null, 2).substring(0, 500) + "...") // Log first 500 chars
 
     return NextResponse.json({ clients }, { status: 200 })
   } catch (error: any) {
     console.error("[API/clients] Error fetching clients:", error)
     let errorMessage = "An unexpected error occurred."
-    const statusCode = 500
+    let statusCode = 500
 
-    if (error instanceof Error) {
+    if (error.code === "auth/session-cookie-expired") {
+      errorMessage = "Session expired. Please log in again."
+      statusCode = 401
+    } else if (error instanceof Error) {
       errorMessage = error.message
     }
 
     const appError = createError(ErrorType.API_SERVER_ERROR, error, { function: "GET /api/clients" }, errorMessage)
     logError(appError)
+    // Ensure error response is always JSON
     return NextResponse.json({ error: appError.message }, { status: statusCode })
   }
 }

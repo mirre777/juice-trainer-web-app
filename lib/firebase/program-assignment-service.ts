@@ -1,95 +1,36 @@
-import { db } from "@/lib/firebase/firebase"
-import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, query, where, getDocs } from "firebase/firestore"
-import type { ProgramAssignment } from "@/types/program-assignment"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 
-const PROGRAM_ASSIGNMENTS_COLLECTION = "programAssignments"
-
-export const createProgramAssignment = async (programAssignment: ProgramAssignment): Promise<ProgramAssignment> => {
+export const assignProgramToClient = async (userId: string, programId: string) => {
   try {
-    const programAssignmentDocRef = doc(collection(db, PROGRAM_ASSIGNMENTS_COLLECTION), programAssignment.id)
-
-    await setDoc(programAssignmentDocRef, programAssignment)
-
-    return programAssignment
-  } catch (error: any) {
-    throw new Error(`Failed to create program assignment: ${error.message}`)
-  }
-}
-
-export const getProgramAssignment = async (id: string): Promise<ProgramAssignment | null> => {
-  try {
-    const programAssignmentDocRef = doc(db, PROGRAM_ASSIGNMENTS_COLLECTION, id)
-    const docSnap = await getDoc(programAssignmentDocRef)
-
-    if (docSnap.exists()) {
-      return docSnap.data() as ProgramAssignment
-    } else {
-      return null
-    }
-  } catch (error: any) {
-    throw new Error(`Failed to get program assignment: ${error.message}`)
-  }
-}
-
-export const updateProgramAssignment = async (
-  id: string,
-  updates: Partial<ProgramAssignment>,
-): Promise<ProgramAssignment | null> => {
-  try {
-    const programAssignmentDocRef = doc(db, PROGRAM_ASSIGNMENTS_COLLECTION, id)
-
-    await updateDoc(programAssignmentDocRef, updates)
-
-    const updatedProgramAssignment = await getProgramAssignment(id)
-    return updatedProgramAssignment
-  } catch (error: any) {
-    throw new Error(`Failed to update program assignment: ${error.message}`)
-  }
-}
-
-export const deleteProgramAssignment = async (id: string): Promise<void> => {
-  try {
-    const programAssignmentDocRef = doc(db, PROGRAM_ASSIGNMENTS_COLLECTION, id)
-    await deleteDoc(programAssignmentDocRef)
-  } catch (error: any) {
-    throw new Error(`Failed to delete program assignment: ${error.message}`)
-  }
-}
-
-export const getProgramAssignmentsByProgramId = async (programId: string): Promise<ProgramAssignment[]> => {
-  try {
-    const programAssignmentsCollectionRef = collection(db, PROGRAM_ASSIGNMENTS_COLLECTION)
-
-    const q = query(programAssignmentsCollectionRef, where("programId", "==", programId))
-
-    const querySnapshot = await getDocs(q)
-
-    const programAssignments: ProgramAssignment[] = []
-    querySnapshot.forEach((doc) => {
-      programAssignments.push(doc.data() as ProgramAssignment)
+    await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).set({
+      userId,
+      programId,
+      assignedAt: new Date(),
     })
-
-    return programAssignments
-  } catch (error: any) {
-    throw new Error(`Failed to get program assignments by programId: ${error.message}`)
+    return { success: true }
+  } catch (error) {
+    console.error("Error assigning program to user:", error)
+    return { success: false, error: error }
   }
 }
 
-export const getProgramAssignmentsByUserId = async (userId: string): Promise<ProgramAssignment[]> => {
+export const unassignProgramFromClient = async (userId: string, programId: string) => {
   try {
-    const programAssignmentsCollectionRef = collection(db, PROGRAM_ASSIGNMENTS_COLLECTION)
+    await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).delete()
+    return { success: true }
+  } catch (error) {
+    console.error("Error unassigning program from user:", error)
+    return { success: false, error: error }
+  }
+}
 
-    const q = query(programAssignmentsCollectionRef, where("userId", "==", userId))
-
-    const querySnapshot = await getDocs(q)
-
-    const programAssignments: ProgramAssignment[] = []
-    querySnapshot.forEach((doc) => {
-      programAssignments.push(doc.data() as ProgramAssignment)
-    })
-
-    return programAssignments
-  } catch (error: any) {
-    throw new Error(`Failed to get program assignments by userId: ${error.message}`)
+export const getClientPrograms = async (userId: string) => {
+  try {
+    const snapshot = await getFirebaseAdminFirestore().collection("userPrograms").where("userId", "==", userId).get()
+    const programs = snapshot.docs.map((doc) => doc.data())
+    return { success: true, data: programs }
+  } catch (error) {
+    console.error("Error getting user programs:", error)
+    return { success: false, error: error }
   }
 }

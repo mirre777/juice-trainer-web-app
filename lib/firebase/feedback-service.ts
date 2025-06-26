@@ -1,95 +1,60 @@
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { addDoc, collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore"
-import type { AppError } from "@/lib/utils/error-handler"
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
-export interface Feedback {
-  id?: string
-  userId: string
-  route: string
-  rating: number
-  comment: string
-  createdAt: string
-  status: "pending" | "approved" | "rejected"
+export interface FeedbackData {
+  feedback: string
+  sentiment?: "sad" | "neutral" | "happy"
+  app: string
+  page?: string
+  userAgent?: string
 }
 
-const feedbackCollection = collection(db, "feedback")
-
-export const addFeedback = async (
+export async function submitFeedback(
   userId: string,
-  route: string,
-  rating: number,
-  comment: string,
-): Promise<Feedback | AppError> => {
+  feedbackData: FeedbackData,
+): Promise<{ success: boolean; error?: any }> {
   try {
-    const createdAt = new Date().toISOString()
-    const docRef = await addDoc(feedbackCollection, {
-      userId,
-      route,
-      rating,
-      comment,
-      createdAt,
-      status: "pending",
-    })
-
-    const newFeedback: Feedback = {
-      id: docRef.id,
-      userId,
-      route,
-      rating,
-      comment,
-      createdAt,
-      status: "pending",
+    if (!userId || !feedbackData.feedback) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "submitFeedback" },
+        "User ID and feedback text are required",
+      )
+      logError(error)
+      return { success: false, error }
     }
 
-    return newFeedback
-  } catch (error: any) {
-    return {
-      message: error.message || "Failed to add feedback",
-      status: "error",
+    // Reference to user's feedback subcollection
+    const feedbackRef = collection(db, "users", userId, "feedbacks")
+
+    const feedbackDoc = {
+      ...feedbackData,
+      createdAt: serverTimestamp(),
+      userId: userId,
     }
-  }
-}
 
-export const getFeedbackByRoute = async (route: string): Promise<Feedback[]> => {
-  try {
-    const q = query(feedbackCollection, where("route", "==", route))
-    const querySnapshot = await getDocs(q)
-    const feedback: Feedback[] = []
-    querySnapshot.forEach((doc) => {
-      feedback.push({ id: doc.id, ...doc.data() } as Feedback)
+    const [docRef, error] = await tryCatch(() => addDoc(feedbackRef, feedbackDoc), ErrorType.DB_WRITE_FAILED, {
+      function: "submitFeedback",
+      userId,
+      feedbackData,
     })
-    return feedback
-  } catch (error) {
-    console.error("Error getting feedback by route:", error)
-    return []
-  }
-}
 
-export const getAllFeedback = async (): Promise<Feedback[]> => {
-  try {
-    const querySnapshot = await getDocs(feedbackCollection)
-    const feedback: Feedback[] = []
-    querySnapshot.forEach((doc) => {
-      feedback.push({ id: doc.id, ...doc.data() } as Feedback)
-    })
-    return feedback
-  } catch (error) {
-    console.error("Error getting all feedback:", error)
-    return []
-  }
-}
+    if (error || !docRef) {
+      return { success: false, error }
+    }
 
-export const updateFeedbackStatus = async (
-  feedbackId: string,
-  status: "pending" | "approved" | "rejected",
-): Promise<void> => {
-  try {
-    const feedbackDoc = doc(db, "feedback", feedbackId)
-    await updateDoc(feedbackDoc, {
-      status: status,
-    })
+    console.log(`[submitFeedback] ✅ Feedback submitted successfully: ${docRef.id}`)
+    return { success: true }
   } catch (error) {
-    console.error("Error updating feedback status:", error)
-    throw error
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "submitFeedback", userId, feedbackData },
+      "Unexpected error submitting feedback",
+    )
+    logError(appError)
+    return { success: false, error: appError }
   }
 }
