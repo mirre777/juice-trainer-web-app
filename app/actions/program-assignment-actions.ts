@@ -21,3 +21,11 @@ export async function CreateProgramAssignmentAction(prevState: any, formData: Fo
     return { message: "Failed to assign user to program." }
   }
 }
+
+export async function sendProgramToClient(prevState: any, formData: FormData) {
+  // Placeholder implementation for sendProgramToClient
+  // You'll need to fill in the actual logic here based on your application's requirements.
+  // For example, this might involve updating a program assignment, sending a notification, etc.
+  console.log("sendProgramToClient action called with formData:", formData)
+  return { message: "Program sent to client successfully (placeholder)." }
+}
