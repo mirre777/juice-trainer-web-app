@@ -1,16 +1,60 @@
 import { NextResponse } from "next/server"
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
-import { getUserByEmail } from "@/lib/firebase/user-service"
+import { getUserByEmail, updateUser, storeInvitationCode } from "@/lib/firebase/user-service"
+import { getFirebaseAdminAuth, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
+import { cookies } from "next/headers"
+
+// Initialize Firebase Admin
+initializeFirebaseAdmin()
 
 export async function POST(request: Request) {
   try {
-    const { email, password, invitationCode } = await request.json()
+    const { email, password, invitationCode, idToken } = await request.json()
 
     console.log(`[API:login] 🚀 Processing login for ${email}`)
     console.log(`[API:login] 🎫 Invitation code received:`, invitationCode)
     console.log(`[API:login] 🎫 Invitation code type:`, typeof invitationCode)
     console.log(`[API:login] 🎫 Invitation code length:`, invitationCode?.length)
+
+    if (idToken) {
+      // Verify the ID token
+      const decodedToken = await getFirebaseAdminAuth().verifyIdToken(idToken)
+
+      // Create session cookie (expires in 5 days)
+      const expiresIn = 60 * 60 * 24 * 5 * 1000 // 5 days in milliseconds
+      const sessionCookie = await getFirebaseAdminAuth().createSessionCookie(idToken, { expiresIn })
+
+      // Set the session cookie
+      cookies().set({
+        name: "session",
+        value: sessionCookie,
+        maxAge: expiresIn / 1000, // maxAge is in seconds
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      })
+
+      // Also set the auth_token for backward compatibility
+      cookies().set({
+        name: "auth_token",
+        value: idToken,
+        maxAge: 60 * 60, // 1 hour in seconds
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      })
+
+      return NextResponse.json({
+        success: true,
+        user: {
+          uid: decodedToken.uid,
+          email: decodedToken.email,
+        },
+      })
+    }
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
@@ -66,11 +110,10 @@ export async function POST(request: Request) {
           try {
             // Store the invitation code in the user document
             console.log(`[API:login] 💾 About to store invitation code...`)
-            const { storeInvitationCode } = await import("@/lib/firebase/user-service")
+            const storeResult = await storeInvitationCode(user.id, invitationCode)
             console.log(`[API:login] 📦 storeInvitationCode function imported successfully`)
 
             console.log(`[API:login] 🔄 Calling storeInvitationCode with userId: ${user.id}, code: ${invitationCode}`)
-            const storeResult = await storeInvitationCode(user.id, invitationCode)
             console.log(`[API:login] 📋 storeInvitationCode result:`, storeResult)
 
             if (storeResult.success) {
@@ -197,7 +240,6 @@ export async function POST(request: Request) {
         console.log(`[API:login] Firebase UID: ${existingFirebaseUser.uid}`)
 
         // Update Firestore user to link with existing Firebase Auth account
-        const { updateUser } = await import("@/lib/firebase/user-service")
         const updateResult = await updateUser(user.id, {
           hasFirebaseAuth: true,
           firebaseUid: existingFirebaseUser.uid,
@@ -221,7 +263,6 @@ export async function POST(request: Request) {
 
           // Store the invitation code
           console.log(`[API:login] 💾 Attempting to store invitation code ${invitationCode} for user ${user.id}`)
-          const { storeInvitationCode } = await import("@/lib/firebase/user-service")
           const storeResult = await storeInvitationCode(user.id, invitationCode)
 
           if (storeResult.success) {
@@ -322,7 +363,6 @@ export async function POST(request: Request) {
             console.log(`[API:login] Firebase UID: ${firebaseUser.uid}`)
 
             // Update user document to reflect Firebase Auth migration
-            const { updateUser } = await import("@/lib/firebase/user-service")
             const updateResult = await updateUser(user.id, {
               hasFirebaseAuth: true,
               firebaseUid: firebaseUser.uid,
@@ -350,7 +390,6 @@ export async function POST(request: Request) {
               console.log(
                 `[API:login] 💾 Attempting to store invitation code ${invitationCode} for migrated user ${user.id}`,
               )
-              const { storeInvitationCode } = await import("@/lib/firebase/user-service")
               const storeResult = await storeInvitationCode(user.id, invitationCode)
 
               if (storeResult.success) {
