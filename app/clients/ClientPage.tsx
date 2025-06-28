@@ -1,167 +1,171 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { PageLayout } from "@/components/shared/page-layout"
+import { useState, useEffect, useCallback } from "react"
 import { ClientsList } from "@/components/clients/clients-list"
-import { Button } from "@/components/ui/button"
-import { PlusCircle } from "lucide-react"
-import { useCurrentUser } from "@/hooks/use-current-user"
-import { subscribeToClients, linkPendingClientsWithUsers } from "@/lib/firebase/client-service"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
-import { useErrorHandler } from "@/hooks/use-error-handler"
+import { UnifiedPageLayout } from "@/components/shared/unified-page-layout"
+import { subscribeToClients } from "@/lib/firebase/client-service"
+import { getCookie } from "cookies-next"
 import { useToast } from "@/hooks/use-toast"
+import type { Client } from "@/types/client"
+import { Button } from "@/components/ui/button"
+import { Plus } from "lucide-react"
 
 export default function ClientPage() {
-  const [clients, setClients] = useState([])
-  const [filteredClients, setFilteredClients] = useState([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [filteredClients, setFilteredClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("All")
-  const { userId } = useCurrentUser()
+  const [allClientsExpanded, setAllClientsExpanded] = useState(false)
   const { toast } = useToast()
-  const { error, handleError } = useErrorHandler({
-    context: { component: "ClientsPage" },
-  })
 
-  // Use a ref to track if we've already set up the subscription
-  const subscriptionSetup = useRef(false)
-  // Use a ref to store the unsubscribe function
-  const unsubscribeRef = useRef(() => {})
-  // Use a ref to track if we've already run the linking process
-  const linkingProcessRun = useRef(false)
+  // Get trainer ID from cookie
+  const trainerId = getCookie("user_id") as string
 
-  // Set up real-time listener for clients - only once when userId is available
+  // Subscribe to clients data
   useEffect(() => {
-    // If we don't have a userId or we've already set up the subscription, do nothing
-    if (!userId || subscriptionSetup.current) {
+    if (!trainerId) {
+      console.error("No trainer ID found in cookies")
+      setError("Authentication required")
+      setLoading(false)
       return
     }
 
-    console.log("Setting up real-time listener for clients")
-    setLoading(true)
+    console.log("Setting up clients subscription for trainer:", trainerId)
 
-    try {
-      // Mark that we're setting up the subscription
-      subscriptionSetup.current = true
+    const unsubscribe = subscribeToClients(trainerId, (clientsData, subscriptionError) => {
+      console.log("Received clients update:", clientsData.length, "clients")
 
-      // First, try to link any pending clients with user accounts
-      if (!linkingProcessRun.current) {
-        console.log("Running client-user linking process")
-        linkPendingClientsWithUsers(userId)
-          .then(() => {
-            console.log("Client-user linking process completed")
-            linkingProcessRun.current = true
-          })
-          .catch((err) => {
-            console.error("Error in client-user linking process:", err)
-          })
+      if (subscriptionError) {
+        console.error("Subscription error:", subscriptionError)
+        setError("Failed to load clients")
+        toast({
+          title: "Error loading clients",
+          description: subscriptionError.message || "Please try refreshing the page",
+          variant: "destructive",
+        })
+      } else {
+        setClients(clientsData)
+        setError(null)
       }
 
-      // Subscribe to client changes
-      unsubscribeRef.current = subscribeToClients(userId, (updatedClients, subscriptionError) => {
-        if (subscriptionError) {
-          handleError(subscriptionError, { operation: "subscribeToClients" })
-          toast({
-            title: "Error loading clients",
-            description: "There was a problem loading your clients. Please try again.",
-            variant: "destructive",
-          })
-          setLoading(false)
-          return
-        }
-
-        console.log("Received updated clients:", updatedClients)
-
-        // Force a re-render by creating a new array
-        setClients([...updatedClients])
-        setLoading(false)
-      })
-    } catch (err) {
-      handleError(err, { operation: "subscribeToClients" })
-      toast({
-        title: "Error loading clients",
-        description: "There was a problem loading your clients. Please try again.",
-        variant: "destructive",
-      })
       setLoading(false)
-    }
+    })
 
-    // Cleanup subscription on unmount
     return () => {
-      console.log("Cleaning up client subscription")
-      unsubscribeRef.current()
+      console.log("Cleaning up clients subscription")
+      unsubscribe()
     }
-  }, [userId, handleError, toast])
+  }, [trainerId, toast])
 
-  // Force re-filtering when clients change
+  // Filter clients based on search and status
   useEffect(() => {
-    if (clients && clients.length > 0) {
-      console.log("Clients changed, re-filtering...")
+    let filtered = clients
 
-      let filtered = [...clients]
-
-      // Apply search filter
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase()
-        filtered = filtered.filter(
-          (client) =>
-            (client.name && typeof client.name === "string" && client.name.toLowerCase().includes(term)) ||
-            (client.email && typeof client.email === "string" && client.email.toLowerCase().includes(term)),
-        )
-      }
-
-      // Apply status filter
-      if (statusFilter !== "All") {
-        filtered = filtered.filter((client) => client.status === statusFilter)
-      }
-
-      setFilteredClients(filtered)
-    } else {
-      setFilteredClients([])
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (client) =>
+          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.email?.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
     }
+
+    // Filter by status
+    if (statusFilter !== "All") {
+      filtered = filtered.filter((client) => client.status === statusFilter)
+    }
+
+    setFilteredClients(filtered)
   }, [clients, searchTerm, statusFilter])
 
-  const handleClientAdded = (newClient) => {
+  const handleClientDeleted = useCallback(() => {
+    // The subscription will automatically update the clients list
+    toast({
+      title: "Client deleted",
+      description: "The client has been successfully removed",
+    })
+  }, [toast])
+
+  const handleClientAdded = useCallback(() => {
+    // The subscription will automatically update the clients list
     setIsAddClientModalOpen(false)
     toast({
       title: "Client added",
-      description: `${newClient.name} has been added to your clients.`,
+      description: "The new client has been successfully added",
     })
+  }, [toast])
+
+  if (!trainerId) {
+    return (
+      <UnifiedPageLayout title="Clients" description="Manage your coaching clients">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Authentication Required</h3>
+            <p className="text-gray-600">Please log in to view your clients.</p>
+          </div>
+        </div>
+      </UnifiedPageLayout>
+    )
+  }
+
+  if (error) {
+    return (
+      <UnifiedPageLayout title="Clients" description="Manage your coaching clients">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h3 className="text-lg font-medium text-red-900 mb-2">Error Loading Clients</h3>
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()}>Try Again</Button>
+          </div>
+        </div>
+      </UnifiedPageLayout>
+    )
   }
 
   return (
-    <PageLayout>
+    <UnifiedPageLayout
+      title="Clients"
+      description="Manage your coaching clients"
+      action={
+        <Button
+          onClick={() => setIsAddClientModalOpen(true)}
+          data-add-client-button="true"
+          className="bg-primary hover:bg-primary/90"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Client
+        </Button>
+      }
+    >
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <ClientsFilterBar onSearch={setSearchTerm} onStatusChange={setStatusFilter} statusFilter={statusFilter} />
-          <Button
-            onClick={() => setIsAddClientModalOpen(true)}
-            className="bg-[#CCFF00] text-black hover:bg-[#b8e600]"
-            data-testid="add-client-button"
-            data-add-client-button="true"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Client
-          </Button>
-        </div>
+        <ClientsFilterBar
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          allClientsExpanded={allClientsExpanded}
+          onToggleAllExpanded={setAllClientsExpanded}
+          clientsCount={filteredClients.length}
+        />
 
-        {error && (
-          <div className="p-4 bg-red-50 text-red-800 rounded-md">
-            <p className="font-medium">Error loading clients</p>
-            <p className="text-sm text-red-600">{error.message}</p>
-          </div>
-        )}
+        <ClientsList
+          clients={filteredClients}
+          allClientsExpanded={allClientsExpanded}
+          loading={loading}
+          onClientDeleted={handleClientDeleted}
+        />
 
-        <ClientsList clients={filteredClients} loading={loading} />
+        <AddClientModal
+          isOpen={isAddClientModalOpen}
+          onClose={() => setIsAddClientModalOpen(false)}
+          onClientAdded={handleClientAdded}
+        />
       </div>
-
-      <AddClientModal
-        isOpen={isAddClientModalOpen}
-        onClose={() => setIsAddClientModalOpen(false)}
-        onClientAdded={handleClientAdded}
-      />
-    </PageLayout>
+    </UnifiedPageLayout>
   )
 }
