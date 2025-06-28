@@ -24,7 +24,7 @@ export function LogoutModal({ open, onOpenChange }: LogoutModalProps) {
 
     try {
       const response = await fetch("/api/auth/logout", {
-        method: "GET",
+        method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
@@ -41,8 +41,8 @@ export function LogoutModal({ open, onOpenChange }: LogoutModalProps) {
         // Close modal
         onOpenChange(false)
 
-        // Refresh page - let the app's auth logic handle the redirect
-        window.location.reload()
+        // Redirect to login page
+        window.location.href = "/login"
       } else {
         console.error("Logout failed:", response.status, response.statusText)
         alert("Logout failed. Please try again.")

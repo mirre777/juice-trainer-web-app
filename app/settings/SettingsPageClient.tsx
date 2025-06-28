@@ -54,7 +54,7 @@ export default function SettingsPageClient() {
           setUserData({
             name: data.name || "",
             email: data.email || "",
-            phone: "", // Not available in current API response
+            phone: data.phone || "", // Add phone from API if available
           })
           setSaveMessage("") // Clear any previous error messages
         } else {
@@ -63,6 +63,10 @@ export default function SettingsPageClient() {
 
           if (response.status === 401) {
             setSaveMessage("Authentication failed. Please log in again.")
+            // Redirect to login after a short delay
+            setTimeout(() => {
+              window.location.href = "/login"
+            }, 2000)
           } else if (response.status === 500) {
             setSaveMessage(`Server error: ${errorData.details || errorData.error}`)
           } else {
@@ -90,6 +94,7 @@ export default function SettingsPageClient() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           name: userData.name,
           email: userData.email,
@@ -114,10 +119,26 @@ export default function SettingsPageClient() {
         setSaveMessage(`Error: ${errorMessage}`)
       }
     } catch (error) {
+      console.error("Save error:", error)
       setSaveMessage("Error saving changes")
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleLogout = () => {
+    setShowLogoutModal(true)
+  }
+
+  // Show loading state while fetching data
+  if (isLoadingData) {
+    return (
+      <PageLayout title="Settings" description="Manage your account preferences">
+        <div className="flex justify-center items-center p-8">
+          <div className="text-gray-500">Loading settings...</div>
+        </div>
+      </PageLayout>
+    )
   }
 
   return (
@@ -129,95 +150,97 @@ export default function SettingsPageClient() {
             <CardTitle>Profile</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoadingData ? (
-              <div className="flex justify-center items-center p-8">
-                <div className="text-gray-500">Loading...</div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-6">
-                <div className="relative">
-                  <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                    <User className="w-12 h-12 text-gray-400" />
-                  </div>
-                  <button className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                    </svg>
-                  </button>
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                  <User className="w-12 h-12 text-gray-400" />
                 </div>
-                <div className="space-y-4 flex-1">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <input
-                      type="text"
-                      value={userData.name}
-                      onChange={(e) => setUserData((prev) => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Enter your name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={userData.email}
-                      onChange={(e) => setUserData((prev) => ({ ...prev, email: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Enter email"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <input
-                      type="tel"
-                      value={userData.phone}
-                      onChange={(e) => setUserData((prev) => ({ ...prev, phone: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Enter phone number"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Invite Code</label>
-                    <input
-                      type="text"
-                      value={inviteCode}
-                      onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                      placeholder="Enter your invite code (max 10 characters)"
-                      maxLength={10}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Share this code with clients: {typeof window !== "undefined" ? window.location.origin : ""}
-                      /invite/
-                      {inviteCode || "YOUR_CODE"}
-                    </p>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button className="bg-black text-white" onClick={handleSaveChanges} disabled={isLoading}>
-                      {isLoading ? "Saving..." : "Save Changes"}
-                    </Button>
-                  </div>
-                  {saveMessage && (
-                    <p
-                      className={`text-sm ${saveMessage.includes("Error") || saveMessage.includes("Failed") || saveMessage.includes("Authentication") || saveMessage.includes("Server") ? "text-red-600" : "text-green-600"}`}
-                    >
-                      {saveMessage}
-                    </p>
-                  )}
-                </div>
+                <button className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                  </svg>
+                </button>
               </div>
-            )}
+              <div className="space-y-4 flex-1">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={userData.name}
+                    onChange={(e) => setUserData((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Enter your name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={userData.email}
+                    onChange={(e) => setUserData((prev) => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Enter email"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={userData.phone}
+                    onChange={(e) => setUserData((prev) => ({ ...prev, phone: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Enter phone number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Invite Code</label>
+                  <input
+                    type="text"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                    placeholder="Enter your invite code (max 10 characters)"
+                    maxLength={10}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Share this code with clients: {typeof window !== "undefined" ? window.location.origin : ""}
+                    /invite/
+                    {inviteCode || "YOUR_CODE"}
+                  </p>
+                </div>
+                <div className="flex justify-end">
+                  <Button className="bg-black text-white" onClick={handleSaveChanges} disabled={isLoading}>
+                    {isLoading ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+                {saveMessage && (
+                  <p
+                    className={`text-sm ${
+                      saveMessage.includes("Error") ||
+                      saveMessage.includes("Failed") ||
+                      saveMessage.includes("Authentication") ||
+                      saveMessage.includes("Server") ||
+                      saveMessage.includes("Network")
+                        ? "text-red-600"
+                        : "text-green-600"
+                    }`}
+                  >
+                    {saveMessage}
+                  </p>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -275,12 +298,9 @@ export default function SettingsPageClient() {
                     <p className="text-sm text-gray-500">Sign out of your account</p>
                   </div>
                 </div>
-                <button
-                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  onClick={() => setShowLogoutModal(true)}
-                >
+                <Button variant="outline" onClick={handleLogout}>
                   Log Out
-                </button>
+                </Button>
               </div>
               <div className="flex items-center justify-between p-4 border rounded-md border-red-200 bg-red-50">
                 <div className="flex items-center">
@@ -290,12 +310,9 @@ export default function SettingsPageClient() {
                     <p className="text-sm text-gray-500">Permanently delete your account and all data</p>
                   </div>
                 </div>
-                <button
-                  className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-                  onClick={() => setShowDeleteAccountModal(true)}
-                >
+                <Button variant="destructive" onClick={() => setShowDeleteAccountModal(true)}>
                   Delete
-                </button>
+                </Button>
               </div>
             </div>
           </CardContent>
