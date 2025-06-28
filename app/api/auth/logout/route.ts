@@ -4,16 +4,12 @@ export const runtime = "nodejs"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/firebase/firebase"
+import type { NextRequest } from "next/server"
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   try {
-    // Clear all cookies
-    const cookieStore = cookies()
-    const allCookies = cookieStore.getAll()
-
-    for (const cookie of allCookies) {
-      cookieStore.delete(cookie.name)
-    }
+    // Clear the auth_token cookie
+    cookies().delete("auth_token")
 
     // Try to sign out from Firebase
     try {
@@ -23,24 +19,9 @@ export async function GET() {
       // Continue with logout even if Firebase signOut fails
     }
 
-    // Return success response with cleared cookies
-    return new NextResponse(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        // Set cookie to expire in the past to ensure it's deleted
-        "Set-Cookie": [
-          `token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `user_id=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `refresh_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-        ],
-      },
-    })
+    return NextResponse.json({ success: true, message: "Logged out successfully" })
   } catch (error) {
-    console.error("Error during logout:", error)
-    return new NextResponse(JSON.stringify({ error: "Failed to logout" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
+    console.error("Logout error:", error)
+    return NextResponse.json({ error: "Logout failed" }, { status: 500 })
   }
 }

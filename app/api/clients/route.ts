@@ -1,7 +1,6 @@
 // app/api/clients/route.ts
 import { type NextRequest, NextResponse } from "next/server"
-// REMOVE: import { collection, query, getDocs } from "firebase/firestore" // Client-side Firebase instance
-import { getFirebaseAdminAuth, initializeFirebaseAdmin, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin" // Server-side Firebase Admin
+import { getFirebaseAdminAuth, initializeFirebaseAdmin, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
 import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
 
@@ -11,31 +10,32 @@ initializeFirebaseAdmin()
 export async function GET(request: NextRequest) {
   console.log("[API/clients] Received GET request.")
   try {
-    const sessionCookie = cookies().get("session")?.value
-    console.log("[API/clients] Session cookie present:", !!sessionCookie)
+    // Fix: Use 'auth_token' instead of 'session' to match your auth system
+    const authToken = cookies().get("auth_token")?.value
+    console.log("[API/clients] Auth token present:", !!authToken)
 
-    if (!sessionCookie) {
+    if (!authToken) {
       const error = createError(
         ErrorType.API_UNAUTHORIZED,
         null,
         { function: "GET /api/clients" },
-        "Unauthorized: No session found.",
+        "Unauthorized: No auth token found.",
       )
       logError(error)
       return NextResponse.json({ error: error.message }, { status: 401 })
     }
 
-    // Verify the session cookie to get the trainer's UID
-    const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
+    // Verify the auth token to get the trainer's UID
+    const decodedClaims = await getFirebaseAdminAuth().verifyIdToken(authToken)
     const trainerId = decodedClaims.uid
-    console.log("[API/clients] Trainer ID from session:", trainerId)
+    console.log("[API/clients] Trainer ID from token:", trainerId)
 
     if (!trainerId) {
       const error = createError(
         ErrorType.API_UNAUTHORIZED,
         null,
         { function: "GET /api/clients" },
-        "Unauthorized: Trainer ID not found in session.",
+        "Unauthorized: Trainer ID not found in token.",
       )
       logError(error)
       return NextResponse.json({ error: error.message }, { status: 401 })
@@ -45,8 +45,8 @@ export async function GET(request: NextRequest) {
 
     // Use the Firebase Admin Firestore instance
     const adminDb = getFirebaseAdminFirestore()
-    const clientsRef = adminDb.collection(`users/${trainerId}/clients`) // Corrected to use adminDb
-    const querySnapshot = await clientsRef.get() // No need for `query` and `getDocs` from client SDK
+    const clientsRef = adminDb.collection(`users/${trainerId}/clients`)
+    const querySnapshot = await clientsRef.get()
 
     const clients = querySnapshot.docs.map((doc) => ({
       id: doc.id,
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     }))
 
     console.log(`[API/clients] Found ${clients.length} clients for trainer ${trainerId}.`)
-    console.log("[API/clients] Clients data being sent:", JSON.stringify(clients, null, 2).substring(0, 500) + "...") // Log first 500 chars
+    console.log("[API/clients] Clients data being sent:", JSON.stringify(clients, null, 2).substring(0, 500) + "...")
 
     return NextResponse.json({ clients }, { status: 200 })
   } catch (error: any) {
@@ -62,8 +62,11 @@ export async function GET(request: NextRequest) {
     let errorMessage = "An unexpected error occurred."
     let statusCode = 500
 
-    if (error.code === "auth/session-cookie-expired") {
-      errorMessage = "Session expired. Please log in again."
+    if (error.code === "auth/id-token-expired") {
+      errorMessage = "Token expired. Please log in again."
+      statusCode = 401
+    } else if (error.code === "auth/argument-error") {
+      errorMessage = "Invalid token. Please log in again."
       statusCode = 401
     } else if (error instanceof Error) {
       errorMessage = error.message
@@ -71,7 +74,6 @@ export async function GET(request: NextRequest) {
 
     const appError = createError(ErrorType.API_SERVER_ERROR, error, { function: "GET /api/clients" }, errorMessage)
     logError(appError)
-    // Ensure error response is always JSON
     return NextResponse.json({ error: appError.message }, { status: statusCode })
   }
 }
