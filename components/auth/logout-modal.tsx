@@ -1,28 +1,33 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
 
 interface LogoutModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean
+  onClose: () => void
 }
 
-export function LogoutModal({ open, onOpenChange }: LogoutModalProps) {
+export function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const router = useRouter()
+  const { toast } = useToast()
 
   const handleLogout = async () => {
-    setIsLoggingOut(true)
-
     try {
+      setIsLoggingOut(true)
+
       const response = await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
@@ -31,54 +36,55 @@ export function LogoutModal({ open, onOpenChange }: LogoutModalProps) {
         },
       })
 
-      if (response.ok) {
-        // Clear localStorage and sessionStorage
-        if (typeof window !== "undefined") {
-          localStorage.clear()
-          sessionStorage.clear()
-        }
-
-        // Close modal
-        onOpenChange(false)
-
-        // Redirect to login page
-        window.location.href = "/login"
-      } else {
-        console.error("Logout failed:", response.status, response.statusText)
-        alert("Logout failed. Please try again.")
-        setIsLoggingOut(false)
+      if (!response.ok) {
+        throw new Error("Logout failed")
       }
+
+      // Clear any client-side storage
+      if (typeof window !== "undefined") {
+        localStorage.clear()
+        sessionStorage.clear()
+      }
+
+      toast({
+        title: "Logged out successfully",
+        description: "You have been logged out of your account.",
+      })
+
+      // Redirect to login page
+      router.push("/login")
+      router.refresh()
     } catch (error) {
-      console.error("Error during logout:", error)
-      alert("Logout failed. Please try again.")
+      console.error("Logout error:", error)
+      toast({
+        title: "Logout failed",
+        description: "There was an error logging you out. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoggingOut(false)
+      onClose()
     }
   }
 
-  const handleCancel = () => {
-    onOpenChange(false)
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Log Out</DialogTitle>
-          <DialogDescription>Are you sure you want to log out of your account?</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleCancel} disabled={isLoggingOut}>
+    <AlertDialog open={isOpen} onOpenChange={onClose}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to log out? You will need to sign in again to access your account.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onClose} disabled={isLoggingOut}>
             Cancel
-          </Button>
-          <Button
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-            className="bg-[#D2FF28] text-black hover:bg-[#B8E024] disabled:opacity-50"
-          >
-            {isLoggingOut ? "Logging out..." : "Log Out"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleLogout} disabled={isLoggingOut} className="bg-red-600 hover:bg-red-700">
+            {isLoggingOut ? "Logging out..." : "Logout"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

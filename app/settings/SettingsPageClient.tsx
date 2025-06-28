@@ -1,367 +1,313 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { User, LogOut, Trash2 } from "lucide-react"
-import { PageLayout } from "@/components/shared/page-layout"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { LogOut, User, CreditCard, Bell, Shield } from "lucide-react"
 import { LogoutModal } from "@/components/auth/logout-modal"
+import { useToast } from "@/hooks/use-toast"
+
+interface UserProfile {
+  id: string
+  email: string
+  displayName: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+  role: string
+  subscriptionStatus?: string
+  subscriptionPlan?: string
+}
 
 export default function SettingsPageClient() {
-  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false)
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
-  const [inviteCode, setInviteCode] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [saveMessage, setSaveMessage] = useState("")
-  const [isLoadingData, setIsLoadingData] = useState(true)
-  const [userData, setUserData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-  })
+  const [updating, setUpdating] = useState(false)
+  const router = useRouter()
+  const { toast } = useToast()
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      setIsLoadingData(true)
-      setSaveMessage("")
-
-      try {
-        console.log("🔍 Fetching user data from /api/auth/me...")
-        const response = await fetch("/api/auth/me", {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        })
-
-        console.log("📡 API Response status:", response.status)
-
-        if (response.ok) {
-          const data = await response.json()
-          console.log("✅ User data from API:", data)
-
-          setInviteCode(data.universalInviteCode || "")
-          setUserData({
-            name: data.name || "",
-            email: data.email || "",
-            phone: data.phone || "", // Add phone from API if available
-          })
-          setSaveMessage("") // Clear any previous error messages
-        } else {
-          const errorData = await response.json()
-          console.error("❌ API Error:", errorData)
-
-          if (response.status === 401) {
-            setSaveMessage("Authentication failed. Please log in again.")
-            // Redirect to login after a short delay
-            setTimeout(() => {
-              window.location.href = "/login"
-            }, 2000)
-          } else if (response.status === 500) {
-            setSaveMessage(`Server error: ${errorData.details || errorData.error}`)
-          } else {
-            setSaveMessage(`Failed to load user data: ${errorData.error}`)
-          }
-        }
-      } catch (error) {
-        console.error("💥 Network error:", error)
-        setSaveMessage("Network error loading user data")
-      } finally {
-        setIsLoadingData(false)
-      }
-    }
-
-    fetchUserData()
+    fetchUserProfile()
   }, [])
 
-  const handleSaveChanges = async () => {
-    setIsLoading(true)
-    setSaveMessage("")
-
+  const fetchUserProfile = async () => {
     try {
-      const response = await fetch("/api/user/update-profile", {
-        method: "POST",
+      setLoading(true)
+      setError(null)
+
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
-        body: JSON.stringify({
-          name: userData.name,
-          email: userData.email,
-          phone: userData.phone,
-          universalInviteCode: inviteCode,
-        }),
       })
 
-      if (response.ok) {
-        setSaveMessage("Changes saved successfully!")
-        setTimeout(() => setSaveMessage(""), 3000)
-      } else {
-        const errorData = await response.json()
-        let errorMessage =
-          errorData.error?.message || errorData.error || "An unknown error occurred while saving changes."
-
-        // Check for the specific "invite code is already taken" message
-        if (errorMessage.includes("invite code is already taken")) {
-          errorMessage = "Sorry, your last rep failed. This invite code is already taken."
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Redirect to login if unauthorized
+          router.push("/login")
+          return
         }
-
-        setSaveMessage(`Error: ${errorMessage}`)
+        throw new Error(`Failed to fetch profile: ${response.status}`)
       }
-    } catch (error) {
-      console.error("Save error:", error)
-      setSaveMessage("Error saving changes")
+
+      const userData = await response.json()
+      setUser(userData)
+    } catch (err) {
+      console.error("Error fetching user profile:", err)
+      setError(err instanceof Error ? err.message : "Failed to load profile")
+
+      // If it's an auth error, redirect to login
+      if (err instanceof Error && err.message.includes("401")) {
+        router.push("/login")
+      }
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const handleLogout = () => {
-    setShowLogoutModal(true)
+  const handleUpdateProfile = async (formData: FormData) => {
+    try {
+      setUpdating(true)
+
+      const response = await fetch("/api/user/update-profile", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update profile")
+      }
+
+      const updatedUser = await response.json()
+      setUser(updatedUser)
+
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been successfully updated.",
+      })
+    } catch (err) {
+      console.error("Error updating profile:", err)
+      toast({
+        title: "Update failed",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setUpdating(false)
+    }
   }
 
-  // Show loading state while fetching data
-  if (isLoadingData) {
+  if (loading) {
     return (
-      <PageLayout title="Settings" description="Manage your account preferences">
-        <div className="flex justify-center items-center p-8">
-          <div className="text-gray-500">Loading settings...</div>
+      <div className="container mx-auto p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+            <div className="space-y-6">
+              <div className="h-32 bg-gray-200 rounded"></div>
+              <div className="h-32 bg-gray-200 rounded"></div>
+              <div className="h-32 bg-gray-200 rounded"></div>
+            </div>
+          </div>
         </div>
-      </PageLayout>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="max-w-4xl mx-auto">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-red-600 mb-4">Error loading settings: {error}</p>
+                <Button onClick={fetchUserProfile} variant="outline">
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="max-w-4xl mx-auto">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-gray-600 mb-4">No user data available</p>
+                <Button onClick={() => router.push("/login")} variant="outline">
+                  Go to Login
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     )
   }
 
   return (
-    <PageLayout title="Settings" description="Manage your account preferences">
-      <div className="space-y-6">
-        {/* Profile Section */}
+    <div className="container mx-auto p-6">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Settings</h1>
+          <Button onClick={() => setShowLogoutModal(true)} variant="outline" className="flex items-center gap-2">
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+
+        {/* Profile Settings */}
         <Card>
           <CardHeader>
-            <CardTitle>Profile</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Profile Information
+            </CardTitle>
+            <CardDescription>Update your personal information and contact details.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-6">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                  <User className="w-12 h-12 text-gray-400" />
+            <form action={handleUpdateProfile} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    defaultValue={user.firstName || ""}
+                    placeholder="Enter your first name"
+                  />
                 </div>
-                <button className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                  </svg>
-                </button>
+                <div>
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    defaultValue={user.lastName || ""}
+                    placeholder="Enter your last name"
+                  />
+                </div>
               </div>
-              <div className="space-y-4 flex-1">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={userData.name}
-                    onChange={(e) => setUserData((prev) => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Enter your name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={userData.email}
-                    onChange={(e) => setUserData((prev) => ({ ...prev, email: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Enter email"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    value={userData.phone}
-                    onChange={(e) => setUserData((prev) => ({ ...prev, phone: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Enter phone number"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Invite Code</label>
-                  <input
-                    type="text"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                    placeholder="Enter your invite code (max 10 characters)"
-                    maxLength={10}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Share this code with clients: {typeof window !== "undefined" ? window.location.origin : ""}
-                    /invite/
-                    {inviteCode || "YOUR_CODE"}
-                  </p>
-                </div>
-                <div className="flex justify-end">
-                  <Button className="bg-black text-white" onClick={handleSaveChanges} disabled={isLoading}>
-                    {isLoading ? "Saving..." : "Save Changes"}
-                  </Button>
-                </div>
-                {saveMessage && (
-                  <p
-                    className={`text-sm ${
-                      saveMessage.includes("Error") ||
-                      saveMessage.includes("Failed") ||
-                      saveMessage.includes("Authentication") ||
-                      saveMessage.includes("Server") ||
-                      saveMessage.includes("Network")
-                        ? "text-red-600"
-                        : "text-green-600"
-                    }`}
-                  >
-                    {saveMessage}
-                  </p>
-                )}
+
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" name="email" type="email" defaultValue={user.email} placeholder="Enter your email" />
               </div>
+
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  defaultValue={user.phone || ""}
+                  placeholder="Enter your phone number"
+                />
+              </div>
+
+              <Button type="submit" disabled={updating}>
+                {updating ? "Updating..." : "Update Profile"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Account Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Account Information
+            </CardTitle>
+            <CardDescription>View your account details and subscription status.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Account Type</span>
+              <Badge variant="secondary">{user.role}</Badge>
+            </div>
+
+            {user.subscriptionStatus && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Subscription Status</span>
+                <Badge variant={user.subscriptionStatus === "active" ? "default" : "secondary"}>
+                  {user.subscriptionStatus}
+                </Badge>
+              </div>
+            )}
+
+            {user.subscriptionPlan && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Plan</span>
+                <Badge variant="outline">{user.subscriptionPlan}</Badge>
+              </div>
+            )}
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">User ID</span>
+              <span className="text-sm text-gray-600 font-mono">{user.id}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Notifications Section */}
+        {/* Subscription Management */}
         <Card>
           <CardHeader>
-            <CardTitle>Notifications</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Subscription & Billing
+            </CardTitle>
+            <CardDescription>Manage your subscription and billing preferences.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Email Notifications</h3>
-                  <p className="text-sm text-gray-500">Receive emails about client activity</p>
-                </div>
-                <Switch defaultChecked id="email-notifications" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Push Notifications</h3>
-                  <p className="text-sm text-gray-500">Receive push notifications on your device</p>
-                </div>
-                <Switch defaultChecked id="push-notifications" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">SMS Notifications</h3>
-                  <p className="text-sm text-gray-500">Receive text messages for important updates</p>
-                </div>
-                <Switch id="sms-notifications" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Marketing Emails</h3>
-                  <p className="text-sm text-gray-500">Receive promotional emails and offers</p>
-                </div>
-                <Switch id="marketing-emails" />
-              </div>
+              <p className="text-sm text-gray-600">Subscription management features will be available here.</p>
+              <Button variant="outline" disabled>
+                Manage Subscription
+              </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Account Actions Section */}
+        {/* Notifications */}
         <Card>
           <CardHeader>
-            <CardTitle>Account Actions</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Notifications
+            </CardTitle>
+            <CardDescription>Configure your notification preferences.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-md">
-                <div className="flex items-center">
-                  <LogOut className="w-5 h-5 mr-3 text-gray-500" />
-                  <div>
-                    <h3 className="font-medium">Log Out</h3>
-                    <p className="text-sm text-gray-500">Sign out of your account</p>
-                  </div>
-                </div>
-                <Button variant="outline" onClick={handleLogout}>
-                  Log Out
-                </Button>
-              </div>
-              <div className="flex items-center justify-between p-4 border rounded-md border-red-200 bg-red-50">
-                <div className="flex items-center">
-                  <Trash2 className="w-5 h-5 mr-3 text-red-500" />
-                  <div>
-                    <h3 className="font-medium">Delete Account</h3>
-                    <p className="text-sm text-gray-500">Permanently delete your account and all data</p>
-                  </div>
-                </div>
-                <Button variant="destructive" onClick={() => setShowDeleteAccountModal(true)}>
-                  Delete
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Contact Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center space-y-4">
-              <p className="text-gray-600">We won't spam you, but you can spam us</p>
-              <Button
-                onClick={() => {
-                  navigator.clipboard.writeText("hello@juice.fitness")
-                  setSaveMessage("Email address copied to clipboard!")
-                  setTimeout(() => setSaveMessage(""), 3000)
-                }}
-                className="bg-black text-white hover:bg-gray-800"
-              >
-                Copy Email Address
+              <p className="text-sm text-gray-600">Notification settings will be available here.</p>
+              <Button variant="outline" disabled>
+                Configure Notifications
               </Button>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Delete Account Modal */}
-      <Dialog open={showDeleteAccountModal} onOpenChange={setShowDeleteAccountModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Account</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete your account? This action cannot be undone and all your data will be
-              permanently deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteAccountModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive">Delete Account</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Logout Modal */}
-      <LogoutModal open={showLogoutModal} onOpenChange={setShowLogoutModal} />
-    </PageLayout>
+      <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} />
+    </div>
   )
 }
