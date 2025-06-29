@@ -18,14 +18,16 @@ export function SheetsImportDialog({ isOpen, onClose }: SheetsImportDialogProps)
   useEffect(() => {
     if (isOpen) {
       // Check if user has permanently dismissed
-      const permanentlyDismissed = localStorage.getItem("sheets-instructions-dismissed") === "true"
-      if (permanentlyDismissed) {
+      const permanentlyDismissed = localStorage.getItem("sheets-dialog-permanent-dismiss")
+      if (permanentlyDismissed === "true") {
+        onClose()
         return
       }
 
       // Check if dismissed in this session
-      const sessionDismissed = sessionStorage.getItem("sheets-instructions-session-dismissed") === "true"
-      if (sessionDismissed) {
+      const sessionDismissed = sessionStorage.getItem("sheets-dialog-session-dismiss")
+      if (sessionDismissed === "true") {
+        onClose()
         return
       }
 
@@ -36,22 +38,22 @@ export function SheetsImportDialog({ isOpen, onClose }: SheetsImportDialogProps)
       img.onload = () => setImageLoaded(true)
       img.src = "/google-sheets-share-dialog.png"
     }
-  }, [isOpen])
+  }, [isOpen, onClose])
 
   const handleOkThanks = () => {
-    sessionStorage.setItem("sheets-instructions-session-dismissed", "true")
+    sessionStorage.setItem("sheets-dialog-session-dismiss", "true")
     setShowDialog(false)
     onClose()
   }
 
   const handleDontShowAgain = () => {
-    localStorage.setItem("sheets-instructions-dismissed", "true")
+    localStorage.setItem("sheets-dialog-permanent-dismiss", "true")
     setShowDialog(false)
     onClose()
   }
 
   const handleClose = () => {
-    sessionStorage.setItem("sheets-instructions-session-dismissed", "true")
+    sessionStorage.setItem("sheets-dialog-session-dismiss", "true")
     setShowDialog(false)
     onClose()
   }
@@ -59,7 +61,7 @@ export function SheetsImportDialog({ isOpen, onClose }: SheetsImportDialogProps)
   if (!showDialog) return null
 
   return (
-    <Dialog open={showDialog} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -79,51 +81,50 @@ export function SheetsImportDialog({ isOpen, onClose }: SheetsImportDialogProps)
               <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
                 1
               </span>
-              <p className="text-sm">Open your workout program in Google Sheets.</p>
+              <p className="text-gray-700">Open your workout program in Google Sheets.</p>
             </div>
 
             <div className="flex items-start gap-3">
               <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
                 2
               </span>
-              <p className="text-sm">Click "Share" → "Anyone with the link can view".</p>
-            </div>
-
-            {/* Image container with loading state */}
-            <div className="ml-9 bg-gray-50 rounded-lg p-4 min-h-[300px] flex items-center justify-center">
-              {!imageLoaded ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                  <span className="ml-2 text-sm text-gray-500">Loading image...</span>
-                </div>
-              ) : (
-                <Image
-                  src="/google-sheets-share-dialog.png"
-                  alt="Google Sheets sharing dialog"
-                  width={600}
-                  height={300}
-                  className="rounded-lg shadow-sm"
-                  priority
-                />
-              )}
-            </div>
-
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                3
-              </span>
-              <p className="text-sm">Paste the link into the field above.</p>
+              <p className="text-gray-700">Click "Share" → "Anyone with the link can view".</p>
             </div>
           </div>
 
-          <div className="flex justify-between pt-4 border-t">
-            <Button variant="outline" onClick={handleDontShowAgain} className="text-sm bg-transparent">
-              Don't show me again
-            </Button>
-            <Button onClick={handleOkThanks} className="bg-black text-white hover:bg-gray-800">
-              Ok Thanks
-            </Button>
+          <div className="bg-gray-50 rounded-lg p-4 min-h-[300px] flex items-center justify-center">
+            {!imageLoaded ? (
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span className="ml-2 text-gray-600">Loading image...</span>
+              </div>
+            ) : (
+              <Image
+                src="/google-sheets-share-dialog.png"
+                alt="Google Sheets sharing dialog"
+                width={500}
+                height={300}
+                className="rounded-lg shadow-sm"
+                priority
+              />
+            )}
           </div>
+
+          <div className="flex items-start gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
+              3
+            </span>
+            <p className="text-gray-700">Paste the link into the field above.</p>
+          </div>
+        </div>
+
+        <div className="flex justify-between pt-4">
+          <Button variant="outline" onClick={handleDontShowAgain} className="text-gray-600 bg-transparent">
+            Don't show me again
+          </Button>
+          <Button onClick={handleOkThanks} className="bg-black text-white hover:bg-gray-800">
+            Ok Thanks
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
