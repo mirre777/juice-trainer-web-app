@@ -7,41 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
 import { Search, FileSpreadsheet, ChevronRight, X } from "lucide-react"
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react" // Added useCallback
+import { useToast } from "@/components/ui/toast-context"
 import { useDebounce } from "@/hooks/use-debounce"
-
-// Safe toast hook that doesn't break during SSR
-function useSafeToast() {
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
-
-  const toast = useCallback(
-    (options: any) => {
-      if (isClient && typeof window !== "undefined") {
-        // Use a simple alert as fallback if toast provider is not available
-        if (options.title) {
-          alert(`${options.title}${options.description ? ": " + options.description : ""}`)
-        }
-      }
-    },
-    [isClient],
-  )
-
-  return {
-    toast: {
-      success: toast,
-      error: toast,
-      default: toast,
-    },
-  }
-}
 
 interface SheetsImport {
   id: string
@@ -161,8 +133,8 @@ function EditableProgramName({
   return (
     <h3
       className="text-[14px] font-medium text-black font-sen cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors text-left"
-      onClick={handleDoubleClick}
-      title="Click to edit"
+      onClick={handleDoubleClick} // Change from onDoubleClick to onClick
+      title="Click to edit" // Update the title for accessibility
     >
       {displayName}
     </h3>
@@ -171,7 +143,7 @@ function EditableProgramName({
 
 export default function ImportProgramsClient() {
   const router = useRouter()
-  const { toast } = useSafeToast()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
   const [programNameInput, setProgramNameInput] = useState("")
@@ -196,7 +168,7 @@ export default function ImportProgramsClient() {
     return new Set()
   })
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
-  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false)
+  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false) // Moved here
   const [doNotShowInstructionsAgain, setDoNotShowInstructionsAgain] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("doNotShowInstructionsAgain") === "true"
@@ -212,24 +184,27 @@ export default function ImportProgramsClient() {
           credentials: "include",
         })
 
-        const rawResponseText = await response.text()
+        const rawResponseText = await response.text() // Capture raw response text
         console.log("[ImportPrograms] Raw /api/auth/me response text:", rawResponseText)
 
         if (response.ok) {
           try {
-            const userData = JSON.parse(rawResponseText)
+            const userData = JSON.parse(rawResponseText) // Parse the captured text
             const currentUserId = userData.uid || userData.id
             console.log("[ImportPrograms] User authenticated:", currentUserId)
             setUserId(currentUserId)
           } catch (jsonError) {
             console.error("[ImportPrograms] Failed to parse /api/auth/me JSON:", jsonError, "Raw:", rawResponseText)
-            toast.error({
+            // Handle the case where the response is not valid JSON but status is OK
+            toast({
               title: "Authentication Error",
               description: "Received invalid user data. Please try logging in again.",
+              variant: "destructive",
             })
           }
         } else {
           console.log("[ImportPrograms] User not authenticated. Status:", response.status, "Text:", rawResponseText)
+          // Optionally, parse error message if response is not OK but is JSON
           try {
             const errorData = JSON.parse(rawResponseText)
             console.error("[ImportPrograms] Auth error details:", errorData)
@@ -244,7 +219,7 @@ export default function ImportProgramsClient() {
       }
     }
     checkAuth()
-  }, [toast])
+  }, [])
 
   // Helper to mark programs as dismissed
   const markProgramsAsDismissed = useCallback((programIds: string[]) => {
@@ -254,7 +229,7 @@ export default function ImportProgramsClient() {
       localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(newDismissed)))
       return newDismissed
     })
-    setActiveToastId(null)
+    setActiveToastId(null) // Clear active toast ID when dismissed
   }, [])
 
   // Fetch user's imports from Firebase
@@ -349,7 +324,12 @@ export default function ImportProgramsClient() {
       console.log("[ImportPrograms] Cleaning up Firebase listener for userId:", userId)
       unsubscribe()
     }
-  }, [userId, dismissedNotifications, activeToastId, markProgramsAsDismissed])
+  }, [userId, dismissedNotifications, activeToastId, markProgramsAsDismissed]) // Added markProgramsAsDismissed to dependencies
+
+  // Persist dismissed notifications to localStorage - now handled by markProgramsAsDismissed
+  // useEffect(() => {
+  //   localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
+  // }, [dismissedNotifications])
 
   // Memoized search filtering
   const filteredImports = useMemo(() => {
@@ -404,7 +384,7 @@ export default function ImportProgramsClient() {
         return { variant: "secondary" as const, text: "Processing", className: "bg-blue-50 text-blue-700" }
       case "conversion_complete":
         return { variant: "secondary" as const, text: "Ready", className: "bg-green-50 text-green-700" }
-      case "reviewed":
+      case "reviewed": // New status
         return { variant: "secondary" as const, text: "Reviewed", className: "bg-green-50 text-green-700" }
       case "completed":
         return { variant: "secondary" as const, text: "Completed", className: "bg-green-50 text-green-700" }
@@ -494,13 +474,44 @@ export default function ImportProgramsClient() {
         ? `Your Program "${formatProgramName(newlyCompleted[0])}" Is Ready!`
         : `${newlyCompleted.length} Programs Are Ready!`
 
-    toast.success({
+    const toastId = toast.success({
       title,
       description:
         "Your workout program is now good to go! Review it, edit if needed, and you're all set to send it out. 💪",
+      duration: null, // Keep toast open until dismissed by user
+      pages: ["/programs", "/import-programs", "/demo/programs", "/demo/import-programs"],
+      ctaButton: {
+        text: "Show Me",
+        onClick: () => {
+          markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when CTA is clicked
+          if (window.location.pathname !== "/import-programs") {
+            router.push("/import-programs")
+            setTimeout(() => {
+              const importsSection = document.querySelector('[data-section="previously-imported"]')
+              if (importsSection) {
+                importsSection.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+              }
+            }, 100)
+          } else {
+            const importsSection = document.querySelector('[data-section="previously-imported"]')
+            if (importsSection) {
+              importsSection.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              })
+            }
+          }
+        },
+      },
+      onDismiss: () => {
+        markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when 'X' or auto-dismiss occurs
+      },
     })
 
-    markProgramsAsDismissed(programIdsToDismiss)
+    setActiveToastId(toastId)
   }
 
   // Handle review button click
@@ -517,7 +528,7 @@ export default function ImportProgramsClient() {
     completedImports: completedImports.length,
     filteredImports: filteredImports.length,
     activeToastId,
-    showInstructionsDialog,
+    showInstructionsDialog, // Added for debugging
   })
 
   return (
@@ -753,7 +764,7 @@ export default function ImportProgramsClient() {
           </DialogContent>
         </Dialog>
 
-        {/* Instructions Dialog */}
+        {/* Instructions Dialog - Moved here */}
         <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
           <DialogContent className="sm:max-w-lg font-inter">
             <DialogClose asChild>
