@@ -23,6 +23,7 @@ export function SheetsImportDialog({ open, onOpenChange }: SheetsImportDialogPro
   const [imageLoaded, setImageLoaded] = useState(false)
   const [isPreloading, setIsPreloading] = useState(true)
   const { toast } = useToast()
+  const [shouldShowDialog, setShouldShowDialog] = useState(false)
 
   // Preload the image when dialog opens
   useEffect(() => {
@@ -45,8 +46,21 @@ export function SheetsImportDialog({ open, onOpenChange }: SheetsImportDialogPro
       if (savedSheetLinks) {
         setSavedLinks(JSON.parse(savedSheetLinks))
       }
+    } else {
+      // Reset states when dialog closes
+      setIsPreloading(true)
+      setImageLoaded(false)
     }
   }, [open])
+
+  // Control dialog visibility based on image loading
+  useEffect(() => {
+    if (open && imageLoaded && !isPreloading) {
+      setShouldShowDialog(true)
+    } else if (!open) {
+      setShouldShowDialog(false)
+    }
+  }, [open, imageLoaded, isPreloading])
 
   const handleImport = async () => {
     // Validate the URL
@@ -110,7 +124,7 @@ export function SheetsImportDialog({ open, onOpenChange }: SheetsImportDialogPro
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={shouldShowDialog} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">

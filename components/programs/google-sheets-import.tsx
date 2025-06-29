@@ -138,8 +138,12 @@ export function GoogleSheetsImport() {
   const handleSheetsImportDialogClose = (open: boolean) => {
     setShowImportDialog(open)
     if (!open) {
-      // After closing the instructions, automatically open the link input modal
-      setShowSheetLinkDialog(true)
+      // Only open the link input dialog if the user hasn't permanently dismissed it
+      const dontShowAgain = localStorage.getItem("dontShowSheetsInstructions") === "true"
+      if (!dontShowAgain) {
+        // After closing the instructions, automatically open the link input modal
+        setShowSheetLinkDialog(true)
+      }
     }
   }
 
