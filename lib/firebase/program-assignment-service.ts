@@ -1,36 +1,55 @@
-import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
+import { getFirebaseAdminFirestore } from "./firebase-admin"
+import { type AppError, ErrorType, createError, logError } from "@/lib/utils/error-handler"
 
-export const assignProgramToClient = async (userId: string, programId: string) => {
+export interface ProgramAssignment {
+  id?: string
+  programId: string
+  clientId: string
+  trainerId: string
+  assignedAt: Date
+  status: "active" | "completed" | "paused"
+  programData?: any
+}
+
+export async function assignProgramToClientService(
+  programId: string,
+  clientId: string,
+  trainerId: string,
+  programData: any,
+): Promise<{ success: boolean; error?: AppError; assignmentId?: string }> {
   try {
-    await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).set({
-      userId,
+    const db = getFirebaseAdminFirestore()
+
+    const assignment: ProgramAssignment = {
       programId,
+      clientId,
+      trainerId,
       assignedAt: new Date(),
-    })
-    return { success: true }
-  } catch (error) {
-    console.error("Error assigning program to user:", error)
-    return { success: false, error: error }
-  }
-}
+      status: "active",
+      programData,
+    }
 
-export const unassignProgramFromClient = async (userId: string, programId: string) => {
-  try {
-    await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).delete()
-    return { success: true }
-  } catch (error) {
-    console.error("Error unassigning program from user:", error)
-    return { success: false, error: error }
-  }
-}
+    const docRef = await db.collection("users").doc(trainerId).collection("program_assignments").add(assignment)
 
-export const getClientPrograms = async (userId: string) => {
-  try {
-    const snapshot = await getFirebaseAdminFirestore().collection("userPrograms").where("userId", "==", userId).get()
-    const programs = snapshot.docs.map((doc) => doc.data())
-    return { success: true, data: programs }
+    console.log(`Program ${programId} assigned to client ${clientId} with assignment ID: ${docRef.id}`)
+
+    return {
+      success: true,
+      assignmentId: docRef.id,
+    }
   } catch (error) {
-    console.error("Error getting user programs:", error)
-    return { success: false, error: error }
+    const appError = createError(
+      ErrorType.DB_WRITE_FAILED,
+      error,
+      { programId, clientId, trainerId },
+      "Failed to assign program to client",
+    )
+
+    logError(appError)
+
+    return {
+      success: false,
+      error: appError,
+    }
   }
 }

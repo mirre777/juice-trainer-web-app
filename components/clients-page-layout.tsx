@@ -1,318 +1,112 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Filter, ChevronDown, PlusCircle, Share, ChevronUp } from "lucide-react"
-import { ClientsList } from "@/components/clients/clients-list"
-import { AddClientModal } from "@/components/clients/add-client-modal"
-import { ClientInvitationDialog } from "@/components/clients/client-invitation-dialog"
-import { useToast } from "@/hooks/use-toast"
-import { subscribeToClients, linkPendingClientsWithUsers } from "@/lib/firebase/client-service"
-import { getCookie } from "cookies-next"
-import type { Client } from "@/types/client"
-import { useSearchParams } from "next/navigation"
+import { ClientsList } from "./clients/clients-list"
+import { ClientsFilterBar } from "./clients/clients-filter-bar"
+import { AddClientModal } from "./clients/add-client-modal"
 import { Button } from "@/components/ui/button"
-import { handleClientDeleted } from "@/lib/client-utils"
+import { Plus, Users } from "lucide-react"
+import { useCurrentUser } from "@/hooks/use-current-user"
 
-interface ClientsPageLayoutProps {
-  isDemo?: boolean
+interface Client {
+  id: string
+  name: string
+  email: string
+  phone?: string
+  status: "active" | "inactive" | "pending"
+  joinedAt: Date
+  lastWorkout?: Date
+  totalWorkouts?: number
 }
 
-export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
-  const searchParams = useSearchParams()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState(() => {
-    if (typeof window !== "undefined") {
-      const storedFilter = localStorage.getItem("clientsStatusFilter")
-      console.log("[ClientsPageLayout] Initializing statusFilter. Stored:", storedFilter)
-      return storedFilter || "All"
-    }
-    return "All"
-  })
-  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(searchParams?.get("addClient") === "true")
-  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
-  const [prefillData, setPrefillData] = useState<{ name?: string } | null>(null)
-  const [clients, setClients] = useState<Client[]>([])
-  const [filteredClients, setFilteredClients] = useState<Client[]>([])
-  const [loading, setLoading] = useState(true)
-  const [allClientsExpanded, setAllClientsExpanded] = useState(false)
-  const [trainerCode, setTrainerCode] = useState<string>("")
-  const { toast } = useToast()
+interface ClientsPageLayoutProps {
+  initialClients?: Client[]
+}
 
-  // Fetch trainer's universal invite code
-  useEffect(() => {
-    const fetchTrainerCode = async () => {
-      try {
-        const response = await fetch("/api/auth/me")
-        if (response.ok) {
-          const userData = await response.json()
-          setTrainerCode(userData.universalInviteCode || "")
-        }
-      } catch (error) {
-        console.error("Error fetching trainer code:", error)
+export default function ClientsPageLayout({ initialClients = [] }: ClientsPageLayoutProps) {
+  const [clients, setClients] = useState<Client[]>(initialClients)
+  const [filteredClients, setFilteredClients] = useState<Client[]>(initialClients)
+  const [isAddClientOpen, setIsAddClientOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "pending">("all")
+  const { user, loading } = useCurrentUser()
+
+  const refreshClients = async () => {
+    try {
+      const response = await fetch("/api/clients")
+      if (response.ok) {
+        const data = await response.json()
+        setClients(data.clients || [])
       }
+    } catch (error) {
+      console.error("Failed to refresh clients:", error)
     }
+  }
 
-    if (!isDemo) {
-      fetchTrainerCode()
-    } else {
-      setTrainerCode("DEMO123")
-    }
-  }, [isDemo])
-
-  // Check if we should open the add client modal from URL parameters
   useEffect(() => {
-    if (!searchParams) return
-
-    const addClient = searchParams.get("addClient")
-    if (addClient === "true") {
-      // Get prefill data from URL parameters
-      const name = searchParams.get("name")
-      if (name) {
-        setPrefillData({ name })
-      }
+    if (user && !loading) {
+      refreshClients()
     }
-  }, [searchParams])
+  }, [user, loading])
 
-  // Set up real-time listener for clients
   useEffect(() => {
-    setLoading(true)
-
-    const trainerId = getCookie("user_id") as string
-    // For demo mode, use a fixed ID
-    const effectiveTrainerId = isDemo ? "demo-trainer-id" : trainerId
-
-    if (!effectiveTrainerId) {
-      setClients([])
-      setFilteredClients([])
-      setLoading(false)
-      return
-    }
-
-    console.log("Setting up real-time client subscription for trainer:", effectiveTrainerId)
-
-    // Run the linking process immediately when the component mounts
-    if (!isDemo) {
-      console.log("[ClientsPageLayout] Running initial client linking process")
-      linkPendingClientsWithUsers(effectiveTrainerId)
-        .then(() => {
-          console.log("[ClientsPageLayout] Completed initial client linking")
-        })
-        .catch((error) => {
-          console.error("[ClientsPageLayout] Error in initial client linking:", error)
-        })
-    }
-
-    // Set up the real-time listener
-    const unsubscribe = subscribeToClients(effectiveTrainerId, (updatedClients, error) => {
-      if (error) {
-        console.error("Error in client subscription:", error)
-        toast({
-          title: "Error",
-          description: "Failed to update clients in real-time. Please refresh the page.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      console.log("Received real-time client update:", updatedClients.length, "clients")
-
-      // Add demo data if needed
-      const clientsWithDemoData = isDemo
-        ? updatedClients.map((client) => ({
-            ...client,
-            progress: Math.floor(Math.random() * 100),
-            sessions: {
-              completed: Math.floor(Math.random() * 10),
-              total: 10,
-            },
-            completion: Math.floor(Math.random() * 100),
-            notes: client.notes || "Client is making good progress.",
-            lastWorkout: {
-              name: "Full Body Workout",
-              date: "2 days ago",
-              completion: 85,
-            },
-            metrics: [
-              {
-                name: "Weight",
-                value: `${70 + Math.floor(Math.random() * 20)}kg`,
-                change: "-2.5kg",
-              },
-              {
-                name: "Body Fat",
-                value: `${15 + Math.floor(Math.random() * 10)}%`,
-                change: "-1.2%",
-              },
-            ],
-          }))
-        : updatedClients
-
-      setClients(clientsWithDemoData)
-      setLoading(false)
-
-      // Run the linking process after receiving client updates
-      // This ensures we check for any new users that might match our clients
-      if (!isDemo) {
-        console.log("[ClientsPageLayout] Running client linking after update")
-        linkPendingClientsWithUsers(effectiveTrainerId)
-          .then(() => {
-            console.log("[ClientsPageLayout] Completed client linking after update")
-          })
-          .catch((error) => {
-            console.error("[ClientsPageLayout] Error in client linking after update:", error)
-          })
-      }
-    })
-
-    // Clean up the subscription when the component unmounts
-    return () => {
-      console.log("Cleaning up client subscription")
-      unsubscribe()
-    }
-  }, [isDemo, toast])
-
-  // Handle search and filter
-  useEffect(() => {
-    let result = [...clients]
+    let filtered = clients
 
     // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      result = result.filter(
+    if (searchTerm) {
+      filtered = filtered.filter(
         (client) =>
-          client.name?.toLowerCase().includes(query) ||
-          client.email?.toLowerCase().includes(query) ||
-          client.notes?.toLowerCase().includes(query),
+          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.email.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
 
     // Apply status filter
-    if (statusFilter !== "All") {
-      result = result.filter((client) => client.status === statusFilter)
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((client) => client.status === statusFilter)
     }
 
-    setFilteredClients(result)
-  }, [searchQuery, statusFilter, clients])
+    setFilteredClients(filtered)
+  }, [clients, searchTerm, statusFilter])
 
-  // Effect to save statusFilter to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      console.log("[ClientsPageLayout] Saving statusFilter to localStorage:", statusFilter)
-      localStorage.setItem("clientsStatusFilter", statusFilter)
-    }
-  }, [statusFilter])
-
-  const handleStatusChange = (status: string) => {
-    console.log("[ClientsPageLayout] handleStatusChange called. New status:", status)
-    setStatusFilter(status)
-  }
-
-  const handleToggleAll = () => {
-    setAllClientsExpanded((prev) => !prev)
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      </div>
+    )
   }
 
   return (
-    <div>
-      <div className="pb-6"></div>
-
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        {/* Search */}
-        <div className="relative w-full sm:w-auto">
-          <input
-            type="text"
-            placeholder="Search clients..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full sm:w-[300px] border border-gray-200 rounded-lg"
-          />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        </div>
-
-        <div className="flex flex-wrap gap-3 w-full sm:w-auto">
-          {/* Status Filter */}
-          <div className="relative">
-            <div className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <span className="text-sm">Status:</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="appearance-none bg-transparent pr-8 text-sm focus:outline-none"
-              >
-                <option value="All">All</option>
-                <option value="Active">Active</option>
-                <option value="On Hold">On Hold</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Pending">Pending</option>
-                <option value="Accepted Invitation">Accepted Invitation</option>
-              </select>
-              <ChevronDown className="h-4 w-4 text-gray-500 absolute right-3" />
-            </div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <Users className="h-8 w-8 text-blue-600" />
+          <div>
+            <h1 className="text-3xl font-bold">Clients</h1>
+            <p className="text-gray-600">{clients.length} total clients</p>
           </div>
-
-          {/* Toggle All Button */}
-          <button
-            onClick={handleToggleAll}
-            className="px-4 py-2 border border-gray-200 rounded-lg flex items-center gap-2"
-          >
-            {allClientsExpanded ? (
-              <ChevronUp className="h-4 w-4 text-gray-500" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500" />
-            )}
-            <span className="text-sm">{allClientsExpanded ? "Collapse All" : "Expand All"}</span>
-          </button>
-
-          {/* Show Code Button */}
-          <Button
-            onClick={() => setIsInviteDialogOpen(true)}
-            variant="outline"
-            className="border-gray-200 text-gray-700 hover:bg-gray-50"
-          >
-            <Share className="mr-2 h-4 w-4" />
-            Show Code
-          </Button>
-
-          {/* Add New Client */}
-          <Button
-            onClick={() => setIsAddClientModalOpen(true)}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-            data-add-client-button="true"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Client
-          </Button>
         </div>
+        <Button onClick={() => setIsAddClientOpen(true)} className="flex items-center gap-2">
+          <Plus className="h-4 w-4" />
+          Add Client
+        </Button>
       </div>
 
-      {/* Clients List */}
-      <ClientsList
-        clients={filteredClients}
-        allClientsExpanded={allClientsExpanded}
-        isDemo={isDemo}
-        loading={loading}
-        onClientDeleted={handleClientDeleted}
-        showInviteActions={false}
+      <ClientsFilterBar
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        clientCount={filteredClients.length}
       />
 
-      {/* Add Client Modal */}
-      <AddClientModal
-        isOpen={isAddClientModalOpen}
-        onClose={() => setIsAddClientModalOpen(false)}
-        isDemo={isDemo}
-        prefillData={prefillData}
-      />
+      <ClientsList clients={filteredClients} onClientUpdate={refreshClients} />
 
-      {/* Universal Invite Dialog */}
-      {trainerCode && (
-        <ClientInvitationDialog
-          isOpen={isInviteDialogOpen}
-          onClose={() => setIsInviteDialogOpen(false)}
-          client={{ id: "universal", name: "your clients" }}
-          inviteCode={trainerCode}
-          isReinvite={false}
-        />
-      )}
+      <AddClientModal open={isAddClientOpen} onOpenChange={setIsAddClientOpen} onClientAdded={refreshClients} />
     </div>
   )
 }
+
+// Named export for compatibility
+export { ClientsPageLayout }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { ClientCalendarPage } from "./client-page"
+import { CalendarPageLayoutClient } from "@/components/calendar/calendar-page-layout-client"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function CalendarPage() {
   return (
     <ProtectedRoute requiredRole="trainer">
-      <ClientCalendarPage />
+      <CalendarPageLayoutClient />
     </ProtectedRoute>
   )
 }
