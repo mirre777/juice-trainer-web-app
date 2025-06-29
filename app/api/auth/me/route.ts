@@ -1,34 +1,20 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { auth } from "@/lib/firebase/firebase"
-
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-export async function GET(request: NextRequest) {
+import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
+
+export async function GET() {
   try {
     console.log("🚀 Starting /api/auth/me request")
 
     const cookieStore = cookies()
-    const authToken =
-      cookieStore.get("auth_token")?.value || cookieStore.get("session")?.value || cookieStore.get("authToken")?.value
     const userId = cookieStore.get("user_id")?.value
     console.log("🆔 User ID from cookie:", userId)
-
-    if (!authToken) {
-      return NextResponse.json({ error: "No authentication token found" }, { status: 401 })
-    }
 
     if (!userId) {
       console.log("❌ No user_id in cookies")
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
-
-    // Verify the token with Firebase
-    const decodedToken = await auth.verifyIdToken(authToken)
-
-    if (!decodedToken) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
     try {

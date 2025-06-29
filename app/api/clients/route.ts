@@ -1,103 +1,57 @@
+// app/api/clients/route.ts
 import { type NextRequest, NextResponse } from "next/server"
+import { initializeFirebaseAdmin, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
-import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
+import { createError, ErrorType, logError } from "@/lib/utils/error-handler"
 
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
+// Initialize Firebase Admin SDK if not already done
+initializeFirebaseAdmin()
 
 export async function GET(request: NextRequest) {
+  console.log("[API/clients] Received GET request.")
   try {
-    console.log("🚀 Starting /api/clients request")
-
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
-    console.log("🆔 User ID from cookie:", userId)
+    console.log("[API/clients] User ID from cookie:", userId)
 
     if (!userId) {
-      console.log("❌ No user_id in cookies")
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
-
-    try {
-      console.log("🔍 Querying Firestore for clients...")
-
-      // Query clients where trainerId matches the current user
-      const clientsRef = collection(db, "clients")
-      const q = query(clientsRef, where("trainerId", "==", userId))
-      const querySnapshot = await getDocs(q)
-
-      const clients: any[] = []
-      querySnapshot.forEach((doc) => {
-        clients.push({
-          id: doc.id,
-          ...doc.data(),
-        })
-      })
-
-      console.log("✅ Found clients:", clients.length)
-      return NextResponse.json(clients)
-    } catch (firestoreError: any) {
-      console.error("💥 Firestore error:", firestoreError)
-      return NextResponse.json(
-        {
-          error: "Database error",
-          details: firestoreError?.message || "Failed to fetch clients",
-        },
-        { status: 500 },
+      const error = createError(
+        ErrorType.API_UNAUTHORIZED,
+        null,
+        { function: "GET /api/clients" },
+        "Unauthorized: No user ID found.",
       )
+      logError(error)
+      return NextResponse.json({ error: error.message }, { status: 401 })
     }
+
+    console.log(`[API/clients] Fetching clients for trainer: ${userId}`)
+
+    // Use the Firebase Admin Firestore instance
+    const adminDb = getFirebaseAdminFirestore()
+    const clientsRef = adminDb.collection(`users/${userId}/clients`)
+    const querySnapshot = await clientsRef.get()
+
+    const clients = querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+
+    console.log(`[API/clients] Found ${clients.length} clients for trainer ${userId}.`)
+    console.log("[API/clients] Clients data being sent:", JSON.stringify(clients, null, 2).substring(0, 500) + "...")
+
+    return NextResponse.json({ clients }, { status: 200 })
   } catch (error: any) {
-    console.error("💥 Unexpected error:", error)
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error?.message || "Unknown error",
-      },
-      { status: 500 },
-    )
-  }
-}
+    console.error("[API/clients] Error fetching clients:", error)
+    let errorMessage = "An unexpected error occurred."
+    const statusCode = 500
 
-export async function POST(request: Request) {
-  try {
-    console.log("🚀 Starting POST /api/clients request")
-
-    const cookieStore = cookies()
-    const userId = cookieStore.get("user_id")?.value
-
-    if (!userId) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    if (error instanceof Error) {
+      errorMessage = error.message
     }
 
-    const body = await request.json()
-    console.log("📝 Request body:", body)
-
-    // Add the client to Firestore
-    const clientsRef = collection(db, "clients")
-
-    const newClient = {
-      ...body,
-      trainerId: userId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    const docRef = await addDoc(clientsRef, newClient)
-    console.log("✅ Client created with ID:", docRef.id)
-
-    return NextResponse.json({
-      id: docRef.id,
-      ...newClient,
-    })
-  } catch (error: any) {
-    console.error("💥 Error creating client:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to create client",
-        details: error?.message || "Unknown error",
-      },
-      { status: 500 },
-    )
+    const appError = createError(ErrorType.API_SERVER_ERROR, error, { function: "GET /api/clients" }, errorMessage)
+    logError(appError)
+    return NextResponse.json({ error: appError.message }, { status: statusCode })
   }
 }
