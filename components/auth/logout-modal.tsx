@@ -3,88 +3,70 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { useToast } from "@/hooks/use-toast"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
 interface LogoutModalProps {
-  isOpen: boolean
-  onClose: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-export function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
+export function LogoutModal({ open, onOpenChange }: LogoutModalProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const router = useRouter()
-  const { toast } = useToast()
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true)
 
       const response = await fetch("/api/auth/logout", {
-        method: "POST",
+        method: "GET",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
       })
 
-      if (!response.ok) {
-        throw new Error("Logout failed")
+      if (response.ok) {
+        // Clear any client-side storage
+        if (typeof window !== "undefined") {
+          localStorage.clear()
+          sessionStorage.clear()
+        }
+
+        // Close modal and redirect
+        onOpenChange(false)
+        router.push("/login")
+        router.refresh()
+      } else {
+        console.error("Logout failed")
       }
-
-      // Clear any client-side storage
-      if (typeof window !== "undefined") {
-        localStorage.clear()
-        sessionStorage.clear()
-      }
-
-      toast({
-        title: "Logged out successfully",
-        description: "You have been logged out of your account.",
-      })
-
-      // Redirect to login page
-      router.push("/login")
-      router.refresh()
     } catch (error) {
       console.error("Logout error:", error)
-      toast({
-        title: "Logout failed",
-        description: "There was an error logging you out. Please try again.",
-        variant: "destructive",
-      })
     } finally {
       setIsLoggingOut(false)
-      onClose()
     }
   }
 
   return (
-    <AlertDialog open={isOpen} onOpenChange={onClose}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to log out? You will need to sign in again to access your account.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={onClose} disabled={isLoggingOut}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirm Logout</DialogTitle>
+          <DialogDescription>Are you sure you want to log out of your account?</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoggingOut}>
             Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction onClick={handleLogout} disabled={isLoggingOut} className="bg-red-600 hover:bg-red-700">
-            {isLoggingOut ? "Logging out..." : "Logout"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          </Button>
+          <Button onClick={handleLogout} disabled={isLoggingOut}>
+            {isLoggingOut ? "Logging out..." : "Log Out"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
