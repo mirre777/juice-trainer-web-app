@@ -2,7 +2,7 @@ import type React from "react"
 import { Sen, Inter } from "next/font/google"
 import ClientLayout from "./ClientLayout"
 import { DemoBanner } from "@/components/demo-banner"
-import { ToastProvider } from "@/components/ui/toast-context"
+import { ToastProvider } from "@/components/toast-provider"
 import "./globals.css"
 
 // Initialize the Sen font

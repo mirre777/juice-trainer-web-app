@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getFirebaseAdminAuth, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
 
-// Mark this route as dynamic
+// Force dynamic rendering for this route
 export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
