@@ -2,77 +2,74 @@
 
 import { assignProgramToClientService } from "@/lib/firebase/program-assignment-service"
 import { cookies } from "next/headers"
-import type { Client } from "@/types/client"
+import { getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
 
 export async function assignProgramToClient(
-  client: Client,
-  programData: any,
-): Promise<{ success: boolean; message: string }> {
+  clientId: string,
+  programData: {
+    id: string
+    name: string
+    weeks: any[]
+  },
+  notes?: string,
+) {
   try {
+    // Get the session cookie
     const cookieStore = cookies()
-    const trainerId = cookieStore.get("user_id")?.value
+    const sessionCookie = cookieStore.get("session")?.value
 
-    if (!trainerId) {
-      return {
-        success: false,
-        message: "Authentication required",
-      }
+    if (!sessionCookie) {
+      throw new Error("No session found")
     }
 
-    await assignProgramToClientService(trainerId, client, programData)
+    // Verify the session cookie
+    const auth = getFirebaseAdminAuth()
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    const trainerId = decodedClaims.uid
+
+    // Assign the program to the client
+    const assignmentId = await assignProgramToClientService(trainerId, clientId, programData, notes)
 
     return {
       success: true,
-      message: `Program assigned to ${client.name} successfully!`,
+      assignmentId,
+      message: "Program assigned successfully",
     }
   } catch (error) {
     console.error("Error in assignProgramToClient action:", error)
     return {
       success: false,
-      message: "Failed to assign program. Please try again.",
+      error: error instanceof Error ? error.message : "Failed to assign program",
     }
   }
 }
 
-export async function assignProgramToMultipleClients(
-  clients: Client[],
-  programData: any,
-): Promise<{ success: boolean; message: string; results: Array<{ clientName: string; success: boolean }> }> {
+export async function getProgramAssignments(clientId?: string) {
   try {
+    // Get the session cookie
     const cookieStore = cookies()
-    const trainerId = cookieStore.get("user_id")?.value
+    const sessionCookie = cookieStore.get("session")?.value
 
-    if (!trainerId) {
-      return {
-        success: false,
-        message: "Authentication required",
-        results: [],
-      }
+    if (!sessionCookie) {
+      throw new Error("No session found")
     }
 
-    const results = await Promise.allSettled(
-      clients.map((client) => assignProgramToClientService(trainerId, client, programData)),
-    )
+    // Verify the session cookie
+    const auth = getFirebaseAdminAuth()
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    const trainerId = decodedClaims.uid
 
-    const clientResults = results.map((result, index) => ({
-      clientName: clients[index].name,
-      success: result.status === "fulfilled",
-    }))
-
-    const successCount = clientResults.filter((r) => r.success).length
-    const totalCount = clients.length
-
+    // This would fetch assignments from the database
+    // For now, return empty array
     return {
-      success: successCount > 0,
-      message: `Successfully assigned program to ${successCount}/${totalCount} clients`,
-      results: clientResults,
+      success: true,
+      assignments: [],
     }
   } catch (error) {
-    console.error("Error in assignProgramToMultipleClients action:", error)
+    console.error("Error in getProgramAssignments action:", error)
     return {
       success: false,
-      message: "Failed to assign programs. Please try again.",
-      results: [],
+      error: error instanceof Error ? error.message : "Failed to get assignments",
     }
   }
 }

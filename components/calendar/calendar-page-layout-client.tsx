@@ -66,7 +66,7 @@ interface CalendarPageLayoutProps {
   isDemo?: boolean
 }
 
-export function CalendarPageLayoutClient({ isDemo = true }: CalendarPageLayoutProps) {
+export default function CalendarPageLayoutClient({ isDemo = true }: CalendarPageLayoutProps) {
   const [isNewSessionDialogOpen, setIsNewSessionDialogOpen] = useState(false)
   const [currentMonth, setCurrentMonth] = useState("April 2025") // This would be dynamic in a real app
   const [view, setView] = useState<"calendar" | "list">("calendar")

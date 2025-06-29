@@ -1,4 +1,4 @@
-import OverviewPageClient from "./OverviewPageClient"
+import { OverviewPageClient } from "./OverviewPageClient"
 import { Skeleton } from "@/components/ui/skeleton"
 
 function OverviewSkeleton() {

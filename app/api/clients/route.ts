@@ -1,26 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getFirebaseAdminAuth, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
-import { db } from "@/lib/firebase/firebase"
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 
 export async function GET(request: NextRequest) {
   try {
+    // Get the session cookie
     const cookieStore = cookies()
-    const trainerId = cookieStore.get("user_id")?.value
+    const sessionCookie = cookieStore.get("session")?.value
 
-    if (!trainerId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    // Query the clients collection for this trainer
-    const clientsRef = collection(db, `users/${trainerId}/clients`)
-    const clientsQuery = query(clientsRef, where("deleted", "!=", true), orderBy("name", "asc"))
+    // Verify the session cookie
+    const auth = getFirebaseAdminAuth()
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    const userId = decodedClaims.uid
 
-    const snapshot = await getDocs(clientsQuery)
-    const clients = snapshot.docs.map((doc) => ({
+    // Get clients from Firestore
+    const db = getFirebaseAdminFirestore()
+    const clientsSnapshot = await db
+      .collection("users")
+      .doc(userId)
+      .collection("clients")
+      .where("deleted", "!=", true)
+      .get()
+
+    const clients = clientsSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }))
+
+    console.log(`Fetched ${clients.length} clients for user ${userId}`)
 
     return NextResponse.json({ clients })
   } catch (error) {

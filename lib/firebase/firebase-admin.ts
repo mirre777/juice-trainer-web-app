@@ -43,3 +43,6 @@ export const getFirebaseAdminAuth = () => {
   }
   return admin.auth()
 }
+
+// Export db as an alias for getFirebaseAdminFirestore
+export const db = getFirebaseAdminFirestore()
