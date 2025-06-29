@@ -1,55 +1,36 @@
-import { getFirebaseAdminFirestore } from "./firebase-admin"
-import { type AppError, ErrorType, createError, logError } from "@/lib/utils/error-handler"
+import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 
-export interface ProgramAssignment {
-  id?: string
-  programId: string
-  clientId: string
-  trainerId: string
-  assignedAt: Date
-  status: "active" | "completed" | "paused"
-  programData?: any
+export const assignProgramToClient = async (userId: string, programId: string) => {
+  try {
+    await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).set({
+      userId,
+      programId,
+      assignedAt: new Date(),
+    })
+    return { success: true }
+  } catch (error) {
+    console.error("Error assigning program to user:", error)
+    return { success: false, error: error }
+  }
 }
 
-export async function assignProgramToClientService(
-  programId: string,
-  clientId: string,
-  trainerId: string,
-  programData: any,
-): Promise<{ success: boolean; error?: AppError; assignmentId?: string }> {
+export const unassignProgramFromClient = async (userId: string, programId: string) => {
   try {
-    const db = getFirebaseAdminFirestore()
-
-    const assignment: ProgramAssignment = {
-      programId,
-      clientId,
-      trainerId,
-      assignedAt: new Date(),
-      status: "active",
-      programData,
-    }
-
-    const docRef = await db.collection("users").doc(trainerId).collection("program_assignments").add(assignment)
-
-    console.log(`Program ${programId} assigned to client ${clientId} with assignment ID: ${docRef.id}`)
-
-    return {
-      success: true,
-      assignmentId: docRef.id,
-    }
+    await getFirebaseAdminFirestore().collection("userPrograms").doc(`${userId}_${programId}`).delete()
+    return { success: true }
   } catch (error) {
-    const appError = createError(
-      ErrorType.DB_WRITE_FAILED,
-      error,
-      { programId, clientId, trainerId },
-      "Failed to assign program to client",
-    )
+    console.error("Error unassigning program from user:", error)
+    return { success: false, error: error }
+  }
+}
 
-    logError(appError)
-
-    return {
-      success: false,
-      error: appError,
-    }
+export const getClientPrograms = async (userId: string) => {
+  try {
+    const snapshot = await getFirebaseAdminFirestore().collection("userPrograms").where("userId", "==", userId).get()
+    const programs = snapshot.docs.map((doc) => doc.data())
+    return { success: true, data: programs }
+  } catch (error) {
+    console.error("Error getting user programs:", error)
+    return { success: false, error: error }
   }
 }

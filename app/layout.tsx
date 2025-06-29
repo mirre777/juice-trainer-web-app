@@ -2,7 +2,7 @@ import type React from "react"
 import { Sen, Inter } from "next/font/google"
 import ClientLayout from "./ClientLayout"
 import { DemoBanner } from "@/components/demo-banner"
-import { ToastProvider } from "@/components/toast-provider"
+import { ToastProvider } from "@/components/ui/toast-context"
 import "./globals.css"
 
 // Initialize the Sen font
@@ -34,5 +34,5 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 
 export const metadata = {
-  generator: "v0.dev",
-}
+      generator: 'v0.dev'
+    };

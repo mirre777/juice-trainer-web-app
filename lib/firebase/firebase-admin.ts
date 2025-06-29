@@ -1,3 +1,4 @@
+// lib/firebase/firebase-admin.ts
 import * as admin from "firebase-admin"
 
 let initialized = false
@@ -42,6 +43,3 @@ export const getFirebaseAdminAuth = () => {
   }
   return admin.auth()
 }
-
-// Export db as named export for compatibility
-export const db = getFirebaseAdminFirestore()

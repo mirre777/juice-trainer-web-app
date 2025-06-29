@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { ClientsPageLayout } from "@/components/clients-page-layout"
+import ClientPage from "./ClientPage"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function ClientsPage() {
   return (
     <ProtectedRoute requiredRole="trainer">
-      <ClientsPageLayout />
+      <ClientPage />
     </ProtectedRoute>
   )
 }
