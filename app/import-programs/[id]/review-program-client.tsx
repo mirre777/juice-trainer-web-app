@@ -5,42 +5,13 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, Send, Users, Calendar, Target } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ArrowLeft, Send, Users, Calendar, Clock, Target } from "lucide-react"
+import type { WorkoutProgram } from "@/types/workout-program"
+import { sendProgramToClient } from "@/app/actions/program-assignment-actions"
 import { toast } from "@/hooks/use-toast"
-import { assignProgramToClient } from "@/app/actions/program-assignment-actions"
-
-interface Exercise {
-  name: string
-  sets: string
-  reps: string
-  weight?: string
-  notes?: string
-  restTime?: string
-}
-
-interface Workout {
-  name: string
-  exercises: Exercise[]
-}
-
-interface Week {
-  weekNumber: number
-  workouts: Workout[]
-}
-
-interface WorkoutProgram {
-  id: string
-  name: string
-  description?: string
-  weeks: Week[]
-  totalWeeks: number
-  createdAt: string
-  status: "pending" | "approved" | "rejected"
-}
 
 interface Client {
   id: string
@@ -51,43 +22,42 @@ interface Client {
 
 interface ReviewProgramClientProps {
   program: WorkoutProgram
+  importId: string
 }
 
-export default function ReviewProgramClient({ program }: ReviewProgramClientProps) {
+export default function ReviewProgramClient({ program, importId }: ReviewProgramClientProps) {
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [isLoadingClients, setIsLoadingClients] = useState(false)
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isSending, setIsSending] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   const fetchClients = async () => {
-    console.log("[ReviewProgram] Starting to fetch clients...")
     setIsLoadingClients(true)
     try {
+      console.log("[ReviewProgram] Fetching clients...")
       const response = await fetch("/api/clients")
-      console.log("[ReviewProgram] API response status:", response.status)
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch clients: ${response.status}`)
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("[ReviewProgram] API response data:", data)
+      console.log("[ReviewProgram] API response:", data)
 
       if (data.clients && Array.isArray(data.clients)) {
         setClients(data.clients)
-        console.log("[ReviewProgram] Set clients:", data.clients.length)
+        console.log("[ReviewProgram] Loaded clients:", data.clients.length)
       } else {
         console.error("[ReviewProgram] Invalid response format:", data)
         setClients([])
       }
     } catch (error) {
       console.error("[ReviewProgram] Error fetching clients:", error)
-      toast({
+      toast.error({
         title: "Error",
         description: "Failed to load clients. Please try again.",
-        variant: "destructive",
       })
       setClients([])
     } finally {
@@ -95,61 +65,57 @@ export default function ReviewProgramClient({ program }: ReviewProgramClientProp
     }
   }
 
-  const handleSendToClient = async () => {
-    if (!selectedClient) {
-      toast({
-        title: "No client selected",
-        description: "Please select a client to send the program to.",
-        variant: "destructive",
-      })
-      return
-    }
+  const handleSendToClient = async (client: Client) => {
+    if (!client || !program) return
 
     setIsSending(true)
+    setSelectedClient(client)
+
     try {
-      await assignProgramToClient(program.id, selectedClient.id)
+      console.log("[ReviewProgram] Sending program to client:", client.id)
+      const result = await sendProgramToClient(program, client.id)
 
-      toast({
-        title: "Program sent successfully!",
-        description: `The program has been assigned to ${selectedClient.name}.`,
-      })
-
-      setIsDialogOpen(false)
-      setSelectedClient(null)
-
-      // Redirect to clients page or program list
-      router.push("/clients")
-    } catch (error) {
-      console.error("Error sending program:", error)
-      toast({
+      if (result.success) {
+        toast.success({
+          title: "Success!",
+          description: `Program sent to ${client.name} successfully.`,
+        })
+        setIsDialogOpen(false)
+        // Optionally redirect or update UI
+      } else {
+        toast.error({
+          title: "Error",
+          description: result.message || "Failed to send program to client.",
+        })
+      }
+    } catch (error: any) {
+      console.error("[ReviewProgram] Error sending program:", error)
+      toast.error({
         title: "Error",
-        description: "Failed to send program. Please try again.",
-        variant: "destructive",
+        description: error.message || "An unexpected error occurred.",
       })
     } finally {
       setIsSending(false)
+      setSelectedClient(null)
     }
   }
 
-  const handleDialogOpen = (open: boolean) => {
-    setIsDialogOpen(open)
-    if (open) {
-      fetchClients()
-    }
+  const handleDialogOpen = () => {
+    setIsDialogOpen(true)
+    fetchClients()
   }
 
-  const totalExercises = program.weeks.reduce((total, week) => {
-    return (
-      total +
-      week.workouts.reduce((weekTotal, workout) => {
-        return weekTotal + workout.exercises.length
-      }, 0)
-    )
-  }, 0)
+  const totalExercises =
+    program.weeks?.reduce((total, week) => {
+      return (
+        total +
+        (week.routines?.reduce((weekTotal, routine) => {
+          return weekTotal + (routine.exercises?.length || 0)
+        }, 0) || 0)
+      )
+    }, 0) || 0
 
-  const totalWorkouts = program.weeks.reduce((total, week) => {
-    return total + week.workouts.length
-  }, 0)
+  const totalWeeks = program.weeks?.length || 0
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -159,45 +125,122 @@ export default function ReviewProgramClient({ program }: ReviewProgramClientProp
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
-        <div className="flex-1">
+        <div>
           <h1 className="text-2xl font-bold">{program.name}</h1>
-          {program.description && <p className="text-muted-foreground mt-1">{program.description}</p>}
+          <p className="text-muted-foreground">Review and send to client</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={handleDialogOpen}>
+      </div>
+
+      {/* Program Overview */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Program Overview
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">
+                <strong>{totalWeeks}</strong> weeks
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">
+                <strong>{totalExercises}</strong> total exercises
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">
+                <strong>{program.weeks?.reduce((total, week) => total + (week.routines?.length || 0), 0) || 0}</strong>{" "}
+                workouts
+              </span>
+            </div>
+          </div>
+
+          {program.description && <p className="text-sm text-muted-foreground">{program.description}</p>}
+        </CardContent>
+      </Card>
+
+      {/* Program Details */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Program Structure</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-96">
+            <div className="space-y-4">
+              {program.weeks?.map((week, weekIndex) => (
+                <div key={weekIndex} className="border rounded-lg p-4">
+                  <h3 className="font-semibold mb-3">Week {weekIndex + 1}</h3>
+                  <div className="space-y-3">
+                    {week.routines?.map((routine, routineIndex) => (
+                      <div key={routineIndex} className="pl-4 border-l-2 border-muted">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium">{routine.name}</h4>
+                          <Badge variant="secondary">{routine.exercises?.length || 0} exercises</Badge>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {routine.exercises?.slice(0, 4).map((exercise, exerciseIndex) => (
+                            <div key={exerciseIndex} className="text-sm text-muted-foreground">
+                              • {exercise.name}
+                            </div>
+                          ))}
+                          {(routine.exercises?.length || 0) > 4 && (
+                            <div className="text-sm text-muted-foreground">
+                              ... and {(routine.exercises?.length || 0) - 4} more
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Actions */}
+      <div className="flex gap-4">
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
+            <Button onClick={handleDialogOpen} className="flex items-center gap-2">
               <Send className="h-4 w-4" />
               Send to Client
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Send Program to Client</DialogTitle>
+              <DialogTitle>Select Client</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="py-4">
               {isLoadingClients ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               ) : clients.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  No clients found. Add clients first to send programs.
+                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No clients found</p>
+                  <p className="text-sm">Add clients to send programs to them.</p>
                 </div>
               ) : (
-                <ScrollArea className="max-h-60">
+                <ScrollArea className="max-h-96">
                   <div className="space-y-2">
                     {clients.map((client) => (
                       <div
                         key={client.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedClient?.id === client.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:bg-muted/50"
-                        }`}
-                        onClick={() => setSelectedClient(client)}
+                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => handleSendToClient(client)}
                       >
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={client.avatar || "/placeholder.svg"} />
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={client.avatar || "/placeholder.svg"} alt={client.name} />
                           <AvatarFallback>
                             {client.name
                               .split(" ")
@@ -206,97 +249,25 @@ export default function ReviewProgramClient({ program }: ReviewProgramClientProp
                               .toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1">
-                          <p className="font-medium">{client.name}</p>
-                          <p className="text-sm text-muted-foreground">{client.email}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{client.name}</p>
+                          <p className="text-sm text-muted-foreground truncate">{client.email}</p>
                         </div>
+                        {isSending && selectedClient?.id === client.id && (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        )}
                       </div>
                     ))}
                   </div>
                 </ScrollArea>
               )}
-              <div className="flex gap-2 pt-4">
-                <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button className="flex-1" onClick={handleSendToClient} disabled={!selectedClient || isSending}>
-                  {isSending ? "Sending..." : "Send Program"}
-                </Button>
-              </div>
             </div>
           </DialogContent>
         </Dialog>
-      </div>
 
-      {/* Program Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <Calendar className="h-8 w-8 text-primary" />
-            <div>
-              <p className="text-2xl font-bold">{program.totalWeeks}</p>
-              <p className="text-sm text-muted-foreground">Weeks</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <Target className="h-8 w-8 text-primary" />
-            <div>
-              <p className="text-2xl font-bold">{totalWorkouts}</p>
-              <p className="text-sm text-muted-foreground">Workouts</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <Users className="h-8 w-8 text-primary" />
-            <div>
-              <p className="text-2xl font-bold">{totalExercises}</p>
-              <p className="text-sm text-muted-foreground">Exercises</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Program Content */}
-      <div className="space-y-6">
-        {program.weeks.map((week) => (
-          <Card key={week.weekNumber}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                Week {week.weekNumber}
-                <Badge variant="secondary">{week.workouts.length} workouts</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {week.workouts.map((workout, workoutIndex) => (
-                <div key={workoutIndex}>
-                  <h4 className="font-semibold text-lg mb-3">{workout.name}</h4>
-                  <div className="space-y-2">
-                    {workout.exercises.map((exercise, exerciseIndex) => (
-                      <div key={exerciseIndex} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div className="flex-1">
-                          <p className="font-medium">{exercise.name}</p>
-                          {exercise.notes && <p className="text-sm text-muted-foreground mt-1">{exercise.notes}</p>}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span>{exercise.sets} sets</span>
-                          <span>{exercise.reps} reps</span>
-                          {exercise.weight && <span>{exercise.weight}</span>}
-                          {exercise.restTime && (
-                            <span className="text-muted-foreground">Rest: {exercise.restTime}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {workoutIndex < week.workouts.length - 1 && <Separator className="my-4" />}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
+        <Button variant="outline" onClick={() => router.push("/import-programs")}>
+          Back to Imports
+        </Button>
       </div>
     </div>
   )

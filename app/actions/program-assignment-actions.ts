@@ -1,6 +1,6 @@
 "use server"
 
-import { assignProgramToClient } from "@/lib/firebase/program-assignment-service"
+import { assignProgramToClient as assignProgramService } from "@/lib/firebase/program-assignment-service"
 import type { WorkoutProgram } from "@/types/workout-program"
 import { getFirebaseAdminAuth, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
@@ -32,7 +32,7 @@ export async function sendProgramToClient(programData: WorkoutProgram, clientId:
 
     console.log(`[Server Action] Trainer ${trainerId} attempting to assign program to client ${clientId}`)
 
-    const result = await assignProgramToClient(trainerId, clientId, programData)
+    const result = await assignProgramService(trainerId, clientId, programData)
 
     if (result.success) {
       return { success: true, message: "Program successfully assigned to client!", programId: result.programId }
@@ -49,3 +49,6 @@ export async function sendProgramToClient(programData: WorkoutProgram, clientId:
     return { success: false, message: error.message || "An unexpected error occurred during program assignment." }
   }
 }
+
+// Export assignProgramToClient as a named export for compatibility
+export const assignProgramToClient = sendProgramToClient

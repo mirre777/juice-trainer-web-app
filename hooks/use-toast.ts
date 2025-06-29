@@ -56,12 +56,28 @@ export function useToast() {
     }
   }
 
-  const toast = {
+  const toastFunctions = {
     default: (props: Omit<Toast, "id" | "type">) => addToast({ ...props, type: "default" }),
     success: (props: Omit<Toast, "id" | "type">) => addToast({ ...props, type: "success" }),
     error: (props: Omit<Toast, "id" | "type">) => addToast({ ...props, type: "error" }),
     warning: (props: Omit<Toast, "id" | "type">) => addToast({ ...props, type: "warning" }),
   }
 
-  return { toasts, toast, dismissToast }
+  return { toasts, toast: toastFunctions, dismissToast }
+}
+
+// Export toast as a named export for compatibility
+export const toast = {
+  default: (props: { title: string; description?: string; duration?: number }) => {
+    console.log("Toast:", props)
+  },
+  success: (props: { title: string; description?: string; duration?: number }) => {
+    console.log("Success toast:", props)
+  },
+  error: (props: { title: string; description?: string; duration?: number }) => {
+    console.log("Error toast:", props)
+  },
+  warning: (props: { title: string; description?: string; duration?: number }) => {
+    console.log("Warning toast:", props)
+  },
 }
