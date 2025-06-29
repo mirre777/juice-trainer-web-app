@@ -1,27 +1,16 @@
-import { Suspense } from "react"
-import ClientPage from "./ClientPage"
-import { Skeleton } from "@/components/ui/skeleton"
+import type { Metadata } from "next"
+import { ClientsPageLayout } from "@/components/clients-page-layout"
+import { ProtectedRoute } from "@/components/auth/protected-route"
 
-function ClientsSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-10 w-32" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[...Array(6)].map((_, i) => (
-          <Skeleton key={i} className="h-48" />
-        ))}
-      </div>
-    </div>
-  )
+export const metadata: Metadata = {
+  title: "Clients | Juice",
+  description: "Manage your coaching clients",
 }
 
 export default function ClientsPage() {
   return (
-    <Suspense fallback={<ClientsSkeleton />}>
-      <ClientPage />
-    </Suspense>
+    <ProtectedRoute requiredRole="trainer">
+      <ClientsPageLayout />
+    </ProtectedRoute>
   )
 }

@@ -1,23 +1,16 @@
-import { Suspense } from "react"
-import { ClientCalendarPage } from "./client-page"
-import { Skeleton } from "@/components/ui/skeleton"
+import type { Metadata } from "next"
+import { CalendarPageLayoutClient } from "@/components/calendar/calendar-page-layout-client"
+import { ProtectedRoute } from "@/components/auth/protected-route"
 
-function CalendarSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-10 w-32" />
-      </div>
-      <Skeleton className="h-96" />
-    </div>
-  )
+export const metadata: Metadata = {
+  title: "Calendar | Juice",
+  description: "Schedule and manage your coaching sessions",
 }
 
 export default function CalendarPage() {
   return (
-    <Suspense fallback={<CalendarSkeleton />}>
-      <ClientCalendarPage />
-    </Suspense>
+    <ProtectedRoute requiredRole="trainer">
+      <CalendarPageLayoutClient />
+    </ProtectedRoute>
   )
 }
