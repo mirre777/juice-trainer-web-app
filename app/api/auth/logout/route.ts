@@ -1,15 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    const cookieStore = cookies()
-
-    // Create response
-    const response = NextResponse.json({ message: "Logged out successfully" }, { status: 200 })
+    const response = NextResponse.json({ success: true })
 
     // Clear all possible authentication cookies
-    const cookiesToClear = ["session", "auth_token", "authToken", "firebase-auth-token", "__session"]
+    const cookiesToClear = ["auth_token", "session", "authToken", "__session"]
 
     cookiesToClear.forEach((cookieName) => {
       response.cookies.set(cookieName, "", {
@@ -24,6 +20,6 @@ export async function POST(request: NextRequest) {
     return response
   } catch (error) {
     console.error("Logout error:", error)
-    return NextResponse.json({ error: "Internal server error during logout" }, { status: 500 })
+    return NextResponse.json({ error: "Logout failed" }, { status: 500 })
   }
 }

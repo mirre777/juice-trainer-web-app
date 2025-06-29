@@ -1,40 +1,37 @@
-import { NextResponse } from "next/server"
-import { getFirebaseAdminAuth, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { auth } from "@/lib/firebase/firebase"
 
-// Initialize Firebase Admin
-initializeFirebaseAdmin()
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const sessionCookie = cookies().get("session")?.value
-    const authToken = cookies().get("auth_token")?.value
+    const cookieStore = cookies()
 
-    if (!sessionCookie && !authToken) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    // Try to get auth token from cookies
+    const authToken =
+      cookieStore.get("auth_token")?.value || cookieStore.get("session")?.value || cookieStore.get("authToken")?.value
+
+    if (!authToken) {
+      return NextResponse.json({ error: "No authentication token found" }, { status: 401 })
     }
 
-    let decodedToken
+    // Verify the token with Firebase
+    const decodedToken = await auth.verifyIdToken(authToken)
 
-    try {
-      if (sessionCookie) {
-        decodedToken = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
-      } else if (authToken) {
-        decodedToken = await getFirebaseAdminAuth().verifyIdToken(authToken)
-      }
-    } catch (error) {
+    if (!decodedToken) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
+    // Return user data
     return NextResponse.json({
-      user: {
-        uid: decodedToken.uid,
-        email: decodedToken.email,
-        role: decodedToken.role || "client",
-      },
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+      name: decodedToken.name || decodedToken.email?.split("@")[0],
+      displayName: decodedToken.name || decodedToken.email?.split("@")[0],
+      role: decodedToken.role || "trainer",
+      emailVerified: decodedToken.email_verified,
     })
   } catch (error) {
-    console.error("Auth check error:", error)
-    return NextResponse.json({ error: "Authentication check failed" }, { status: 500 })
+    console.error("Auth verification error:", error)
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 })
   }
 }
