@@ -1,1059 +1,303 @@
 "use client"
 
-import type React from "react"
-import {
-  ChevronLeft,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Trash2,
-  Calendar,
-  RotateCcw,
-  Plus,
-  Check,
-  User,
-  MessageSquare,
-  Info,
-  Save,
-  Send,
-  Loader2,
-  ChevronUp,
-} from "lucide-react"
-import { useState, useEffect, useMemo } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card } from "@/components/ui/card"
-import { doc, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
-import { useCurrentUser } from "@/hooks/use-current-user"
-import { sendProgramToClient } from "@/app/actions/program-assignment-actions"
-import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
-import type { Client } from "@/types/client"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { ArrowLeft, Send, Users, Calendar, Target } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { toast } from "@/hooks/use-toast"
+import { assignProgramToClient } from "@/app/actions/program-assignment-actions"
 
-interface ReviewProgramClientProps {
-  importData: any
+interface Exercise {
+  name: string
+  sets: string
+  reps: string
+  weight?: string
+  notes?: string
+  restTime?: string
 }
 
-export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
-  console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
+interface Workout {
+  name: string
+  exercises: Exercise[]
+}
+
+interface Week {
+  weekNumber: number
+  workouts: Workout[]
+}
+
+interface WorkoutProgram {
+  id: string
+  name: string
+  description?: string
+  weeks: Week[]
+  totalWeeks: number
+  createdAt: string
+  status: "pending" | "approved" | "rejected"
+}
+
+interface Client {
+  id: string
+  name: string
+  email: string
+  avatar?: string
+}
+
+interface ReviewProgramClientProps {
+  program: WorkoutProgram
+}
+
+export default function ReviewProgramClient({ program }: ReviewProgramClientProps) {
   const router = useRouter()
-  const { toast } = useToast()
-  const { user: trainer, loading: isTrainerLoading } = useCurrentUser()
-
-  const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
-  const [currentWeek, setCurrentWeek] = useState(1)
-  const [isSaving, setIsSaving] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
-  const [showSendProgramDialog, setShowSendProgramDialog] = useState(false)
-  const [messageToClient, setMessageToClient] = useState("")
-  const [showSelectWeekDialog, setShowSelectWeekDialog] = useState(false)
-  const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
-  const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
-
   const [clients, setClients] = useState<Client[]>([])
-  const [loadingClients, setLoadingClients] = useState(false)
-  const [selectedClientId, setSelectedClientId] = useState<string>("")
-  const [isAssigning, setIsAssigning] = useState(false)
+  const [isLoadingClients, setIsLoadingClients] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [isSending, setIsSending] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  const clientNameForModal = selectedClientId
-    ? clients.find((c) => c.id === selectedClientId)?.name || "Selected Client"
-    : "Select a Client"
-  const dateForModal = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
-
-  console.log("[ReviewProgramClient] Current trainer state from useCurrentUser:", { trainer, isTrainerLoading })
-
-  useEffect(() => {
-    if (importData?.program) {
-      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
-
-      initialProgram.program_weeks =
-        Number.isInteger(initialProgram.program_weeks) && initialProgram.program_weeks > 0
-          ? initialProgram.program_weeks
-          : 4
-
-      initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
-
-      let normalizedWeeks: ExerciseWeek[] = []
-
-      if (initialProgram.is_periodized) {
-        if (initialProgram.weeks && initialProgram.weeks.length > 0) {
-          normalizedWeeks = initialProgram.weeks
-        } else if (initialProgram.routines && initialProgram.routines.length > 0) {
-          for (let i = 0; i < initialProgram.program_weeks; i++) {
-            normalizedWeeks.push({
-              week_number: i + 1,
-              set_count: 0,
-              sets: [],
-              routines: JSON.parse(JSON.stringify(initialProgram.routines)),
-            })
-          }
-        } else {
-          for (let i = 0; i < initialProgram.program_weeks; i++) {
-            normalizedWeeks.push({
-              week_number: i + 1,
-              set_count: 0,
-              sets: [],
-              routines: [],
-            })
-          }
-        }
-      } else {
-        if (initialProgram.weeks && initialProgram.weeks.length > 0) {
-          normalizedWeeks = [initialProgram.weeks[0]]
-        } else if (initialProgram.routines && initialProgram.routines.length > 0) {
-          normalizedWeeks = [
-            {
-              week_number: 1,
-              set_count: 0,
-              sets: [],
-              routines: JSON.parse(JSON.stringify(initialProgram.routines)),
-            },
-          ]
-        } else {
-          normalizedWeeks = [
-            {
-              week_number: 1,
-              set_count: 0,
-              sets: [],
-              routines: [],
-            },
-          ]
-        }
-        initialProgram.program_weeks = 1
-      }
-
-      normalizedWeeks.forEach((week) => {
-        week.routines?.forEach((routine) => {
-          routine.exercises.forEach((exercise) => {
-            if (exercise.weeks && exercise.weeks.length > 0) {
-              exercise.weeks.forEach((exWeek) => {
-                if (exWeek.sets) {
-                  exWeek.sets.forEach((set, setIndex) => {
-                    if (typeof set.set_number !== "number" || set.set_number <= 0) {
-                      set.set_number = setIndex + 1
-                    }
-                  })
-                }
-              })
-            } else if (exercise.sets) {
-              exercise.sets.forEach((set, setIndex) => {
-                if (typeof set.set_number !== "number" || set.set_number <= 0) {
-                  set.set_number = setIndex + 1
-                }
-              })
-            }
-          })
-        })
-      })
-
-      setProgramState({
-        ...initialProgram,
-        weeks: normalizedWeeks,
-        routines: [],
-      })
-      setCurrentWeek(1)
-      setHasChanges(false)
-      setJustSaved(false)
-    }
-  }, [importData])
-
-  const fetchClients = async (trainerId: string) => {
-    setLoadingClients(true)
-    setClients([])
-    setSelectedClientId("")
-    console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
-
+  const fetchClients = async () => {
+    console.log("[ReviewProgram] Starting to fetch clients...")
+    setIsLoadingClients(true)
     try {
-      const response = await fetch(`/api/clients?trainerId=${trainerId}`)
-      console.log("[ReviewProgramClient] API response status:", response.status)
+      const response = await fetch("/api/clients")
+      console.log("[ReviewProgram] API response status:", response.status)
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", errorText)
-        toast({
-          title: "Error",
-          description: `Failed to load clients: ${response.statusText}`,
-          variant: "destructive",
-        })
-        return
+        throw new Error(`Failed to fetch clients: ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("[ReviewProgramClient] API response data:", data)
+      console.log("[ReviewProgram] API response data:", data)
 
       if (data.clients && Array.isArray(data.clients)) {
-        console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients.length)
         setClients(data.clients)
-        if (data.clients.length > 0) {
-          setSelectedClientId(data.clients[0].id)
-          console.log("[ReviewProgramClient] First client selected:", data.clients[0].id)
-        }
+        console.log("[ReviewProgram] Set clients:", data.clients.length)
       } else {
-        console.log("[ReviewProgramClient] No clients array in response")
+        console.error("[ReviewProgram] Invalid response format:", data)
         setClients([])
       }
     } catch (error) {
-      console.error("[ReviewProgramClient] Error fetching clients:", error)
+      console.error("[ReviewProgram] Error fetching clients:", error)
       toast({
         title: "Error",
-        description: "An unexpected error occurred while fetching clients.",
+        description: "Failed to load clients. Please try again.",
         variant: "destructive",
       })
       setClients([])
     } finally {
-      setLoadingClients(false)
-      console.log("[ReviewProgramClient] Finished fetching clients.")
+      setIsLoadingClients(false)
     }
   }
 
-  const currentRoutines: WorkoutRoutine[] = useMemo(() => {
-    if (!programState || !programState.weeks || programState.weeks.length === 0) return []
-    return programState.weeks[currentWeek - 1]?.routines || []
-  }, [programState, currentWeek])
-
-  const goToPreviousWeek = () => setCurrentWeek(Math.max(1, currentWeek - 1))
-  const goToNextWeek = () => setCurrentWeek(Math.min(programState?.program_weeks || 1, currentWeek + 1))
-
-  const handleProgramTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setProgramState((prev) => {
-      if (!prev) return prev
-      return { ...prev, program_title: e.target.value }
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const handleProgramNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setProgramState((prev) => {
-      if (!prev) return prev
-      return { ...prev, program_notes: e.target.value }
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const handleProgramWeeksChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newWeeksCount = Number.parseInt(e.target.value, 10)
-    if (isNaN(newWeeksCount) || newWeeksCount < 1) return
-
-    setProgramState((prev) => {
-      if (!prev) return null
-
-      const updatedProgram = { ...prev, program_weeks: newWeeksCount }
-
-      if (updatedProgram.is_periodized) {
-        const currentWeeks = updatedProgram.weeks || []
-        const newWeeksArray: ExerciseWeek[] = []
-
-        for (let i = 0; i < newWeeksCount; i++) {
-          if (currentWeeks[i]) {
-            newWeeksArray.push(currentWeeks[i])
-          } else {
-            const lastWeekData = currentWeeks[currentWeeks.length - 1] || { routines: [] }
-            newWeeksArray.push({
-              week_number: i + 1,
-              set_count: 0,
-              sets: [],
-              routines: JSON.parse(JSON.stringify(lastWeekData.routines)),
-            })
-          }
-        }
-        updatedProgram.weeks = newWeeksArray
-        if (currentWeek > newWeeksCount) {
-          setCurrentWeek(newWeeksCount)
-        }
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const togglePeriodization = () => {
-    if (!programState) return
-
-    setHasChanges(true)
-    setJustSaved(false)
-
-    if (programState.is_periodized) {
-      setShowSelectWeekDialog(true)
-    } else {
-      const currentSingleWeekRoutines = programState.weeks?.[0]?.routines || []
-      const newWeeks: ExerciseWeek[] = []
-      const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4
-
-      for (let i = 0; i < defaultWeeks; i++) {
-        newWeeks.push({
-          week_number: i + 1,
-          set_count: 0,
-          sets: [],
-          routines: JSON.parse(JSON.stringify(currentSingleWeekRoutines)),
-        })
-      }
-
-      setProgramState((prev) => {
-        if (!prev) return null
-        return {
-          ...prev,
-          is_periodized: true,
-          weeks: newWeeks,
-          program_weeks: defaultWeeks,
-        }
-      })
-      setCurrentWeek(1)
-    }
-  }
-
-  const handleSelectWeekForNonPeriodized = (weekNumber: number) => {
-    if (!programState || !programState.weeks) return
-
-    const selectedWeekData = programState.weeks.find((w) => w.week_number === weekNumber)
-    if (selectedWeekData) {
-      setProgramState((prev) => {
-        if (!prev) return null
-        return {
-          ...prev,
-          is_periodized: false,
-          weeks: [JSON.parse(JSON.stringify(selectedWeekData))],
-          program_weeks: 1,
-        }
-      })
-      setShowSelectWeekDialog(false)
-      setCurrentWeek(1)
-      setHasChanges(true)
-      setJustSaved(false)
-    }
-  }
-
-  const handleSaveChanges = async () => {
-    if (!programState) return
-
-    setIsSaving(true)
-    try {
-      await updateDoc(doc(db, "sheets_imports", importData.id), {
-        name: programState.program_title,
-        program: programState,
-        status: "reviewed",
-        updatedAt: new Date(),
-      })
-      setHasChanges(false)
-      setJustSaved(true)
-      importData.program = JSON.parse(JSON.stringify(programState))
-    } catch (error) {
-      console.error("Error saving program:", error)
+  const handleSendToClient = async () => {
+    if (!selectedClient) {
       toast({
-        title: "Error",
-        description: "Failed to save changes. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const revertChanges = () => {
-    if (importData?.program) {
-      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
-      setProgramState(initialProgram)
-      setCurrentWeek(1)
-      setHasChanges(false)
-      setJustSaved(false)
-      setExpandedRoutines({ "0": true })
-    }
-  }
-
-  const addSet = (routineIndex: number, exerciseIndex: number) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-
-      if (targetExercise) {
-        const newSetNumber = (targetExercise.sets?.length || 0) + 1
-        const newSet: WorkoutSet = {
-          set_number: newSetNumber,
-          warmup: false,
-          reps: "",
-          weight: "",
-          rpe: "",
-          rest: "",
-          duration_sec: null,
-          notes: null,
-        }
-        if (!targetExercise.sets) targetExercise.sets = []
-        targetExercise.sets.push(newSet)
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-
-      if (targetExercise && targetExercise.sets && targetExercise.sets[setIndex]) {
-        const setToDuplicate = targetExercise.sets[setIndex]
-        const duplicatedSet = {
-          ...setToDuplicate,
-          set_number: setToDuplicate.set_number + 1,
-        }
-
-        targetExercise.sets.splice(setIndex + 1, 0, duplicatedSet)
-        targetExercise.sets.forEach((set, index) => {
-          set.set_number = index + 1
-        })
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const deleteSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-
-      if (targetExercise && targetExercise.sets) {
-        targetExercise.sets.splice(setIndex, 1)
-        targetExercise.sets.forEach((set, index) => {
-          set.set_number = index + 1
-        })
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const updateSetField = (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const weekData = updatedProgram.weeks[currentWeek - 1]
-      if (weekData && weekData.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
-        weekData.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const toggleRoutine = (index: number) => {
-    setExpandedRoutines((prev) => ({ ...prev, [index]: !prev[index] }))
-  }
-
-  const getRoutineColor = (index: number) => {
-    const colors = ["bg-orange-500", "bg-blue-500", "bg-purple-500", "bg-green-500", "bg-pink-500", "bg-yellow-500"]
-    return colors[index % colors.length]
-  }
-
-  const handleSendProgram = async () => {
-    if (!programState || !selectedClientId) {
-      toast({
-        title: "Error",
-        description: "Please select a client to send the program.",
+        title: "No client selected",
+        description: "Please select a client to send the program to.",
         variant: "destructive",
       })
       return
     }
 
-    setIsAssigning(true)
+    setIsSending(true)
     try {
-      const result = await sendProgramToClient(programState, selectedClientId)
-      if (result.success) {
-        toast({
-          title: "Success",
-          description: result.message,
-        })
-        setShowSendProgramDialog(false)
-        setMessageToClient("")
-        setSelectedClientId("")
-      } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
+      await assignProgramToClient(program.id, selectedClient.id)
+
+      toast({
+        title: "Program sent successfully!",
+        description: `The program has been assigned to ${selectedClient.name}.`,
+      })
+
+      setIsDialogOpen(false)
+      setSelectedClient(null)
+
+      // Redirect to clients page or program list
+      router.push("/clients")
     } catch (error) {
-      console.error("Error assigning program:", error)
+      console.error("Error sending program:", error)
       toast({
         title: "Error",
-        description: "An unexpected error occurred during program assignment.",
+        description: "Failed to send program. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setIsAssigning(false)
+      setIsSending(false)
     }
   }
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2)
+  const handleDialogOpen = (open: boolean) => {
+    setIsDialogOpen(open)
+    if (open) {
+      fetchClients()
+    }
   }
 
-  if (!programState) {
+  const totalExercises = program.weeks.reduce((total, week) => {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500">Loading program...</p>
-      </div>
+      total +
+      week.workouts.reduce((weekTotal, workout) => {
+        return weekTotal + workout.exercises.length
+      }, 0)
     )
-  }
+  }, 0)
 
-  console.log("[ReviewProgramClient] showSendProgramDialog state at render:", showSendProgramDialog)
+  const totalWorkouts = program.weeks.reduce((total, week) => {
+    return total + week.workouts.length
+  }, 0)
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={() => {
-            if (hasChanges) {
-              setShowConfirmDialog(true)
-            } else {
-              router.push("/import-programs")
-            }
-          }}
-        >
-          <ChevronLeft className="w-4 h-4 mr-1" />
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <Button variant="ghost" size="sm" onClick={() => router.back()} className="flex items-center gap-2">
+          <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
-      </div>
-
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
-          <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">{program.name}</h1>
+          {program.description && <p className="text-muted-foreground mt-1">{program.description}</p>}
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={revertChanges}
-            disabled={!hasChanges || isSaving}
-            className="flex items-center gap-2 text-gray-700 hover:bg-gray-100"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Revert
-          </Button>
-          <Button
-            className={
-              justSaved && !hasChanges
-                ? "bg-lime-400 text-gray-800 cursor-not-allowed opacity-75 flex items-center gap-2"
-                : "bg-lime-400 hover:bg-lime-500 text-gray-800 flex items-center gap-2"
-            }
-            onClick={handleSaveChanges}
-            disabled={isSaving || (justSaved && !hasChanges)}
-          >
-            {isSaving ? (
-              "Saving..."
-            ) : justSaved && !hasChanges ? (
-              <>
-                <Check className="h-4 w-4" />
-                Saved
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
-          <Button
-            className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => {
-              console.log("Send to Client button clicked!")
-              console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid)
-
-              if (trainer?.uid) {
-                fetchClients(trainer.uid)
-              }
-
-              setShowSendProgramDialog(true)
-              console.log("[ReviewProgramClient] showSendProgramDialog set to true.")
-            }}
-            disabled={hasChanges || isSaving || isTrainerLoading}
-          >
-            <Send className="h-4 w-4" />
-            Send to Client
-          </Button>
-        </div>
-      </div>
-
-      {/* Program Settings */}
-      <Card className="p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <label htmlFor="program-title" className="block text-sm font-medium text-gray-700 mb-1">
-              Program Title
-            </label>
-            <Input
-              id="program-title"
-              value={programState.program_title}
-              onChange={handleProgramTitleChange}
-              className="w-full border-transparent focus:border-lime-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="program-weeks" className="block text-sm font-medium text-gray-700 mb-1">
-              Program Weeks
-            </label>
-            <Input
-              id="program-weeks"
-              type="number"
-              value={programState.program_weeks}
-              onChange={handleProgramWeeksChange}
-              className="w-full border-transparent focus:border-lime-500"
-              min={1}
-              disabled={!programState.is_periodized}
-            />
-          </div>
-        </div>
-
-        {/* Program Notes */}
-        <div className="mb-8">
-          <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
-            Program Notes
-          </label>
-          <Textarea
-            id="program-notes"
-            value={programState.program_notes || ""}
-            onChange={handleProgramNotesChange}
-            className="w-full min-h-[100px] border-transparent focus:border-lime-500"
-            placeholder="Add notes about this program..."
-          />
-        </div>
-
-        {/* Periodization Toggle */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div>
-              <h3 className="font-medium text-gray-900">Periodization</h3>
-              <p className="text-sm text-gray-500">
-                {programState.is_periodized
-                  ? "Program changes week by week with different training variables"
-                  : "Same routine repeated each week"}
-              </p>
-            </div>
-            <Button
-              variant={programState.is_periodized ? "default" : "outline"}
-              onClick={togglePeriodization}
-              className="flex items-center gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {programState.is_periodized ? "Switch to Non-Periodized" : "Switch to Periodized"}
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="flex items-center gap-2">
+              <Send className="h-4 w-4" />
+              Send to Client
             </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Week Navigation (only show if periodized) */}
-      {programState.is_periodized && (
-        <Card className="p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
-              <ChevronLeft className="h-6 w-6" />
-            </Button>
-            <div className="flex-1 text-center">
-              <div className="text-lg font-semibold">
-                Week {currentWeek}/{programState.program_weeks}
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToNextWeek}
-              disabled={currentWeek === programState.program_weeks}
-            >
-              <ChevronRight className="h-6 w-6" />
-            </Button>
-          </div>
-
-          {/* Week selector dots */}
-          <div className="flex justify-center mt-4 gap-1">
-            {Array.from({ length: programState.program_weeks }, (_, i) => i + 1).map((week) => (
-              <button
-                key={week}
-                onClick={() => setCurrentWeek(week)}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  week === currentWeek ? "bg-lime-500" : "bg-gray-300"
-                }`}
-              />
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Routines for Current Week / Non-Periodized Program */}
-      {currentRoutines && currentRoutines.length > 0 ? (
-        <div className="space-y-4">
-          {currentRoutines.map((routine, routineIndex) => (
-            <div key={routineIndex} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div
-                className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
-                onClick={() => toggleRoutine(routineIndex)}
-              >
-                <div className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full ${getRoutineColor(routineIndex)} flex items-center justify-center text-white mr-3`}
-                  >
-                    {routine.routine_name?.charAt(0) || "R"}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">{routine.routine_name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {routine.exercises?.length || 0} exercises
-                      {programState.is_periodized && ` • Week ${currentWeek} view`}
-                    </p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm">
-                  {expandedRoutines[routineIndex] ? (
-                    <ChevronUp className="h-5 w-5" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5" />
-                  )}
-                </Button>
-              </div>
-
-              {expandedRoutines[routineIndex] && (
-                <div className="p-4">
-                  {routine.exercises && routine.exercises.length > 0 ? (
-                    <div>
-                      {/* Header */}
-                      <div className="grid grid-cols-9 gap-4 py-2 px-4 bg-gray-100 rounded-t-lg text-sm font-medium text-gray-600">
-                        <div className="col-span-2">Exercise</div>
-                        <div className="col-span-1 text-center">Set</div>
-                        <div className="col-span-1 text-center">Reps</div>
-                        <div className="col-span-1 text-center">Weight</div>
-                        <div className="col-span-1 text-center">RPE</div>
-                        <div className="col-span-1 text-center">Rest</div>
-                        <div className="col-span-2 text-right">Actions</div>
-                      </div>
-
-                      {routine.exercises.map((exercise, exerciseIndex) => (
-                        <div key={exerciseIndex} className="border-b border-gray-200">
-                          {/* Exercise Name and Notes - displayed once per exercise, outside the set loop */}
-                          <div className="py-3 px-4">
-                            <div className="font-medium text-gray-900">{exercise.name}</div>
-                            {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
-                          </div>
-
-                          {/* Exercise sets */}
-                          {programState.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[
-                            exerciseIndex
-                          ]?.sets?.map((set, setIndex) => (
-                            <div
-                              key={setIndex}
-                              className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
-                            >
-                              {/* Empty div to maintain col-span-2 alignment for the first column */}
-                              <div className="col-span-2"></div>
-
-                              <div className="col-span-1 flex justify-center">
-                                <div className="bg-white border border-gray-300 rounded-xl w-8 h-8 flex items-center justify-center text-center font-medium text-gray-800 text-sm">
-                                  {set.set_number}
-                                </div>
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.reps || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="10"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.weight || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="kg"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.rpe || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="7"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.rest || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="60s"
-                                />
-                              </div>
-
-                              <div className="col-span-2 flex justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
-                                >
-                                  <Copy className="h-4 w-4 text-gray-500" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-gray-500" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-
-                          {/* Add set button */}
-                          <div className="grid grid-cols-9 gap-4 py-2 px-4">
-                            <div className="col-span-7"></div>
-                            <div className="col-span-2 flex justify-end">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => addSet(routineIndex, exerciseIndex)}
-                              >
-                                <Plus className="h-4 w-4 text-gray-400" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">No exercises found in this routine.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-          <div className="text-gray-400 mb-2">
-            <Calendar className="mx-auto h-12 w-12" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">No routines found</h3>
-          <p className="text-gray-500 mb-4">
-            {programState.is_periodized
-              ? `Week ${currentWeek} doesn't have any workout routines yet.`
-              : `This program doesn't have any workout routines yet.`}
-          </p>
-          <Button variant="outline">+ Add Routine</Button>
-        </div>
-      )}
-
-      {/* Send Program Confirmation Dialog */}
-      <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
-        <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Confirm Sending Program</DialogTitle>
-            <DialogDescription>You are about to send the following program:</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
-            <Card className="p-4">
-              <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <User className="h-4 w-4 mr-2" /> {clientNameForModal}
-              </div>
-              <div className="flex items-center text-sm text-gray-600 mb-3">
-                <Calendar className="h-4 w-4 mr-2" /> {dateForModal}
-              </div>
-              <div className="flex items-start text-sm text-gray-600">
-                <MessageSquare className="h-4 w-4 mr-2 mt-1" />
-                <Textarea
-                  value={messageToClient}
-                  onChange={(e) => setMessageToClient(e.target.value)}
-                  placeholder="Add a message to your client (optional)"
-                  className="flex-1 border-transparent focus:border-gray-300"
-                  rows={3}
-                />
-              </div>
-            </Card>
-
-            {/* Client Selection Section */}
-            <div className="space-y-2">
-              <h4 className="font-semibold text-gray-800">Select Client:</h4>
-              {loadingClients ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
-                  <span className="ml-2 text-gray-600">Loading clients...</span>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Send Program to Client</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {isLoadingClients ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               ) : clients.length === 0 ? (
-                <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  No clients found. Add clients first to send programs.
+                </div>
               ) : (
-                <RadioGroup
-                  value={selectedClientId}
-                  onValueChange={setSelectedClientId}
-                  className="max-h-48 overflow-y-auto"
-                >
-                  {clients.map((client) => (
-                    <div
-                      key={client.id}
-                      className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                    >
-                      <RadioGroupItem value={client.id} id={`client-${client.id}`} />
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
+                <ScrollArea className="max-h-60">
+                  <div className="space-y-2">
+                    {clients.map((client) => (
+                      <div
+                        key={client.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedClient?.id === client.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:bg-muted/50"
+                        }`}
+                        onClick={() => setSelectedClient(client)}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={client.avatar || "/placeholder.svg"} />
+                          <AvatarFallback>
+                            {client.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium">{client.name}</p>
+                          <p className="text-sm text-muted-foreground">{client.email}</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
-                          {client.name}
-                        </Label>
-                        {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button className="flex-1" onClick={handleSendToClient} disabled={!selectedClient || isSending}>
+                  {isSending ? "Sending..." : "Send Program"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Program Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <Calendar className="h-8 w-8 text-primary" />
+            <div>
+              <p className="text-2xl font-bold">{program.totalWeeks}</p>
+              <p className="text-sm text-muted-foreground">Weeks</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <Target className="h-8 w-8 text-primary" />
+            <div>
+              <p className="text-2xl font-bold">{totalWorkouts}</p>
+              <p className="text-sm text-muted-foreground">Workouts</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <Users className="h-8 w-8 text-primary" />
+            <div>
+              <p className="text-2xl font-bold">{totalExercises}</p>
+              <p className="text-sm text-muted-foreground">Exercises</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Program Content */}
+      <div className="space-y-6">
+        {program.weeks.map((week) => (
+          <Card key={week.weekNumber}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Week {week.weekNumber}
+                <Badge variant="secondary">{week.workouts.length} workouts</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {week.workouts.map((workout, workoutIndex) => (
+                <div key={workoutIndex}>
+                  <h4 className="font-semibold text-lg mb-3">{workout.name}</h4>
+                  <div className="space-y-2">
+                    {workout.exercises.map((exercise, exerciseIndex) => (
+                      <div key={exerciseIndex} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div className="flex-1">
+                          <p className="font-medium">{exercise.name}</p>
+                          {exercise.notes && <p className="text-sm text-muted-foreground mt-1">{exercise.notes}</p>}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <span>{exercise.sets} sets</span>
+                          <span>{exercise.reps} reps</span>
+                          {exercise.weight && <span>{exercise.weight}</span>}
+                          {exercise.restTime && (
+                            <span className="text-muted-foreground">Rest: {exercise.restTime}</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </RadioGroup>
-              )}
-            </div>
-
-            <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
-              <Info className="h-4 w-4" />
-              <span>
-                We will send your client an email and app notification. They can still access their old program.
-              </span>
-            </div>
-          </div>
-          <DialogFooter className="flex-shrink-0">
-            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isAssigning}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
-              onClick={handleSendProgram}
-              disabled={isAssigning || !selectedClientId || !programState}
-            >
-              {isAssigning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Sending...
-                </>
-              ) : (
-                "Send Program"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmation Dialog for Unsaved Changes */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Continue Editing
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setHasChanges(false)
-                router.push("/import-programs")
-              }}
-            >
-              Leave Without Saving
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Select Week Dialog for switching from Periodized to Non-Periodized */}
-      <Dialog open={showSelectWeekDialog} onOpenChange={setShowSelectWeekDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select Week to Keep</DialogTitle>
-            <DialogDescription>
-              You are switching from a periodized program to a non-periodized program. Please select which week's data
-              you would like to keep as the single routine for this program.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2 py-4">
-            {programState.weeks?.map((week) => (
-              <Button
-                key={week.week_number}
-                variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
-                onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
-              >
-                Week {week.week_number}
-              </Button>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (selectedWeekForNonPeriodized !== null) {
-                  handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
-                }
-              }}
-              disabled={selectedWeekForNonPeriodized === null}
-            >
-              Confirm Selection
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                    ))}
+                  </div>
+                  {workoutIndex < week.workouts.length - 1 && <Separator className="my-4" />}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }
