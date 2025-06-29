@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { ClientWorkoutView } from "@/components/client-workout-view"
-import { PageLayout } from "@/components/shared/page-layout"
 import { PlusCircle } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect } from "react"
@@ -10,9 +9,17 @@ import { fetchClients } from "@/lib/firebase/client-service"
 import { ClientRequests } from "@/components/dashboard-alt/client-requests"
 import Image from "next/image"
 import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Users, Calendar, TrendingUp, DollarSign } from "lucide-react"
+import { useRouter } from "next/navigation"
+
+interface OverviewData {
+  totalClients: number
+  activeClients: number
+  upcomingSessions: number
+  monthlyRevenue: number
+}
 
 interface DashboardStats {
   totalClients: number
@@ -33,13 +40,9 @@ const OverviewPageClient: React.FC = () => {
   const [sessions, setSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [trainerId, setTrainerId] = useState<string | null>(null)
-  const [stats, setStats] = useState<DashboardStats>({
-    totalClients: 0,
-    activeClients: 0,
-    upcomingSessions: 0,
-    monthlyRevenue: 0,
-  })
+  const [data, setData] = useState<OverviewData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -83,14 +86,20 @@ const OverviewPageClient: React.FC = () => {
               const clientsData = await clientsResponse.json()
               const clients = clientsData.clients || []
 
-              setStats({
+              const overviewData: OverviewData = {
                 totalClients: clients.length,
                 activeClients: clients.filter((client: any) => client.status === "active").length,
-                upcomingSessions: 0, // TODO: Implement sessions API
+                upcomingSessions: 0, // TODO: Implement sessions count
                 monthlyRevenue: 0, // TODO: Implement revenue calculation
-              })
+              }
+
+              setData(overviewData)
             } else {
-              throw new Error("Failed to fetch dashboard data")
+              if (clientsResponse.status === 401) {
+                router.push("/login")
+                return
+              }
+              throw new Error(`Failed to fetch clients: ${clientsResponse.status}`)
             }
           } catch (error) {
             console.error("Error fetching clients:", error)
@@ -301,52 +310,56 @@ const OverviewPageClient: React.FC = () => {
 
   if (loading) {
     return (
-      <PageLayout title="Overview" description="Your coaching business at a glance">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="container mx-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
         </div>
-      </PageLayout>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <PageLayout title="Overview" description="Your coaching business at a glance">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-red-600 mb-4">Error: {error}</p>
-              <Button onClick={() => {}} variant="outline">
-                Try Again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </PageLayout>
+      <div className="container mx-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-red-600 mb-4">Error: {error}</p>
+                <Button onClick={() => {}} variant="outline">
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     )
   }
 
   return (
-    <PageLayout title="Overview" description="Your coaching business at a glance">
-      <div className="space-y-6">
+    <div className="container mx-auto p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Overview</h1>
+        </div>
+
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalClients}</div>
+              <div className="text-2xl font-bold">{data?.totalClients || 0}</div>
               <p className="text-xs text-muted-foreground">All registered clients</p>
             </CardContent>
           </Card>
@@ -357,7 +370,7 @@ const OverviewPageClient: React.FC = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.activeClients}</div>
+              <div className="text-2xl font-bold">{data?.activeClients || 0}</div>
               <p className="text-xs text-muted-foreground">Currently active</p>
             </CardContent>
           </Card>
@@ -368,7 +381,7 @@ const OverviewPageClient: React.FC = () => {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.upcomingSessions}</div>
+              <div className="text-2xl font-bold">{data?.upcomingSessions || 0}</div>
               <p className="text-xs text-muted-foreground">This week</p>
             </CardContent>
           </Card>
@@ -379,7 +392,7 @@ const OverviewPageClient: React.FC = () => {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${stats.monthlyRevenue}</div>
+              <div className="text-2xl font-bold">${data?.monthlyRevenue || 0}</div>
               <p className="text-xs text-muted-foreground">This month</p>
             </CardContent>
           </Card>
@@ -389,31 +402,25 @@ const OverviewPageClient: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common tasks to get you started</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Button className="h-auto p-4 flex flex-col items-start space-y-2 bg-transparent" variant="outline">
-                <Users className="h-6 w-6" />
-                <div className="text-left">
-                  <div className="font-medium">Add New Client</div>
-                  <div className="text-sm text-muted-foreground">Register a new client</div>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button onClick={() => router.push("/clients")} className="h-20">
+                <div className="text-center">
+                  <Users className="h-6 w-6 mx-auto mb-2" />
+                  <div>Manage Clients</div>
                 </div>
               </Button>
-
-              <Button className="h-auto p-4 flex flex-col items-start space-y-2 bg-transparent" variant="outline">
-                <Calendar className="h-6 w-6" />
-                <div className="text-left">
-                  <div className="font-medium">Schedule Session</div>
-                  <div className="text-sm text-muted-foreground">Book a training session</div>
+              <Button onClick={() => router.push("/calendar")} variant="outline" className="h-20">
+                <div className="text-center">
+                  <Calendar className="h-6 w-6 mx-auto mb-2" />
+                  <div>View Calendar</div>
                 </div>
               </Button>
-
-              <Button className="h-auto p-4 flex flex-col items-start space-y-2 bg-transparent" variant="outline">
-                <TrendingUp className="h-6 w-6" />
-                <div className="text-left">
-                  <div className="font-medium">View Reports</div>
-                  <div className="text-sm text-muted-foreground">Check client progress</div>
+              <Button onClick={() => router.push("/programs")} variant="outline" className="h-20">
+                <div className="text-center">
+                  <TrendingUp className="h-6 w-6 mx-auto mb-2" />
+                  <div>Create Program</div>
                 </div>
               </Button>
             </div>
@@ -564,7 +571,7 @@ const OverviewPageClient: React.FC = () => {
           </div>
         </div>
       </div>
-    </PageLayout>
+    </div>
   )
 }
 

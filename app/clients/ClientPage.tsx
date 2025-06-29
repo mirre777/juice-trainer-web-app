@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Search, Users } from "lucide-react"
-import { PageLayout } from "@/components/shared/page-layout"
+import { Badge } from "@/components/ui/badge"
+import { Users, Search, Plus, Mail, Phone } from "lucide-react"
 
 interface Client {
   id: string
@@ -13,7 +14,8 @@ interface Client {
   email: string
   phone?: string
   status: string
-  createdAt: string
+  joinDate: string
+  lastWorkout?: string
 }
 
 export default function ClientPage() {
@@ -21,6 +23,7 @@ export default function ClientPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const router = useRouter()
 
   useEffect(() => {
     fetchClients()
@@ -39,12 +42,16 @@ export default function ClientPage() {
         },
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setClients(data.clients || [])
-      } else {
-        throw new Error("Failed to fetch clients")
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push("/login")
+          return
+        }
+        throw new Error(`Failed to fetch clients: ${response.status}`)
       }
+
+      const clientsData = await response.json()
+      setClients(clientsData)
     } catch (err) {
       console.error("Error fetching clients:", err)
       setError(err instanceof Error ? err.message : "Failed to load clients")
@@ -61,69 +68,69 @@ export default function ClientPage() {
 
   if (loading) {
     return (
-      <PageLayout title="Clients" description="Manage your coaching clients">
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <div className="animate-pulse h-8 bg-gray-200 rounded w-32"></div>
-            <div className="animate-pulse h-10 bg-gray-200 rounded w-32"></div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="p-6">
-                  <div className="animate-pulse space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+      <div className="container mx-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+              ))}
+            </div>
           </div>
         </div>
-      </PageLayout>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <PageLayout title="Clients" description="Manage your coaching clients">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <p className="text-red-600 mb-4">Error: {error}</p>
-              <Button onClick={fetchClients} variant="outline">
-                Try Again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </PageLayout>
+      <div className="container mx-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-red-600 mb-4">Error: {error}</p>
+                <Button onClick={fetchClients} variant="outline">
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     )
   }
 
   return (
-    <PageLayout title="Clients" description="Manage your coaching clients">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search clients..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-64"
-              />
-            </div>
-          </div>
+    <div className="container mx-auto p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Clients</h1>
           <Button className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Add Client
           </Button>
         </div>
 
-        {/* Clients Grid */}
+        {/* Search and Filters */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search clients..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Clients List */}
         {filteredClients.length === 0 ? (
           <Card>
             <CardContent className="p-12">
@@ -133,35 +140,44 @@ export default function ClientPage() {
                 <p className="text-gray-500 mb-4">
                   {searchTerm ? "No clients match your search." : "Get started by adding your first client."}
                 </p>
-                {!searchTerm && (
-                  <Button className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Your First Client
-                  </Button>
-                )}
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Client
+                </Button>
               </div>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-4">
             {filteredClients.map((client) => (
               <Card key={client.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="text-lg">{client.name}</CardTitle>
-                  <CardDescription>{client.email}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {client.phone && <p className="text-sm text-gray-600">📞 {client.phone}</p>}
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          client.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {client.status}
-                      </span>
-                      <span className="text-xs text-gray-500">{new Date(client.createdAt).toLocaleDateString()}</span>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                        <Users className="h-6 w-6 text-gray-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium">{client.name}</h3>
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Mail className="h-4 w-4" />
+                            {client.email}
+                          </div>
+                          {client.phone && (
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-4 w-4" />
+                              {client.phone}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Badge variant={client.status === "active" ? "default" : "secondary"}>{client.status}</Badge>
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -170,6 +186,6 @@ export default function ClientPage() {
           </div>
         )}
       </div>
-    </PageLayout>
+    </div>
   )
 }

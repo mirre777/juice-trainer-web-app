@@ -1,26 +1,69 @@
-import { NextResponse } from "next/server"
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
 import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
+
+export async function GET() {
+  try {
+    // Clear all cookies
+    const cookieStore = cookies()
+    const allCookies = cookieStore.getAll()
+
+    for (const cookie of allCookies) {
+      cookieStore.delete(cookie.name)
+    }
+
+    // Return success response with cleared cookies
+    return new NextResponse(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        // Set cookie to expire in the past to ensure it's deleted
+        "Set-Cookie": [
+          `token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          `user_id=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          `refresh_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+        ],
+      },
+    })
+  } catch (error) {
+    console.error("Error during logout:", error)
+    return new NextResponse(JSON.stringify({ error: "Failed to logout" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+}
 
 export async function POST() {
   try {
+    // Clear all cookies
     const cookieStore = cookies()
+    const allCookies = cookieStore.getAll()
 
-    // Clear all possible authentication cookies
-    const cookiesToClear = ["user_id", "auth_token", "session", "authToken", "__session"]
+    for (const cookie of allCookies) {
+      cookieStore.delete(cookie.name)
+    }
 
-    cookiesToClear.forEach((cookieName) => {
-      cookieStore.set(cookieName, "", {
-        expires: new Date(0),
-        path: "/",
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-      })
+    // Return success response with cleared cookies
+    return new NextResponse(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        // Set cookie to expire in the past to ensure it's deleted
+        "Set-Cookie": [
+          `token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          `user_id=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+          `refresh_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
+        ],
+      },
     })
-
-    return NextResponse.json({ success: true, message: "Logged out successfully" })
   } catch (error) {
-    console.error("Logout error:", error)
-    return NextResponse.json({ error: "Logout failed" }, { status: 500 })
+    console.error("Error during logout:", error)
+    return new NextResponse(JSON.stringify({ error: "Failed to logout" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
   }
 }

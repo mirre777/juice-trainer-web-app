@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -11,7 +10,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { LogOut } from "lucide-react"
 
 interface LogoutModalProps {
   open: boolean
@@ -20,15 +18,13 @@ interface LogoutModalProps {
 
 export function LogoutModal({ open, onOpenChange }: LogoutModalProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const router = useRouter()
 
   const handleLogout = async () => {
-    try {
-      setIsLoggingOut(true)
+    setIsLoggingOut(true)
 
-      // Call logout API
+    try {
       const response = await fetch("/api/auth/logout", {
-        method: "POST",
+        method: "GET",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
@@ -36,47 +32,49 @@ export function LogoutModal({ open, onOpenChange }: LogoutModalProps) {
       })
 
       if (response.ok) {
-        // Clear any local storage
+        // Clear localStorage and sessionStorage
         if (typeof window !== "undefined") {
           localStorage.clear()
           sessionStorage.clear()
         }
 
-        // Close modal and redirect
+        // Close modal
         onOpenChange(false)
-        router.push("/login")
-        router.refresh()
+
+        // Refresh page - let the app's auth logic handle the redirect
+        window.location.reload()
       } else {
-        console.error("Logout failed:", response.status)
-        // Still redirect even if API fails
-        onOpenChange(false)
-        router.push("/login")
+        console.error("Logout failed:", response.status, response.statusText)
+        alert("Logout failed. Please try again.")
+        setIsLoggingOut(false)
       }
     } catch (error) {
-      console.error("Logout error:", error)
-      // Still redirect even if there's an error
-      onOpenChange(false)
-      router.push("/login")
-    } finally {
+      console.error("Error during logout:", error)
+      alert("Logout failed. Please try again.")
       setIsLoggingOut(false)
     }
+  }
+
+  const handleCancel = () => {
+    onOpenChange(false)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <LogOut className="h-5 w-5" />
-            Log Out
-          </DialogTitle>
+          <DialogTitle>Log Out</DialogTitle>
           <DialogDescription>Are you sure you want to log out of your account?</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoggingOut}>
+          <Button variant="outline" onClick={handleCancel} disabled={isLoggingOut}>
             Cancel
           </Button>
-          <Button onClick={handleLogout} disabled={isLoggingOut}>
+          <Button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="bg-[#D2FF28] text-black hover:bg-[#B8E024] disabled:opacity-50"
+          >
             {isLoggingOut ? "Logging out..." : "Log Out"}
           </Button>
         </DialogFooter>
