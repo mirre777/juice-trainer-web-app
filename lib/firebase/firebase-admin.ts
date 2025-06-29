@@ -1,4 +1,3 @@
-// lib/firebase/firebase-admin.ts
 import * as admin from "firebase-admin"
 
 let initialized = false
