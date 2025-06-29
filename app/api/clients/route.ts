@@ -1,65 +1,72 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getFirebaseAdminAuth, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
+import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
+    console.log("🚀 Starting /api/clients request")
+
     const cookieStore = cookies()
-    const sessionCookie = cookieStore.get("session")?.value
-    const authToken = cookieStore.get("auth_token")?.value
+    const userId = cookieStore.get("user_id")?.value
+    console.log("🆔 User ID from cookie:", userId)
 
-    if (!sessionCookie && !authToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!userId) {
+      console.log("❌ No user_id in cookies")
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
-
-    let userId: string
 
     try {
-      if (sessionCookie) {
-        const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
-        userId = decodedClaims.uid
-      } else if (authToken) {
-        const decodedToken = await getFirebaseAdminAuth().verifyIdToken(authToken)
-        userId = decodedToken.uid
-      } else {
-        return NextResponse.json({ error: "No valid authentication token" }, { status: 401 })
+      // Import Firestore directly
+      const { db } = await import("@/lib/firebase/firebase")
+      console.log("📊 Firestore imported successfully")
+
+      if (!db) {
+        console.error("❌ Firestore not available")
+        return NextResponse.json({ error: "Database not available" }, { status: 500 })
       }
-    } catch (error) {
-      console.error("Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+
+      console.log("🔍 Querying Firestore for clients of trainer:", userId)
+
+      // Import collection and query functions from firebase/firestore
+      const { collection, query, where, getDocs } = await import("firebase/firestore")
+
+      // Query clients where trainerId matches the current user
+      const clientsRef = collection(db, "clients")
+      const q = query(clientsRef, where("trainerId", "==", userId))
+      const querySnapshot = await getDocs(q)
+
+      console.log("✅ Clients query completed, found:", querySnapshot.size, "clients")
+
+      const clients: any[] = []
+      querySnapshot.forEach((doc) => {
+        clients.push({
+          id: doc.id,
+          ...doc.data(),
+        })
+      })
+
+      console.log("📤 Sending clients response:", clients.length, "clients")
+      return NextResponse.json(clients)
+    } catch (firestoreError: any) {
+      console.error("💥 Firestore error:", firestoreError)
+      return NextResponse.json(
+        {
+          error: "Database error",
+          details: firestoreError?.message || "Database connection failed",
+        },
+        { status: 500 },
+      )
     }
-
-    // Get user document to find the trainer's user ID
-    const db = getFirebaseAdminFirestore()
-    const userDoc = await db.collection("users").doc(userId).get()
-
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    const userData = userDoc.data()
-    const trainerId = userData?.id || userId
-
-    console.log(`[API:clients] Fetching clients for trainer: ${trainerId}`)
-
-    // Fetch clients from the trainer's clients subcollection
-    const clientsSnapshot = await db
-      .collection("users")
-      .doc(trainerId)
-      .collection("clients")
-      .where("deleted", "!=", true)
-      .get()
-
-    const clients = clientsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
-
-    console.log(`[API:clients] Found ${clients.length} clients for trainer ${trainerId}`)
-
-    return NextResponse.json({ clients })
-  } catch (error) {
-    console.error("[API:clients] Error fetching clients:", error)
-    return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 })
+  } catch (error: any) {
+    console.error("💥 Unexpected error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error?.message || "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
