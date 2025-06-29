@@ -239,3 +239,6 @@ export default function CalendarPageLayoutClient({ isDemo = true }: CalendarPage
     </div>
   )
 }
+
+// Named export for compatibility
+export { CalendarPageLayoutClient }

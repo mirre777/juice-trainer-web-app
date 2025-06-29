@@ -104,7 +104,7 @@ export function ClientCalendarPage() {
     )
   }
 
-  return <CalendarPageLayoutClient events={events} />
+  return <CalendarPageLayoutClient events={events} isDemo={false} />
 }
 
 // Keep the default export for consistency

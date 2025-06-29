@@ -1,75 +1,71 @@
 "use server"
 
 import { assignProgramToClientService } from "@/lib/firebase/program-assignment-service"
+import type { WorkoutProgram } from "@/types/workout-program"
+import { getFirebaseAdminAuth, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
-import { getFirebaseAdminAuth } from "@/lib/firebase/firebase-admin"
 
-export async function assignProgramToClient(
-  clientId: string,
-  programData: {
-    id: string
-    name: string
-    weeks: any[]
-  },
-  notes?: string,
-) {
+// Initialize Firebase Admin SDK if not already done
+initializeFirebaseAdmin()
+
+export async function sendProgramToClient(programData: WorkoutProgram, clientId: string) {
   try {
-    // Get the session cookie
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get("session")?.value
+    const sessionCookie = cookies().get("session")?.value
 
     if (!sessionCookie) {
-      throw new Error("No session found")
+      return { success: false, message: "Unauthorized: No session found." }
     }
 
-    // Verify the session cookie
-    const auth = getFirebaseAdminAuth()
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    // Verify the session cookie to get the trainer's UID
+    const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
     const trainerId = decodedClaims.uid
 
-    // Assign the program to the client
-    const assignmentId = await assignProgramToClientService(trainerId, clientId, programData, notes)
+    if (!trainerId) {
+      return { success: false, message: "Unauthorized: Trainer ID not found in session." }
+    }
 
-    return {
-      success: true,
-      assignmentId,
-      message: "Program assigned successfully",
+    console.log(`[Server Action] Trainer ${trainerId} attempting to assign program to client ${clientId}`)
+
+    const result = await assignProgramToClientService(programData, clientId, trainerId)
+
+    if (result.success) {
+      return { success: true, message: "Program successfully assigned to client!", data: result.data }
+    } else {
+      console.error("Failed to assign program:", result.error)
+      return { success: false, message: result.error || "Failed to assign program to client." }
     }
-  } catch (error) {
-    console.error("Error in assignProgramToClient action:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to assign program",
+  } catch (error: any) {
+    console.error("Error in sendProgramToClient Server Action:", error)
+    if (error.code === "auth/session-cookie-expired") {
+      return { success: false, message: "Your session has expired. Please log in again." }
     }
+    return { success: false, message: error.message || "An unexpected error occurred during program assignment." }
   }
 }
 
-export async function getProgramAssignments(clientId?: string) {
+export async function assignProgramToClient(programData: any, clientId: string, trainerId: string) {
   try {
-    // Get the session cookie
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get("session")?.value
+    console.log("[Server Action] Assigning program to client:", { clientId, trainerId })
 
-    if (!sessionCookie) {
-      throw new Error("No session found")
-    }
+    const result = await assignProgramToClientService(programData, clientId, trainerId)
 
-    // Verify the session cookie
-    const auth = getFirebaseAdminAuth()
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
-    const trainerId = decodedClaims.uid
-
-    // This would fetch assignments from the database
-    // For now, return empty array
-    return {
-      success: true,
-      assignments: [],
+    if (result.success) {
+      return {
+        success: true,
+        message: "Program assigned successfully",
+        data: result.data,
+      }
+    } else {
+      return {
+        success: false,
+        message: result.error || "Failed to assign program",
+      }
     }
   } catch (error) {
-    console.error("Error in getProgramAssignments action:", error)
+    console.error("[Server Action] Error assigning program:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get assignments",
+      message: "An error occurred while assigning the program",
     }
   }
 }

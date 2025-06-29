@@ -1,22 +1,16 @@
-import { OverviewPageClient } from "./OverviewPageClient"
-import { Skeleton } from "@/components/ui/skeleton"
+import type { Metadata } from "next"
+import OverviewPageClient from "./OverviewPageClient"
+import { ProtectedRoute } from "@/components/auth/protected-route"
 
-function OverviewSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-24" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Skeleton className="h-80" />
-        <Skeleton className="h-80" />
-      </div>
-    </div>
-  )
+export const metadata: Metadata = {
+  title: "Dashboard | Juice",
+  description: "Your coaching business at a glance",
 }
 
 export default function OverviewPage() {
-  return <OverviewPageClient />
+  return (
+    <ProtectedRoute requiredRole="trainer">
+      <OverviewPageClient />
+    </ProtectedRoute>
+  )
 }

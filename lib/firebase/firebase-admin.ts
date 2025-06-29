@@ -1,5 +1,6 @@
 // lib/firebase/firebase-admin.ts
 import * as admin from "firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
 
 let initialized = false
 
@@ -44,5 +45,5 @@ export const getFirebaseAdminAuth = () => {
   return admin.auth()
 }
 
-// Export db as an alias for getFirebaseAdminFirestore
-export const db = getFirebaseAdminFirestore()
+// Export db as named export for compatibility
+export const db = getFirestore()

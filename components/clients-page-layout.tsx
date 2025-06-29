@@ -17,7 +17,7 @@ interface ClientsPageLayoutProps {
   isDemo?: boolean
 }
 
-export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
+export default function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
   const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -316,3 +316,6 @@ export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
     </div>
   )
 }
+
+// Named export for compatibility
+export { ClientsPageLayout }
