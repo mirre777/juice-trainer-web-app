@@ -19,7 +19,7 @@ interface CalendarEvent {
   type: string
 }
 
-// Named export
+// Named export for compatibility
 export function ClientCalendarPage() {
   const { user, loading } = useCurrentUser()
   const [events, setEvents] = useState<CalendarEvent[]>([])
@@ -107,5 +107,5 @@ export function ClientCalendarPage() {
   return <CalendarPageLayoutClient events={events} isDemo={false} />
 }
 
-// Keep the default export for consistency
+// Default export for consistency
 export default ClientCalendarPage

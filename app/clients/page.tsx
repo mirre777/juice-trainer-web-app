@@ -1,16 +1,11 @@
-import type { Metadata } from "next"
-import { ClientsPageLayout } from "@/components/clients-page-layout"
-import { ProtectedRoute } from "@/components/auth/protected-route"
-
-export const metadata: Metadata = {
-  title: "Clients | Juice",
-  description: "Manage your coaching clients",
-}
+import { Suspense } from "react"
+import ClientsPageLayout from "@/components/clients-page-layout"
+import { LoadingSpinner } from "@/components/shared/loading-spinner"
 
 export default function ClientsPage() {
   return (
-    <ProtectedRoute requiredRole="trainer">
+    <Suspense fallback={<LoadingSpinner />}>
       <ClientsPageLayout />
-    </ProtectedRoute>
+    </Suspense>
   )
 }

@@ -1,16 +1,11 @@
-import type { Metadata } from "next"
-import { CalendarPageLayoutClient } from "@/components/calendar/calendar-page-layout-client"
-import { ProtectedRoute } from "@/components/auth/protected-route"
-
-export const metadata: Metadata = {
-  title: "Calendar | Juice",
-  description: "Schedule and manage your coaching sessions",
-}
+import { Suspense } from "react"
+import CalendarPageLayoutClient from "@/components/calendar/calendar-page-layout-client"
+import { LoadingSpinner } from "@/components/shared/loading-spinner"
 
 export default function CalendarPage() {
   return (
-    <ProtectedRoute requiredRole="trainer">
+    <Suspense fallback={<LoadingSpinner />}>
       <CalendarPageLayoutClient />
-    </ProtectedRoute>
+    </Suspense>
   )
 }

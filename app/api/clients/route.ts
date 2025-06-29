@@ -1,66 +1,65 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getFirebaseAdminAuth, getFirebaseAdminFirestore, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
+import { getFirebaseAdminAuth, getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
-
-// Initialize Firebase Admin SDK
-initializeFirebaseAdmin()
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("[API] /api/clients - GET request received")
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get("session")?.value
+    const authToken = cookieStore.get("auth_token")?.value
 
-    // Get session cookie
-    const sessionCookie = cookies().get("session")?.value
-    console.log("[API] Session cookie exists:", !!sessionCookie)
-
-    if (!sessionCookie) {
-      console.log("[API] No session cookie found")
+    if (!sessionCookie && !authToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Verify the session cookie
-    const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
-    const trainerId = decodedClaims.uid
-    console.log("[API] Trainer ID from session:", trainerId)
+    let userId: string
 
-    if (!trainerId) {
-      console.log("[API] No trainer ID in session")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Get Firestore instance
-    const db = getFirebaseAdminFirestore()
-
-    // Query the clients collection for this trainer
-    const clientsRef = db.collection(`users/${trainerId}/clients`)
-    const snapshot = await clientsRef.where("deleted", "!=", true).get()
-
-    console.log("[API] Found clients:", snapshot.size)
-
-    const clients = snapshot.docs.map((doc) => {
-      const data = doc.data()
-      return {
-        id: doc.id,
-        name: data.name || "Unknown",
-        email: data.email || "",
-        status: data.status || "active",
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        initials: data.initials || data.name?.substring(0, 2)?.toUpperCase() || "??",
-        bgColor: data.bgColor || "#f3f4f6",
-        textColor: data.textColor || "#374151",
+    try {
+      if (sessionCookie) {
+        const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
+        userId = decodedClaims.uid
+      } else if (authToken) {
+        const decodedToken = await getFirebaseAdminAuth().verifyIdToken(authToken)
+        userId = decodedToken.uid
+      } else {
+        return NextResponse.json({ error: "No valid authentication token" }, { status: 401 })
       }
-    })
+    } catch (error) {
+      console.error("Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
 
-    console.log("[API] Returning clients:", clients.length)
+    // Get user document to find the trainer's user ID
+    const db = getFirebaseAdminFirestore()
+    const userDoc = await db.collection("users").doc(userId).get()
+
+    if (!userDoc.exists) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    const userData = userDoc.data()
+    const trainerId = userData?.id || userId
+
+    console.log(`[API:clients] Fetching clients for trainer: ${trainerId}`)
+
+    // Fetch clients from the trainer's clients subcollection
+    const clientsSnapshot = await db
+      .collection("users")
+      .doc(trainerId)
+      .collection("clients")
+      .where("deleted", "!=", true)
+      .get()
+
+    const clients = clientsSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+
+    console.log(`[API:clients] Found ${clients.length} clients for trainer ${trainerId}`)
 
     return NextResponse.json({ clients })
-  } catch (error: any) {
-    console.error("[API] Error in /api/clients:", error)
-
-    if (error.code === "auth/session-cookie-expired") {
-      return NextResponse.json({ error: "Session expired" }, { status: 401 })
-    }
-
-    return NextResponse.json({ error: "Internal server error", details: error.message }, { status: 500 })
+  } catch (error) {
+    console.error("[API:clients] Error fetching clients:", error)
+    return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 })
   }
 }
