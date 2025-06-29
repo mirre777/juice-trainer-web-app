@@ -1,66 +1,30 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getFirebaseAdminAuth, getFirebaseAdminFirestore, initializeFirebaseAdmin } from "@/lib/firebase/firebase-admin"
 import { cookies } from "next/headers"
-
-// Initialize Firebase Admin SDK
-initializeFirebaseAdmin()
+import { db } from "@/lib/firebase/firebase"
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("[API] /api/clients - GET request received")
-
-    // Get session cookie
-    const sessionCookie = cookies().get("session")?.value
-    console.log("[API] Session cookie exists:", !!sessionCookie)
-
-    if (!sessionCookie) {
-      console.log("[API] No session cookie found")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Verify the session cookie
-    const decodedClaims = await getFirebaseAdminAuth().verifySessionCookie(sessionCookie, true)
-    const trainerId = decodedClaims.uid
-    console.log("[API] Trainer ID from session:", trainerId)
+    const cookieStore = cookies()
+    const trainerId = cookieStore.get("user_id")?.value
 
     if (!trainerId) {
-      console.log("[API] No trainer ID in session")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get Firestore instance
-    const db = getFirebaseAdminFirestore()
-
     // Query the clients collection for this trainer
-    const clientsRef = db.collection(`users/${trainerId}/clients`)
-    const snapshot = await clientsRef.where("deleted", "!=", true).get()
+    const clientsRef = collection(db, `users/${trainerId}/clients`)
+    const clientsQuery = query(clientsRef, where("deleted", "!=", true), orderBy("name", "asc"))
 
-    console.log("[API] Found clients:", snapshot.size)
-
-    const clients = snapshot.docs.map((doc) => {
-      const data = doc.data()
-      return {
-        id: doc.id,
-        name: data.name || "Unknown",
-        email: data.email || "",
-        status: data.status || "active",
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        initials: data.initials || data.name?.substring(0, 2)?.toUpperCase() || "??",
-        bgColor: data.bgColor || "#f3f4f6",
-        textColor: data.textColor || "#374151",
-      }
-    })
-
-    console.log("[API] Returning clients:", clients.length)
+    const snapshot = await getDocs(clientsQuery)
+    const clients = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
 
     return NextResponse.json({ clients })
-  } catch (error: any) {
-    console.error("[API] Error in /api/clients:", error)
-
-    if (error.code === "auth/session-cookie-expired") {
-      return NextResponse.json({ error: "Session expired" }, { status: 401 })
-    }
-
-    return NextResponse.json({ error: "Internal server error", details: error.message }, { status: 500 })
+  } catch (error) {
+    console.error("Error fetching clients:", error)
+    return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 })
   }
 }

@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import OverviewPageClient from "./OverviewPageClient"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -19,9 +18,5 @@ function OverviewSkeleton() {
 }
 
 export default function OverviewPage() {
-  return (
-    <Suspense fallback={<OverviewSkeleton />}>
-      <OverviewPageClient />
-    </Suspense>
-  )
+  return <OverviewPageClient />
 }
