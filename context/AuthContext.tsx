@@ -1,150 +1,65 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect, useCallback } from "react"
-
-interface User {
-  id: string
-  email: string
-  name: string
-  role: "trainer" | "client"
-  avatar?: string
-  createdAt: string
-}
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { onAuthStateChanged, type User } from "firebase/auth"
+import { auth } from "../lib/firebase/firebase"
+import { getCookie } from "cookies-next"
 
 interface AuthContextType {
   user: User | null
-  isLoading: boolean
-  isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
-  logout: () => void
-  signup: (email: string, password: string, name: string, role: "trainer" | "client") => Promise<void>
-  updateProfile: (data: Partial<User>) => Promise<void>
+  loading: boolean
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+})
 
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-}
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
 
-  // Load user from localStorage on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem("auth_user")
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser))
-      } catch (error) {
-        console.error("Failed to parse saved user:", error)
-        localStorage.removeItem("auth_user")
-      }
-    }
-    setIsLoading(false)
-  }, [])
+    console.log("[AuthProvider] Setting up auth state listener")
 
-  // Save user to localStorage whenever user changes
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem("auth_user", JSON.stringify(user))
-    } else {
-      localStorage.removeItem("auth_user")
-    }
-  }, [user])
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      console.log("[AuthProvider] Auth state changed:", firebaseUser?.uid || "no user")
 
-  const login = useCallback(async (email: string, password: string) => {
-    setIsLoading(true)
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Mock user data
-      const mockUser: User = {
-        id: "user_" + Date.now(),
-        email,
-        name: email.split("@")[0],
-        role: email.includes("trainer") ? "trainer" : "client",
-        avatar: "/placeholder-user.jpg",
-        createdAt: new Date().toISOString(),
+      if (firebaseUser) {
+        setUser(firebaseUser)
+      } else {
+        // Check for user in cookies as fallback
+        const userId = getCookie("user_id")?.toString()
+        if (userId) {
+          console.log("[AuthProvider] Found user in cookies:", userId)
+          // Create a mock user object for cookie-based auth
+          const mockUser = {
+            uid: userId,
+            email: getCookie("user_email")?.toString() || "",
+            displayName: getCookie("user_name")?.toString() || "",
+          } as User
+          setUser(mockUser)
+        } else {
+          setUser(null)
+        }
       }
 
-      setUser(mockUser)
-    } catch (error) {
-      console.error("Login failed:", error)
-      throw new Error("Invalid credentials")
-    } finally {
-      setIsLoading(false)
+      setLoading(false)
+    })
+
+    return () => {
+      console.log("[AuthProvider] Cleaning up auth listener")
+      unsubscribe()
     }
   }, [])
 
-  const logout = useCallback(() => {
-    setUser(null)
-    localStorage.removeItem("auth_user")
-  }, [])
+  console.log("[AuthProvider] Current state:", { user: user?.uid, loading })
 
-  const signup = useCallback(async (email: string, password: string, name: string, role: "trainer" | "client") => {
-    setIsLoading(true)
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const newUser: User = {
-        id: "user_" + Date.now(),
-        email,
-        name,
-        role,
-        avatar: "/placeholder-user.jpg",
-        createdAt: new Date().toISOString(),
-      }
-
-      setUser(newUser)
-    } catch (error) {
-      console.error("Signup failed:", error)
-      throw new Error("Signup failed")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  const updateProfile = useCallback(
-    async (data: Partial<User>) => {
-      if (!user) throw new Error("No user logged in")
-
-      setIsLoading(true)
-      try {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 800))
-
-        const updatedUser = { ...user, ...data }
-        setUser(updatedUser)
-      } catch (error) {
-        console.error("Profile update failed:", error)
-        throw new Error("Failed to update profile")
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [user],
-  )
-
-  const value = {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    login,
-    logout,
-    signup,
-    updateProfile,
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>
 }
 
-export default AuthProvider
+// Export the useAuth hook that was missing
+export const useAuth = () => useContext(AuthContext)
+
+// Export the useAuthContext hook that was missing
+export const useAuthContext = () => useContext(AuthContext)

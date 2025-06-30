@@ -1,295 +1,304 @@
 "use client"
 
+import type React from "react"
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Clock, Target, CheckCircle, Play, Pause, RotateCcw, Heart, MessageCircle, Share2 } from "lucide-react"
+import { doc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
+import { db } from "../lib/firebase/firebase"
+import { Button } from "./ui/button"
+import { useToast } from "@/hooks/use-toast"
+import { useAuthContext } from "@/context/AuthContext"
+import { Card } from "./ui/card"
 
-interface Exercise {
-  id: string
-  name: string
-  sets: number
-  reps: string
-  weight?: string
-  duration?: string
-  restTime: string
-  completed: boolean
-  notes?: string
+interface ClientWorkoutViewProps {
+  workout: any
+  userId: string
+  clientId?: string
+  client?: any
+  isMockData?: boolean
 }
 
-interface WorkoutData {
-  id: string
-  title: string
-  date: string
-  duration: string
-  difficulty: "Beginner" | "Intermediate" | "Advanced"
-  category: string
-  exercises: Exercise[]
-  clientName: string
-  clientAvatar: string
-  trainerNotes?: string
-  status: "pending" | "in-progress" | "completed"
-}
+const ClientWorkoutView: React.FC<ClientWorkoutViewProps> = ({
+  workout,
+  userId,
+  clientId,
+  client,
+  isMockData = false,
+}) => {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [showCommentInput, setShowCommentInput] = useState(false)
+  const [comment, setComment] = useState("")
+  const { toast } = useToast()
+  const { user, isAuthenticated } = useAuthContext()
 
-const mockWorkout: WorkoutData = {
-  id: "workout_1",
-  title: "Upper Body Strength Training",
-  date: "2024-01-15",
-  duration: "45 min",
-  difficulty: "Intermediate",
-  category: "Strength Training",
-  clientName: "Sarah Johnson",
-  clientAvatar: "/lemon-avatar.png",
-  trainerNotes: "Focus on form over weight. Take your time with each rep.",
-  status: "in-progress",
-  exercises: [
-    {
-      id: "ex_1",
-      name: "Push-ups",
-      sets: 3,
-      reps: "12-15",
-      restTime: "60s",
-      completed: true,
-      notes: "Keep core tight",
-    },
-    {
-      id: "ex_2",
-      name: "Dumbbell Rows",
-      sets: 3,
-      reps: "10-12",
-      weight: "15 lbs",
-      restTime: "90s",
-      completed: true,
-    },
-    {
-      id: "ex_3",
-      name: "Shoulder Press",
-      sets: 3,
-      reps: "8-10",
-      weight: "12 lbs",
-      restTime: "90s",
-      completed: false,
-    },
-    {
-      id: "ex_4",
-      name: "Plank",
-      sets: 3,
-      reps: "1",
-      duration: "30s",
-      restTime: "60s",
-      completed: false,
-    },
-  ],
-}
-
-export function ClientWorkoutView() {
-  const [workout, setWorkout] = useState<WorkoutData>(mockWorkout)
-  const [currentExercise, setCurrentExercise] = useState(0)
-  const [isTimerRunning, setIsTimerRunning] = useState(false)
-  const [timerSeconds, setTimerSeconds] = useState(0)
-
-  const completedExercises = workout.exercises.filter((ex) => ex.completed).length
-  const progressPercentage = (completedExercises / workout.exercises.length) * 100
-
-  const toggleExerciseComplete = (exerciseId: string) => {
-    setWorkout((prev) => ({
-      ...prev,
-      exercises: prev.exercises.map((ex) => (ex.id === exerciseId ? { ...ex, completed: !ex.completed } : ex)),
-    }))
+  // Add defensive checks at the beginning
+  if (!workout) {
+    console.warn("ClientWorkoutView: workout prop is undefined or null")
+    return <div className="p-4 text-center">No workout data available</div>
   }
 
-  const startTimer = () => {
-    setIsTimerRunning(true)
-    // In a real app, you'd implement actual timer logic here
+  const saveReaction = async (emoji: string) => {
+    try {
+      // 🔍 ENHANCED DEBUG LOGGING TO FIND THE SOURCE
+      console.log("=== REACTION DEBUG INFO ===")
+      console.log("🔥 PROPS ANALYSIS:")
+      console.log("- userId prop:", userId)
+      console.log("- clientId prop:", clientId)
+      console.log("- client prop:", client)
+      console.log("- workout prop:", workout)
+      console.log("")
+      console.log("🔥 WORKOUT ANALYSIS:")
+      console.log("- workout.id:", workout?.id)
+      console.log("- workout.userId:", workout?.userId) // Check if workout has userId
+      console.log("- workout.clientId:", workout?.clientId) // Check if workout has clientId
+      console.log("- workout.ownerId:", workout?.ownerId) // Check if workout has ownerId
+      console.log("")
+      console.log("🔥 CLIENT ANALYSIS:")
+      console.log("- client?.id:", client?.id)
+      console.log("- client?.userId:", client?.userId) // Check if client has userId
+      console.log("- client?.firebaseUid:", client?.firebaseUid) // Check if client has firebaseUid
+      console.log("")
+
+      // 🎯 TRY MULTIPLE STRATEGIES TO GET THE CORRECT USER ID
+      let actualUserId = null
+
+      // Strategy 1: Use workout's owner information
+      if (workout?.userId) {
+        actualUserId = workout.userId
+        console.log("✅ Using workout.userId:", actualUserId)
+      }
+      // Strategy 2: Use workout's clientId if it exists
+      else if (workout?.clientId) {
+        actualUserId = workout.clientId
+        console.log("✅ Using workout.clientId:", actualUserId)
+      }
+      // Strategy 3: Use client's userId if available
+      else if (client?.userId) {
+        actualUserId = client.userId
+        console.log("✅ Using client.userId:", actualUserId)
+      }
+      // Strategy 4: Use client's firebaseUid if available
+      else if (client?.firebaseUid) {
+        actualUserId = client.firebaseUid
+        console.log("✅ Using client.firebaseUid:", actualUserId)
+      }
+      // Strategy 5: Fall back to props
+      else {
+        actualUserId = userId || clientId || client?.id
+        console.log("⚠️ Using fallback:", actualUserId)
+      }
+
+      console.log("")
+      console.log("🎯 FINAL DECISION:")
+      console.log("- Selected userId:", actualUserId)
+      console.log("- Workout ID:", workout?.id)
+      console.log("- Full path:", `users/${actualUserId}/workouts/${workout?.id}`)
+      console.log("========================")
+
+      if (!workout?.id || !actualUserId) {
+        console.error("❌ Missing required data:", {
+          workoutId: workout?.id,
+          actualUserId,
+        })
+        toast({
+          title: "Error saving reaction",
+          description: "Missing workout or user information",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (isMockData) {
+        console.log("🎭 Mock data - not saving to database")
+        toast({
+          title: "Reaction saved (demo)",
+          description: "This is demo mode, reaction not saved to database",
+        })
+        return
+      }
+
+      // 🔍 LOG THE EXACT PATH BEING USED
+      const documentPath = `users/${actualUserId}/workouts/${workout.id}`
+      console.log("🔥 Attempting to save reaction to path:", documentPath)
+
+      const workoutRef = doc(db, documentPath)
+
+      await updateDoc(workoutRef, {
+        reactions: arrayUnion({
+          emoji,
+          trainerId: userId, // Keep original userId as trainerId (the trainer reacting)
+          timestamp: new Date().toISOString(),
+        }),
+        updatedAt: serverTimestamp(),
+      })
+
+      console.log("✅ Reaction saved successfully!")
+      toast({
+        title: "Reaction saved",
+        description: "Your reaction has been saved",
+      })
+    } catch (error) {
+      console.error("❌ Error saving reaction:", error)
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      })
+      toast({
+        title: "Error saving reaction",
+        description: error.message || "Please try again later",
+        variant: "destructive",
+      })
+    }
   }
 
-  const pauseTimer = () => {
-    setIsTimerRunning(false)
-  }
+  const saveComment = async () => {
+    try {
+      // Apply the same logic for comments
+      let actualUserId = null
 
-  const resetTimer = () => {
-    setIsTimerRunning(false)
-    setTimerSeconds(0)
+      if (workout?.userId) {
+        actualUserId = workout.userId
+      } else if (workout?.clientId) {
+        actualUserId = workout.clientId
+      } else if (client?.userId) {
+        actualUserId = client.userId
+      } else if (client?.firebaseUid) {
+        actualUserId = client.firebaseUid
+      } else {
+        actualUserId = userId || clientId || client?.id
+      }
+
+      if (!comment.trim()) return
+
+      console.log("=== COMMENT DEBUG INFO ===")
+      console.log("Comment:", comment)
+      console.log("actualUserId:", actualUserId)
+      console.log("workout.id:", workout?.id)
+      console.log("Full path:", `users/${actualUserId}/workouts/${workout?.id}`)
+      console.log("========================")
+
+      if (!workout?.id || !actualUserId) {
+        console.error("❌ Missing required data for comment:", {
+          workoutId: workout?.id,
+          actualUserId,
+        })
+        toast({
+          title: "Error saving comment",
+          description: "Missing workout or user information",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (isMockData) {
+        console.log("🎭 Mock data - not saving comment to database")
+        toast({
+          title: "Comment saved (demo)",
+          description: "This is demo mode, comment not saved to database",
+        })
+        setComment("")
+        setShowCommentInput(false)
+        return
+      }
+
+      const workoutRef = doc(db, `users/${actualUserId}/workouts/${workout.id}`)
+
+      await updateDoc(workoutRef, {
+        comments: arrayUnion({
+          comment,
+          trainerId: userId, // Keep original userId as trainerId
+          timestamp: new Date().toISOString(),
+        }),
+        updatedAt: serverTimestamp(),
+      })
+
+      console.log("✅ Comment saved successfully!")
+      toast({
+        title: "Comment saved",
+        description: "Your comment has been saved",
+      })
+
+      setComment("")
+      setShowCommentInput(false)
+    } catch (error) {
+      console.error("❌ Error saving comment:", error)
+      toast({
+        title: "Error saving comment",
+        description: error.message || "Please try again later",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
-      {/* Header */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Avatar className="h-12 w-12">
-                <AvatarImage src={workout.clientAvatar || "/placeholder.svg"} alt={workout.clientName} />
-                <AvatarFallback>
-                  {workout.clientName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <CardTitle className="text-xl">{workout.title}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {workout.clientName} • {workout.date}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Badge variant="secondary">{workout.difficulty}</Badge>
-              <Badge variant="outline">{workout.category}</Badge>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div className="flex items-center space-x-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">{workout.duration}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Target className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">{workout.exercises.length} exercises</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">{completedExercises} completed</span>
-            </div>
-          </div>
+    <div className="relative">
+      {/* Workout content would go here */}
+      {workout.notes && workout.notes.trim() !== "" && (
+        <Card className="mb-6 p-4 border-2 border-primary bg-white shadow-sm">
+          <h3 className="text-lg font-semibold mb-2">Client Note:</h3>
+          <p className="text-sm text-gray-700">{workout.notes}</p>
+        </Card>
+      )}
 
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Progress</span>
-              <span>{Math.round(progressPercentage)}%</span>
-            </div>
-            <Progress value={progressPercentage} className="h-2" />
-          </div>
+      {isAuthenticated && (
+        <div className="fixed bottom-20 left-0 right-0 flex justify-center gap-4 z-50">
+          <Button
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="rounded-full w-12 h-12 bg-white shadow-lg flex items-center justify-center hover:bg-gray-100"
+          >
+            <span className="text-xl">😊</span>
+          </Button>
 
-          {workout.trainerNotes && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>Trainer Notes:</strong> {workout.trainerNotes}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <Button
+            onClick={() => setShowCommentInput(!showCommentInput)}
+            className="rounded-full w-12 h-12 bg-white shadow-lg flex items-center justify-center hover:bg-gray-100"
+          >
+            <span className="text-xl">💬</span>
+          </Button>
+        </div>
+      )}
 
-      {/* Rest Timer */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Rest Timer</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="text-2xl font-mono">
-              {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, "0")}
-            </div>
-            <div className="flex space-x-2">
-              <Button
-                size="sm"
-                variant={isTimerRunning ? "secondary" : "default"}
-                onClick={isTimerRunning ? pauseTimer : startTimer}
+      {isAuthenticated && showEmojiPicker && (
+        <div className="fixed bottom-36 left-0 right-0 flex justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-4 flex gap-2">
+            {["👍", "👏", "🔥", "💪", "👊", "🎉"].map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => {
+                  saveReaction(emoji)
+                  setShowEmojiPicker(false)
+                }}
+                className="text-2xl hover:scale-125 transition-transform"
               >
-                {isTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isAuthenticated && showCommentInput && (
+        <div className="fixed bottom-36 left-0 right-0 flex justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-4 w-full max-w-md mx-4">
+            <input
+              type="text"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Add a comment..."
+              className="w-full border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <div className="flex justify-end mt-2">
+              <Button onClick={() => setShowCommentInput(false)} variant="outline" className="mr-2">
+                Cancel
               </Button>
-              <Button size="sm" variant="outline" onClick={resetTimer}>
-                <RotateCcw className="h-4 w-4" />
-              </Button>
+              <Button onClick={saveComment}>Send</Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Exercises */}
-      <div className="space-y-4">
-        {workout.exercises.map((exercise, index) => (
-          <Card key={exercise.id} className={exercise.completed ? "bg-green-50 border-green-200" : ""}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-muted-foreground">{index + 1}.</span>
-                      <h3 className="font-semibold">{exercise.name}</h3>
-                      {exercise.completed && <CheckCircle className="h-4 w-4 text-green-600" />}
-                    </div>
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Sets:</span>
-                      <span className="ml-1 font-medium">{exercise.sets}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Reps:</span>
-                      <span className="ml-1 font-medium">{exercise.reps}</span>
-                    </div>
-                    {exercise.weight && (
-                      <div>
-                        <span className="text-muted-foreground">Weight:</span>
-                        <span className="ml-1 font-medium">{exercise.weight}</span>
-                      </div>
-                    )}
-                    {exercise.duration && (
-                      <div>
-                        <span className="text-muted-foreground">Duration:</span>
-                        <span className="ml-1 font-medium">{exercise.duration}</span>
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-muted-foreground">Rest:</span>
-                      <span className="ml-1 font-medium">{exercise.restTime}</span>
-                    </div>
-                  </div>
-
-                  {exercise.notes && (
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      <strong>Notes:</strong> {exercise.notes}
-                    </div>
-                  )}
-                </div>
-
-                <Button
-                  variant={exercise.completed ? "secondary" : "default"}
-                  size="sm"
-                  onClick={() => toggleExerciseComplete(exercise.id)}
-                >
-                  {exercise.completed ? "Completed" : "Mark Complete"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Action Buttons */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-2 justify-center">
-            <Button variant="outline" size="sm">
-              <Heart className="h-4 w-4 mr-2" />
-              Like Workout
-            </Button>
-            <Button variant="outline" size="sm">
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Add Comment
-            </Button>
-            <Button variant="outline" size="sm">
-              <Share2 className="h-4 w-4 mr-2" />
-              Share Progress
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   )
 }
 
-// Named export
-
-// Default export
+// Export as default to fix the deployment error
 export default ClientWorkoutView

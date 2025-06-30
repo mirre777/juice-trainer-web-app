@@ -90,35 +90,9 @@ export function createError(
     message: errorMessage,
     originalError,
     metadata,
-    timestamp: new Date(),
-    statusCode: getStatusCodeForErrorType(type),
   }
 
   return error
-}
-
-function getStatusCodeForErrorType(type: ErrorType): number {
-  switch (type) {
-    case ErrorType.API_INVALID_PARAMS:
-    case ErrorType.VALIDATION_FAILED:
-    case ErrorType.INVALID_INPUT:
-      return 400
-    case ErrorType.API_UNAUTHORIZED:
-    case ErrorType.AUTH_INVALID_CREDENTIALS:
-    case ErrorType.AUTH_TOKEN_EXPIRED:
-    case ErrorType.AUTH_TOKEN_INVALID:
-      return 401
-    case ErrorType.API_FORBIDDEN:
-      return 403
-    case ErrorType.API_NOT_FOUND:
-    case ErrorType.DB_DOCUMENT_NOT_FOUND:
-    case ErrorType.FILE_NOT_FOUND:
-      return 404
-    case ErrorType.API_RATE_LIMIT:
-      return 429
-    default:
-      return 500
-  }
 }
 
 export function logError(error: AppError): void {
@@ -127,7 +101,6 @@ export function logError(error: AppError): void {
     message: error.message,
     metadata: error.metadata,
     originalError: error.originalError,
-    timestamp: error.timestamp,
   })
 }
 
@@ -186,7 +159,23 @@ export function handleApiError(
 
   logError(appError)
 
-  return { error: appError, statusCode: appError.statusCode || 500 }
+  let statusCode = 500 // Default server error
+  switch (appError.type) {
+    case ErrorType.API_INVALID_PARAMS:
+      statusCode = 400
+      break
+    case ErrorType.API_UNAUTHORIZED:
+      statusCode = 401
+      break
+    case ErrorType.API_FORBIDDEN:
+      statusCode = 403
+      break
+    case ErrorType.API_NOT_FOUND:
+      statusCode = 404
+      break
+  }
+
+  return { error: appError, statusCode }
 }
 
 export async function tryCatch<T>(
@@ -210,6 +199,3 @@ export function logAuditEvent(eventData: any): void {
   console.log("Audit logging disabled:", eventData)
   return
 }
-
-// Export the AppError type
-export type { AppError }

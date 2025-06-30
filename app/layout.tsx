@@ -1,42 +1,38 @@
 import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Sen, Inter } from "next/font/google"
+import ClientLayout from "./ClientLayout"
+import { DemoBanner } from "@/components/demo-banner"
+import { ToastProvider } from "@/components/ui/toast-context"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
-import ToastProvider from "@/components/providers/toast-provider"
-import { AuthProvider } from "@/context/AuthContext"
-import { FeedbackProvider } from "@/context/FeedbackContext"
-import FloatingFeedbackButton from "@/components/FloatingFeedbackButton"
 
-const inter = Inter({ subsets: ["latin"] })
+// Initialize the Sen font
+const sen = Sen({
+  subsets: ["latin"],
+  weight: ["400", "700", "800"],
+  variable: "--font-sen",
+  display: "swap",
+})
 
-export const metadata: Metadata = {
-  title: "Juice Trainer - Personal Training Platform",
-  description: "Professional personal training platform for trainers and clients",
-    generator: 'v0.dev'
-}
+// Initialize the Inter font
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+})
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            <ToastProvider>
-              <FeedbackProvider>
-                {children}
-                <FloatingFeedbackButton />
-                <Toaster />
-              </FeedbackProvider>
-            </ToastProvider>
-          </AuthProvider>
-        </ThemeProvider>
+    <html lang="en" className={`${sen.variable} ${inter.variable}`}>
+      <body>
+        <ToastProvider>
+          <DemoBanner />
+          <ClientLayout>{children}</ClientLayout>
+        </ToastProvider>
       </body>
     </html>
   )
 }
+
+export const metadata = {
+      generator: 'v0.dev'
+    };
