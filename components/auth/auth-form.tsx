@@ -101,7 +101,8 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
           if (data.autoSignedIn) {
             // Successfully auto-signed in, redirect to overview
             console.log(`[AuthForm] Trainer auto-signed in, redirecting to overview`)
-            router.push("/overview")
+            // Use window.location.href for immediate redirect
+            window.location.href = "/overview"
           } else {
             // Account created but auto-signin failed, redirect to login
             console.log(`[AuthForm] Trainer account created but auto-signin failed, redirecting to login`)
@@ -118,7 +119,7 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
 
         try {
           // Add a small delay to ensure cookies are set
-          await new Promise((resolve) => setTimeout(resolve, 100))
+          await new Promise((resolve) => setTimeout(resolve, 200))
 
           const userResponse = await fetch("/api/auth/me", {
             credentials: "include", // Ensure cookies are sent
@@ -130,21 +131,22 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
           if (!userResponse.ok) {
             console.error("[AuthForm] Failed to get user data:", userData)
             // Fallback to mobile app success for safety
-            router.push("/mobile-app-success")
+            window.location.href = "/mobile-app-success"
             return
           }
 
           if (userData.role === "trainer") {
             console.log(`[AuthForm] User is trainer, redirecting to overview`)
-            router.push("/overview")
+            // Use window.location.href for immediate redirect without refresh
+            window.location.href = "/overview"
           } else {
             console.log(`[AuthForm] User is not trainer (role: ${userData.role}), redirecting to mobile app success`)
-            router.push("/mobile-app-success")
+            window.location.href = "/mobile-app-success"
           }
         } catch (userError) {
           console.error("[AuthForm] Error fetching user data:", userError)
           // Fallback to mobile app success for safety
-          router.push("/mobile-app-success")
+          window.location.href = "/mobile-app-success"
         }
       }
     } catch (err) {
