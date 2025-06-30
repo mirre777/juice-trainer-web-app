@@ -1,149 +1,138 @@
 export interface WorkoutProgram {
+  id?: string
+  title: string
+  notes?: string
+  weeks: ProgramWeek[]
+  duration?: number
   program_URL?: string
-  program_title: string
-  program_notes?: string | null
-  program_weeks: number
-  routine_count: number
-  routines: WorkoutRoutine[]
-  is_periodized?: boolean // New field to indicate if program changes week by week
 }
 
-export interface WorkoutRoutine {
-  routine_name: string
-  routine_rank: string
+export interface ProgramWeek {
+  week_number: number
+  routines: ProgramRoutine[]
+}
+
+export interface ProgramRoutine {
+  name: string
+  notes?: string
+  order?: number
   exercises: ProgramExercise[]
-  // For periodized programs, exercises can have different values per week
 }
 
 export interface ProgramExercise {
+  id?: string
   name: string
-  exercise_category: string
-  exercise_video?: string | null
-  notes?: string | null // Changed from 'exercise_notes' to 'notes'
-  weeks: ExerciseWeek[]
-  // For non-periodized: weeks array has same values repeated
-  // For periodized: weeks array has different values per week
+  video_url?: string
+  notes?: string
+  sets: ProgramSet[]
 }
 
-export interface ExerciseWeek {
-  week_number: number
-  set_count: number
-  sets: WorkoutSet[]
-  routines?: WorkoutRoutine[] // Added routines to ExerciseWeek for periodized programs
+export interface ProgramSet {
+  id?: string
+  reps: string
+  weight?: string
+  type?: string
+  set_type?: string
+  rpe?: string
+  rest?: string
+  notes?: string
 }
 
-export interface WorkoutSet {
-  set_number: number
-  warmup: boolean
-  reps: number | string | null
-  duration_sec?: number | string | null
-  weight?: number | string | null
-  rpe: number | string | null
-  rest: string | null
+// Mobile app format interfaces
+export interface MobileProgram {
+  id: string
+  name: string
   notes: string | null
+  startedAt: string
+  duration: number
+  createdAt: string
+  updated_at: string
+  routines: Array<{
+    routineId: string
+    week: number
+    order: number
+  }>
 }
 
-// Helper types for the UI
-export interface ExerciseCategory {
+export interface MobileRoutine {
+  id: string
   name: string
-  exercises: string[]
+  notes: string
+  createdAt: string
+  updatedAt: string
+  deletedAt: null
+  type: "program"
+  exercises: Array<{
+    id: string
+    name: string
+    sets: Array<{
+      id: string
+      type: string
+      weight: string
+      reps: string
+      notes?: string
+    }>
+  }>
 }
 
-export const DEFAULT_EXERCISE_CATEGORIES: ExerciseCategory[] = [
-  {
-    name: "Upper Body",
-    exercises: ["Bench Press", "Push-ups", "Pull-ups", "Shoulder Press", "Bicep Curls", "Tricep Extensions"],
-  },
-  {
-    name: "Lower Body",
-    exercises: ["Squats", "Deadlifts", "Lunges", "Leg Press", "Calf Raises", "Leg Extensions"],
-  },
-  {
-    name: "Core",
-    exercises: ["Crunches", "Planks", "Russian Twists", "Leg Raises", "Mountain Climbers", "Ab Rollouts"],
-  },
-  {
-    name: "Cardio",
-    exercises: ["Running", "Cycling", "Jumping Jacks", "Burpees", "Jump Rope", "High Knees"],
-  },
-]
+export interface MobileExercise {
+  id: string
+  name: string
+  muscleGroup?: string
+  isCardio?: boolean
+  isFullBody?: boolean
+  isMobility?: boolean
+  createdAt: any
+  updatedAt: any
+  deletedAt: null
+}
 
-export type ExerciseSet = WorkoutSet
+// Validation functions
+export function validateProgramForMobileConversion(program: WorkoutProgram): boolean {
+  if (!program.title || !program.weeks || program.weeks.length === 0) {
+    return false
+  }
 
-// Sample periodized program data structure
-export const SAMPLE_PERIODIZED_PROGRAM: WorkoutProgram = {
-  program_title: "12-Week Strength Periodization",
-  program_notes: "Progressive overload with deload weeks",
-  program_weeks: 12,
-  routine_count: 2,
-  is_periodized: true,
-  routines: [
-    {
-      routine_name: "Upper Body",
-      routine_rank: "1",
-      exercises: [
-        {
-          name: "Bench Press",
-          exercise_category: "Push",
-          notes: "Focus on progressive overload", // Changed from 'exercise_notes' to 'notes'
-          weeks: [
-            // Week 1-3: Volume Phase
-            {
-              week_number: 1,
-              set_count: 4,
-              sets: [
-                { set_number: 1, warmup: true, reps: "8", rpe: "6", rest: "90s", notes: null },
-                { set_number: 2, warmup: false, reps: "8", rpe: "7", rest: "90s", notes: null },
-                { set_number: 3, warmup: false, reps: "8", rpe: "7", rest: "90s", notes: null },
-                { set_number: 4, warmup: false, reps: "8", rpe: "8", rest: "90s", notes: null },
-              ],
-            },
-            {
-              week_number: 2,
-              set_count: 4,
-              sets: [
-                { set_number: 1, warmup: true, reps: "8", rpe: "6", rest: "90s", notes: null },
-                { set_number: 2, warmup: false, reps: "8", rpe: "7.5", rest: "90s", notes: null },
-                { set_number: 3, warmup: false, reps: "8", rpe: "7.5", rest: "90s", notes: null },
-                { set_number: 4, warmup: false, reps: "8", rpe: "8.5", rest: "90s", notes: null },
-              ],
-            },
-            {
-              week_number: 3,
-              set_count: 4,
-              sets: [
-                { set_number: 1, warmup: true, reps: "8", rpe: "6", rest: "90s", notes: null },
-                { set_number: 2, warmup: false, reps: "8", rpe: "8", rest: "90s", notes: null },
-                { set_number: 3, warmup: false, reps: "8", rpe: "8", rest: "90s", notes: null },
-                { set_number: 4, warmup: false, reps: "8", rpe: "9", rest: "90s", notes: null },
-              ],
-            },
-            // Week 4: Deload
-            {
-              week_number: 4,
-              set_count: 3,
-              sets: [
-                { set_number: 1, warmup: true, reps: "8", rpe: "5", rest: "60s", notes: "Deload week" },
-                { set_number: 2, warmup: false, reps: "8", rpe: "6", rest: "60s", notes: null },
-                { set_number: 3, warmup: false, reps: "8", rpe: "6", rest: "60s", notes: null },
-              ],
-            },
-            // Week 5-7: Intensity Phase
-            {
-              week_number: 5,
-              set_count: 5,
-              sets: [
-                { set_number: 1, warmup: true, reps: "5", rpe: "6", rest: "120s", notes: null },
-                { set_number: 2, warmup: false, reps: "5", rpe: "7", rest: "120s", notes: null },
-                { set_number: 3, warmup: false, reps: "5", rpe: "7", rest: "120s", notes: null },
-                { set_number: 4, warmup: false, reps: "5", rpe: "8", rest: "120s", notes: null },
-                { set_number: 5, warmup: false, reps: "5", rpe: "8", rest: "120s", notes: null },
-              ],
-            },
-            // ... continue for remaining weeks
-          ],
-        },
-      ],
-    },
-  ],
+  for (const week of program.weeks) {
+    if (!week.routines || week.routines.length === 0) {
+      return false
+    }
+
+    for (const routine of week.routines) {
+      if (!routine.name || !routine.exercises || routine.exercises.length === 0) {
+        return false
+      }
+
+      for (const exercise of routine.exercises) {
+        if (!exercise.name || !exercise.sets || exercise.sets.length === 0) {
+          return false
+        }
+      }
+    }
+  }
+
+  return true
+}
+
+export function estimateProgramDataSize(program: WorkoutProgram): number {
+  return JSON.stringify(program).length
+}
+
+export function getProgramStats(program: WorkoutProgram) {
+  const totalWeeks = program.weeks.length
+  const totalRoutines = program.weeks.reduce((acc, week) => acc + week.routines.length, 0)
+  const totalExercises = program.weeks.reduce(
+    (acc, week) => acc + week.routines.reduce((routineAcc, routine) => routineAcc + routine.exercises.length, 0),
+    0,
+  )
+  const uniqueExercises = new Set(
+    program.weeks.flatMap((week) => week.routines.flatMap((routine) => routine.exercises.map((ex) => ex.name))),
+  ).size
+
+  return {
+    totalWeeks,
+    totalRoutines,
+    totalExercises,
+    uniqueExercises,
+  }
 }

@@ -1,51 +1,37 @@
-import { NextResponse } from "next/server"
-import { convertAndSendProgramToClient, getClientUserId } from "@/lib/firebase/program-conversion-service"
-import type { WorkoutProgram } from "@/types/workout-program"
+import { type NextRequest, NextResponse } from "next/server"
+import { programConversionService } from "@/lib/firebase/program-conversion-service"
+import { getCurrentUser } from "@/lib/auth/auth-service"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
-    const { program, trainerId, clientId, message } = body
+    const { programData, clientId } = body
 
-    console.log(`[send-to-client] Received request to send program to client: ${clientId}`)
-
-    // Validate required fields
-    if (!program || !trainerId || !clientId) {
-      return NextResponse.json({ message: "Program, trainer ID, and client ID are required" }, { status: 400 })
+    if (!programData || !clientId) {
+      return NextResponse.json({ error: "Program data and client ID are required" }, { status: 400 })
     }
 
-    // Validate program structure
-    if (!program.program_title || !program.program_weeks) {
-      return NextResponse.json({ message: "Invalid program structure - missing title or weeks" }, { status: 400 })
-    }
-
-    // Get the client's user ID
-    const clientUserId = await getClientUserId(trainerId, clientId)
+    // Get the client's actual user ID
+    const clientUserId = await programConversionService.getClientUserId(user.uid, clientId)
     if (!clientUserId) {
-      return NextResponse.json(
-        { message: "Client user ID not found - client may not have created an account yet" },
-        { status: 404 },
-      )
+      return NextResponse.json({ error: "Client not found or not linked to a user account" }, { status: 404 })
     }
-
-    console.log(`[send-to-client] Converting program for client user ID: ${clientUserId}`)
 
     // Convert and send the program
-    const result = await convertAndSendProgramToClient(program as WorkoutProgram, clientUserId, message)
-
-    if (!result.success) {
-      console.error("[send-to-client] Failed to convert and send program:", result.error)
-      return NextResponse.json({ message: "Failed to send program to client", error: result.error }, { status: 500 })
-    }
-
-    console.log(`[send-to-client] Successfully sent program: ${result.programId}`)
+    const programId = await programConversionService.convertAndSendProgram(programData, clientUserId)
 
     return NextResponse.json({
-      message: "Program sent to client successfully",
-      programId: result.programId,
+      success: true,
+      programId,
+      message: "Program successfully sent to client",
     })
   } catch (error) {
-    console.error("[send-to-client] Unexpected error:", error)
-    return NextResponse.json({ message: "Internal server error", error: error.message }, { status: 500 })
+    console.error("Error sending program to client:", error)
+    return NextResponse.json({ error: "Failed to send program to client" }, { status: 500 })
   }
 }
