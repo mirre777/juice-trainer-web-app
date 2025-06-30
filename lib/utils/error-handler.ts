@@ -67,40 +67,44 @@ export enum ErrorType {
   NOT_IMPLEMENTED = "NOT_IMPLEMENTED",
 }
 
-export interface AppError {
-  type: ErrorType
-  message: string
-  originalError?: any
-  metadata?: any
-  timestamp?: Date
-  statusCode?: number
-  stack?: string
+export class AppError extends Error {
+  public readonly statusCode: number
+  public readonly isOperational: boolean
+
+  constructor(message: string, statusCode = 500, isOperational = true) {
+    super(message)
+    this.statusCode = statusCode
+    this.isOperational = isOperational
+
+    Error.captureStackTrace(this, this.constructor)
+  }
 }
 
-export function createError(
-  type: ErrorType,
-  originalError: any = null,
-  metadata: any = {},
-  message?: string,
-): AppError {
-  const errorMessage = message || originalError?.message || `An error of type ${type} occurred`
-
-  const error: AppError = {
-    type,
-    message: errorMessage,
-    originalError,
-    metadata,
+export const handleError = (error: unknown): AppError => {
+  if (error instanceof AppError) {
+    return error
   }
 
-  return error
+  if (error instanceof Error) {
+    return new AppError(error.message, 500)
+  }
+
+  return new AppError("An unknown error occurred", 500)
+}
+
+export const isOperationalError = (error: Error): boolean => {
+  if (error instanceof AppError) {
+    return error.isOperational
+  }
+  return false
 }
 
 export function logError(error: AppError): void {
   console.error("APP ERROR:", {
-    type: error.type,
     message: error.message,
-    metadata: error.metadata,
-    originalError: error.originalError,
+    statusCode: error.statusCode,
+    isOperational: error.isOperational,
+    stack: error.stack,
   })
 }
 
@@ -108,14 +112,18 @@ export function handleClientError(
   error: any,
   options: { component: string; operation: string; message: string; errorType: ErrorType },
 ): AppError {
-  const appError = createError(
-    options.errorType,
-    error,
-    {
-      component: options.component,
-      operation: options.operation,
-    },
+  const appError = new AppError(
     options.message,
+    options.errorType === ErrorType.API_INVALID_PARAMS
+      ? 400
+      : options.errorType === ErrorType.API_UNAUTHORIZED
+        ? 401
+        : options.errorType === ErrorType.API_FORBIDDEN
+          ? 403
+          : options.errorType === ErrorType.API_NOT_FOUND
+            ? 404
+            : 500,
+    true,
   )
 
   logError(appError)
@@ -126,14 +134,18 @@ export function handleServerError(
   error: any,
   options: { service: string; operation: string; message: string; errorType: ErrorType; logOnly?: boolean },
 ): AppError {
-  const appError = createError(
-    options.errorType,
-    error,
-    {
-      service: options.service,
-      operation: options.operation,
-    },
+  const appError = new AppError(
     options.message,
+    options.errorType === ErrorType.API_INVALID_PARAMS
+      ? 400
+      : options.errorType === ErrorType.API_UNAUTHORIZED
+        ? 401
+        : options.errorType === ErrorType.API_FORBIDDEN
+          ? 403
+          : options.errorType === ErrorType.API_NOT_FOUND
+            ? 404
+            : 500,
+    true,
   )
 
   if (!options.logOnly) {
@@ -147,30 +159,22 @@ export function handleApiError(
   error: any,
   options: { route: string; requestId?: string },
 ): { error: AppError; statusCode: number } {
-  const appError = createError(
-    ErrorType.API_SERVER_ERROR,
-    error,
-    {
-      route: options.route,
-      requestId: options.requestId,
-    },
-    "API request failed",
-  )
+  const appError = new AppError("API request failed", error instanceof AppError ? error.statusCode : 500, true)
 
   logError(appError)
 
   let statusCode = 500 // Default server error
-  switch (appError.type) {
-    case ErrorType.API_INVALID_PARAMS:
+  switch (appError.statusCode) {
+    case 400:
       statusCode = 400
       break
-    case ErrorType.API_UNAUTHORIZED:
+    case 401:
       statusCode = 401
       break
-    case ErrorType.API_FORBIDDEN:
+    case 403:
       statusCode = 403
       break
-    case ErrorType.API_NOT_FOUND:
+    case 404:
       statusCode = 404
       break
   }
@@ -187,7 +191,7 @@ export async function tryCatch<T>(
     const result = await operation()
     return [result, null]
   } catch (error) {
-    const appError = createError(errorType, error, metadata)
+    const appError = handleError(error)
     logError(appError)
     return [null, appError]
   }
@@ -200,4 +204,4 @@ export function logAuditEvent(eventData: any): void {
   return
 }
 
-export type { AppError }
+export type { ErrorType }
