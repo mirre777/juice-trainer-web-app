@@ -1,73 +1,55 @@
-import { collection, doc, addDoc, getDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
-import type { WorkoutProgram } from "@/types/workout-program"
+import { db } from "./firebase"
+import { collection, doc, setDoc, getDoc, getDocs, query, where, Timestamp } from "firebase/firestore"
+import { fetchClients } from "./client-service" // Import the proper client service
 import { v4 as uuidv4 } from "uuid"
 
 // Types matching your mobile app structure
-interface MobileExercise {
+export interface MobileProgram {
   id: string
   name: string
-  description?: string
-  instructions?: string
-  muscleGroups: string[]
-  equipment?: string[]
-  difficulty?: string
-  videoUrl?: string
-  imageUrl?: string
-  createdAt: any
-  updatedAt: any
-  createdBy: string
-  isGlobal: boolean
+  notes: string | null
+  startedAt: string
+  duration: number
+  createdAt: string
+  updated_at: string
+  routines: Array<{
+    routineId: string
+    week: number
+    order: number
+  }>
 }
 
-interface MobileSet {
-  setNumber: number
-  reps?: string
-  weight?: string
-  duration?: string
-  distance?: string
-  rpe?: string
-  restTime?: string
-  notes?: string
-  isWarmup: boolean
-}
-
-interface MobileWorkoutExercise {
-  exerciseId: string
-  exerciseName: string
-  sets: MobileSet[]
-  notes?: string
-  restBetweenSets?: string
-}
-
-interface MobileRoutine {
+export interface MobileRoutine {
   id: string
   name: string
-  description?: string
-  exercises: MobileWorkoutExercise[]
-  estimatedDuration?: number
-  difficulty?: string
-  type: "program" // Always "program" for converted programs
-  createdAt: any
-  updatedAt: any
-  createdBy: string
-  isTemplate: boolean
+  notes: string
+  createdAt: string
+  updatedAt: string
+  deletedAt: null
+  type: "program"
+  exercises: Array<{
+    id: string
+    name: string
+    sets: Array<{
+      id: string
+      type: string
+      weight: string
+      reps: string
+      notes?: string
+    }>
+  }>
 }
 
-interface MobileProgram {
+export interface MobileExercise {
   id: string
-  title: string
-  description?: string
-  routineIds: string[]
-  weeks: number
-  isActive: boolean
-  startDate?: any
-  endDate?: any
+  name: string
+  muscleGroup: string
+  isCardio: boolean
+  isFullBody: boolean
+  isMobility: boolean
   createdAt: any
   updatedAt: any
-  createdBy: string
-  clientId: string
-  message?: string
+  deletedAt: null
 }
 
 export class ProgramConversionService {
@@ -100,22 +82,21 @@ export class ProgramConversionService {
 
     // Create new exercise in user's collection
     const exerciseId = uuidv4()
-    const timestamp = serverTimestamp()
+    const timestamp = Timestamp.now()
 
     const exerciseDoc: MobileExercise = {
       id: exerciseId,
       name: exerciseName,
-      description: `Exercise imported from program: ${exerciseName}`,
-      muscleGroups: [], // Could be enhanced to parse muscle groups from name
-      equipment: [],
-      difficulty: "intermediate",
+      muscleGroup: "Other", // Default muscle group
+      isCardio: false,
+      isFullBody: false,
+      isMobility: false,
       createdAt: timestamp,
       updatedAt: timestamp,
-      createdBy: userId,
-      isGlobal: false,
+      deletedAt: null,
     }
 
-    await addDoc(userExercisesRef, exerciseDoc)
+    await setDoc(doc(userExercisesRef, exerciseId), exerciseDoc)
     console.log(`[ensureExerciseExists] ✅ Created new exercise: ${exerciseName} with ID: ${exerciseId}`)
 
     return exerciseId
@@ -131,7 +112,7 @@ export class ProgramConversionService {
     weekNumber: number,
   ): Promise<{ routineId: string; routineDoc: MobileRoutine }> {
     const routineId = uuidv4()
-    const timestamp = serverTimestamp()
+    const timestamp = Timestamp.now()
 
     console.log(`[createRoutine] Creating routine: ${routineData.routine_name} for week ${weekNumber}`)
 
@@ -152,44 +133,35 @@ export class ProgramConversionService {
         if (set.notes) notesParts.push(set.notes)
 
         return {
-          setNumber: set.set_number || 1,
-          reps: set.reps?.toString() || "",
+          id: uuidv4(),
+          type: set.warmup ? "warmup" : set.set_type || "normal",
           weight: set.weight?.toString() || "",
-          duration: set.duration?.toString() || "",
-          distance: set.distance?.toString() || "",
-          rpe: set.rpe?.toString() || "",
-          restTime: set.rest?.toString() || "",
+          reps: set.reps?.toString() || "",
           notes: notesParts.join(" | ") || undefined,
-          isWarmup: set.warmup || false,
         }
       })
 
       exercises.push({
-        exerciseId,
-        exerciseName: exercise.name,
+        id: exerciseId,
+        name: exercise.name,
         sets: mobileSets,
-        notes: exercise.notes || "",
-        restBetweenSets: exercise.restBetweenSets || "",
       })
     }
 
     const routineDoc: MobileRoutine = {
       id: routineId,
       name: routineData.routine_name,
-      description: `Week ${weekNumber} routine from program: ${routineData.program_title}`,
-      exercises,
-      estimatedDuration: this.estimateRoutineDuration(exercises),
-      difficulty: "intermediate",
+      notes: routineData.notes || "",
+      createdAt: timestamp.toDate().toISOString(),
+      updatedAt: timestamp.toDate().toISOString(),
+      deletedAt: null,
       type: "program", // This is the key flag for mobile app filtering
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      createdBy: userId,
-      isTemplate: false,
+      exercises,
     }
 
     // Save routine to Firestore
     const routinesRef = collection(db, "users", userId, "routines")
-    await addDoc(routinesRef, routineDoc)
+    await setDoc(doc(routinesRef, routineId), routineDoc)
 
     console.log(`[createRoutine] ✅ Created routine: ${routineData.routine_name} with ID: ${routineId}`)
 
@@ -205,7 +177,7 @@ export class ProgramConversionService {
       console.log(`[convertAndSendProgram] Converting program for client: ${clientUserId}`)
       console.log(`[convertAndSendProgram] Program data:`, JSON.stringify(programData, null, 2))
 
-      const timestamp = serverTimestamp()
+      const timestamp = new Date()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
       // Handle periodized programs (with weeks array)
@@ -256,27 +228,23 @@ export class ProgramConversionService {
       const programId = uuidv4()
       const program: MobileProgram = {
         id: programId,
-        title: programData.program_title || programData.title || programData.name || "Imported Program",
-        description: programData.program_notes || `Program imported from trainer. ${programData.message || ""}`.trim(),
-        routineIds: routineMap.map((r) => r.routineId),
-        weeks: programData.program_weeks || routineMap.length,
-        isActive: true,
-        startDate: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        createdBy: clientUserId,
-        clientId: clientUserId, // In mobile app, this is the user's ID
-        message: programData.message || "",
+        name: programData.program_title || programData.title || programData.name || "Imported Program",
+        notes: programData.program_notes || programData.notes || null,
+        startedAt: timestamp.toISOString(),
+        duration: programData.program_weeks || programData.weeks?.length || programData.duration || 4,
+        createdAt: timestamp.toISOString(),
+        updated_at: timestamp.toISOString(),
+        routines: routineMap,
       }
 
       // Save program to Firestore
       const programsRef = collection(db, "users", clientUserId, "programs")
-      await addDoc(programsRef, program)
+      await setDoc(doc(programsRef, programId), program)
 
-      console.log(`[convertAndSendProgram] ✅ Created program: ${program.title} with ID: ${programId}`)
+      console.log(`[convertAndSendProgram] ✅ Created program: ${program.name} with ID: ${programId}`)
       console.log(`[convertAndSendProgram] Program structure:`, {
         totalRoutines: routineMap.length,
-        weeks: program.weeks,
+        weeks: program.duration,
         routineMap: routineMap.slice(0, 3), // Show first 3 for debugging
       })
 
@@ -313,362 +281,60 @@ export class ProgramConversionService {
 
   /**
    * Get all clients for a trainer (for the selection dialog)
+   * NOW USES THE PROPER CLIENT SERVICE WITH DETAILED DEBUGGING
    */
   async getTrainerClients(trainerId: string): Promise<Array<{ id: string; name: string; email?: string }>> {
     try {
-      console.log(`[getTrainerClients] Fetching clients for trainer: ${trainerId}`)
+      console.log(`[ProgramConversionService.getTrainerClients] 🔍 Fetching clients for trainer: ${trainerId}`)
 
-      const clientsRef = collection(db, "users", trainerId, "clients")
-      const snapshot = await getDocs(clientsRef)
+      // Use the proper fetchClients function from client-service.ts
+      const allClients = await fetchClients(trainerId)
+      console.log(`[ProgramConversionService.getTrainerClients] 📊 Found ${allClients.length} total clients`)
 
-      const clients = snapshot.docs
-        .map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            name: data.name || "Unnamed Client",
-            email: data.email || undefined,
-            status: data.status,
-            userId: data.userId,
-          }
+      // Log all clients for debugging
+      allClients.forEach((client, index) => {
+        console.log(`[ProgramConversionService.getTrainerClients] Client ${index + 1}:`, {
+          id: client.id,
+          name: client.name,
+          status: client.status,
+          userId: client.userId || "NO_USER_ID",
+          email: client.email || "NO_EMAIL",
         })
-        .filter((client) => client.status === "Active" && client.userId) // Only show active clients with linked accounts
+      })
 
-      console.log(`[getTrainerClients] Found ${clients.length} active clients with linked accounts`)
-      return clients
+      // Filter to only active clients with linked accounts
+      const activeClientsWithAccounts = allClients.filter((client) => {
+        const hasUserId = client.userId && client.userId.trim() !== ""
+        const isActive = client.status === "Active"
+
+        console.log(`[ProgramConversionService.getTrainerClients] Client ${client.name}:`, {
+          hasUserId,
+          isActive,
+          status: client.status,
+          userId: client.userId || "NONE",
+          willInclude: hasUserId && isActive,
+        })
+
+        return hasUserId && isActive
+      })
+
+      console.log(
+        `[ProgramConversionService.getTrainerClients] ✅ Filtered to ${activeClientsWithAccounts.length} active clients with linked accounts`,
+      )
+
+      // Return in the format expected by the dialog
+      const result = activeClientsWithAccounts.map((client) => ({
+        id: client.id,
+        name: client.name,
+        email: client.email,
+      }))
+
+      console.log(`[ProgramConversionService.getTrainerClients] 🎯 Returning clients:`, result)
+      return result
     } catch (error) {
-      console.error("[getTrainerClients] Error fetching clients:", error)
+      console.error("[ProgramConversionService.getTrainerClients] ❌ Error fetching clients:", error)
       return []
     }
-  }
-
-  /**
-   * Convert a workout program to mobile app format and send to client
-   */
-  async convertAndSendProgram(
-    programData: WorkoutProgram,
-    clientId: string,
-    trainerId: string,
-    message?: string,
-  ): Promise<{ success: boolean; error?: string }> {
-    try {
-      console.log(`[ProgramConversionService] Converting program "${programData.program_title}" for client ${clientId}`)
-
-      // 1. Get client information to get their userId
-      const clientDoc = await getDoc(doc(db, "users", trainerId, "clients", clientId))
-      if (!clientDoc.exists()) {
-        throw new Error("Client not found")
-      }
-
-      const clientData = clientDoc.data()
-      const userId = clientData.userId
-
-      if (!userId) {
-        throw new Error("Client does not have a linked user account")
-      }
-
-      console.log(`[ProgramConversionService] Client ${clientId} has userId: ${userId}`)
-
-      // 2. Process all exercises and create them if they don't exist
-      const exerciseIds = await this.processExercises(programData, trainerId, userId)
-      console.log(`[ProgramConversionService] Processed ${exerciseIds.size} unique exercises`)
-
-      // 3. Create routines for each week/routine combination
-      const routineIds = await this.createRoutines(programData, exerciseIds, trainerId, userId)
-      console.log(`[ProgramConversionService] Created ${routineIds.length} routines`)
-
-      // 4. Create the program document
-      const programId = await this.createProgram(programData, routineIds, trainerId, userId, message)
-      console.log(`[ProgramConversionService] Created program with ID: ${programId}`)
-
-      return { success: true }
-    } catch (error) {
-      console.error("[ProgramConversionService] Error converting program:", error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-      }
-    }
-  }
-
-  /**
-   * Process all exercises in the program and ensure they exist in the database
-   */
-  private async processExercises(
-    programData: WorkoutProgram,
-    trainerId: string,
-    userId: string,
-  ): Promise<Map<string, string>> {
-    const exerciseMap = new Map<string, string>() // exerciseName -> exerciseId
-    const exerciseNames = new Set<string>()
-
-    // Collect all unique exercise names from the program
-    if (programData.weeks) {
-      programData.weeks.forEach((week) => {
-        if (week.routines) {
-          week.routines.forEach((routine) => {
-            if (routine.exercises) {
-              routine.exercises.forEach((exercise) => {
-                if (exercise.name) {
-                  exerciseNames.add(exercise.name.trim())
-                }
-              })
-            }
-          })
-        }
-      })
-    }
-
-    console.log(`[ProgramConversionService] Found ${exerciseNames.size} unique exercises to process`)
-
-    // Process each exercise
-    for (const exerciseName of exerciseNames) {
-      try {
-        const exerciseId = await this.findOrCreateExercise(exerciseName, trainerId, userId)
-        exerciseMap.set(exerciseName, exerciseId)
-        console.log(`[ProgramConversionService] Mapped exercise "${exerciseName}" to ID: ${exerciseId}`)
-      } catch (error) {
-        console.error(`[ProgramConversionService] Error processing exercise "${exerciseName}":`, error)
-        // Continue with other exercises even if one fails
-      }
-    }
-
-    return exerciseMap
-  }
-
-  /**
-   * Find an existing exercise or create a new one
-   */
-  private async findOrCreateExercise(exerciseName: string, trainerId: string, userId: string): Promise<string> {
-    const normalizedName = exerciseName.toLowerCase().trim()
-
-    // 1. First check global exercises
-    const globalExercisesRef = collection(db, "exercises")
-    const globalQuery = query(globalExercisesRef, where("name", "==", exerciseName), where("isGlobal", "==", true))
-
-    const globalSnapshot = await getDocs(globalQuery)
-    if (!globalSnapshot.empty) {
-      const exerciseId = globalSnapshot.docs[0].id
-      console.log(`[ProgramConversionService] Found global exercise "${exerciseName}" with ID: ${exerciseId}`)
-      return exerciseId
-    }
-
-    // 2. Check user's personal exercises
-    const userExercisesRef = collection(db, "users", userId, "exercises")
-    const userQuery = query(userExercisesRef, where("name", "==", exerciseName))
-
-    const userSnapshot = await getDocs(userQuery)
-    if (!userSnapshot.empty) {
-      const exerciseId = userSnapshot.docs[0].id
-      console.log(`[ProgramConversionService] Found user exercise "${exerciseName}" with ID: ${exerciseId}`)
-      return exerciseId
-    }
-
-    // 3. Create new exercise in user's collection
-    console.log(`[ProgramConversionService] Creating new exercise "${exerciseName}" for user ${userId}`)
-
-    const newExercise: Partial<MobileExercise> = {
-      name: exerciseName,
-      description: `Exercise imported from program: ${exerciseName}`,
-      muscleGroups: [], // Could be enhanced to parse muscle groups from name
-      equipment: [],
-      difficulty: "intermediate",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: trainerId,
-      isGlobal: false,
-    }
-
-    const exerciseRef = await addDoc(userExercisesRef, newExercise)
-    console.log(`[ProgramConversionService] Created new exercise "${exerciseName}" with ID: ${exerciseRef.id}`)
-
-    return exerciseRef.id
-  }
-
-  /**
-   * Create routines for the program
-   */
-  private async createRoutines(
-    programData: WorkoutProgram,
-    exerciseMap: Map<string, string>,
-    trainerId: string,
-    userId: string,
-  ): Promise<string[]> {
-    const routineIds: string[] = []
-
-    if (!programData.weeks) {
-      console.log("[ProgramConversionService] No weeks found in program data")
-      return routineIds
-    }
-
-    for (let weekIndex = 0; weekIndex < programData.weeks.length; weekIndex++) {
-      const week = programData.weeks[weekIndex]
-
-      if (!week.routines) {
-        console.log(`[ProgramConversionService] No routines found for week ${weekIndex + 1}`)
-        continue
-      }
-
-      for (let routineIndex = 0; routineIndex < week.routines.length; routineIndex++) {
-        const routine = week.routines[routineIndex]
-
-        try {
-          const routineId = await this.createSingleRoutine(
-            routine,
-            exerciseMap,
-            trainerId,
-            userId,
-            weekIndex + 1,
-            routineIndex + 1,
-            programData.program_title,
-          )
-
-          routineIds.push(routineId)
-          console.log(
-            `[ProgramConversionService] Created routine for Week ${weekIndex + 1}, Routine ${routineIndex + 1}: ${routineId}`,
-          )
-        } catch (error) {
-          console.error(
-            `[ProgramConversionService] Error creating routine for Week ${weekIndex + 1}, Routine ${routineIndex + 1}:`,
-            error,
-          )
-          // Continue with other routines even if one fails
-        }
-      }
-    }
-
-    return routineIds
-  }
-
-  /**
-   * Create a single routine
-   */
-  private async createSingleRoutine(
-    routineData: any,
-    exerciseMap: Map<string, string>,
-    trainerId: string,
-    userId: string,
-    weekNumber: number,
-    routineNumber: number,
-    programTitle: string,
-  ): Promise<string> {
-    const exercises: MobileWorkoutExercise[] = []
-
-    if (routineData.exercises) {
-      for (const exercise of routineData.exercises) {
-        const exerciseId = exerciseMap.get(exercise.name?.trim())
-
-        if (!exerciseId) {
-          console.warn(`[ProgramConversionService] Exercise ID not found for: ${exercise.name}`)
-          continue
-        }
-
-        const sets: MobileSet[] = []
-
-        if (exercise.sets) {
-          exercise.sets.forEach((set: any, index: number) => {
-            sets.push({
-              setNumber: set.set_number || index + 1,
-              reps: set.reps || "",
-              weight: set.weight || "",
-              duration: set.duration || "",
-              distance: set.distance || "",
-              rpe: set.rpe || "",
-              restTime: set.rest || "",
-              notes: set.notes || "",
-              isWarmup: set.warmup || false,
-            })
-          })
-        }
-
-        exercises.push({
-          exerciseId,
-          exerciseName: exercise.name,
-          sets,
-          notes: exercise.notes || "",
-          restBetweenSets: exercise.restBetweenSets || "",
-        })
-      }
-    }
-
-    const routineName =
-      routineData.routine_name || `Week ${weekNumber} - ${routineData.routine_name || `Routine ${routineNumber}`}`
-
-    const mobileRoutine: Partial<MobileRoutine> = {
-      name: routineName,
-      description: `Week ${weekNumber} routine from program: ${programTitle}`,
-      exercises,
-      estimatedDuration: this.estimateRoutineDuration(exercises),
-      difficulty: "intermediate",
-      type: "program", // Always "program" for converted programs
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: trainerId,
-      isTemplate: false,
-    }
-
-    const routinesRef = collection(db, "users", userId, "routines")
-    const routineRef = await addDoc(routinesRef, mobileRoutine)
-
-    return routineRef.id
-  }
-
-  /**
-   * Create the program document
-   */
-  private async createProgram(
-    programData: WorkoutProgram,
-    routineIds: string[],
-    trainerId: string,
-    userId: string,
-    message?: string,
-  ): Promise<string> {
-    const mobileProgram: Partial<MobileProgram> = {
-      title: programData.program_title || "Imported Program",
-      description: programData.program_notes || `Program imported from trainer. ${message || ""}`.trim(),
-      routineIds,
-      weeks: programData.program_weeks || routineIds.length,
-      isActive: true,
-      startDate: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: trainerId,
-      clientId: userId, // In mobile app, this is the user's ID
-      message: message || "",
-    }
-
-    const programsRef = collection(db, "users", userId, "programs")
-    const programRef = await addDoc(programsRef, mobileProgram)
-
-    return programRef.id
-  }
-
-  /**
-   * Estimate routine duration based on exercises and sets
-   */
-  private estimateRoutineDuration(exercises: MobileWorkoutExercise[]): number {
-    let totalMinutes = 0
-
-    exercises.forEach((exercise) => {
-      // Estimate 2 minutes per set + rest time
-      const setsCount = exercise.sets.length
-      totalMinutes += setsCount * 2
-
-      // Add rest time if specified
-      exercise.sets.forEach((set) => {
-        if (set.restTime) {
-          const restMatch = set.restTime.match(/(\d+)/)
-          if (restMatch) {
-            totalMinutes += Number.parseInt(restMatch[1]) / 60 // Convert seconds to minutes
-          }
-        }
-      })
-    })
-
-    // Add 5 minutes for warm-up and cool-down
-    totalMinutes += 5
-
-    return Math.max(totalMinutes, 15) // Minimum 15 minutes
   }
 }
 
