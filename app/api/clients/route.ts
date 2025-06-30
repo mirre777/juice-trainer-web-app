@@ -1,37 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import { fetchClients } from "@/lib/firebase/client-service"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get trainer ID from cookie
-    const userIdCookie = request.cookies.get("user_id")
-    const trainerId = userIdCookie?.value
+    // Get trainer ID from cookies
+    const cookieStore = cookies()
+    const trainerIdCookie = cookieStore.get("trainerId")
 
-    if (!trainerId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!trainerIdCookie?.value) {
+      return NextResponse.json({ error: "Unauthorized - No trainer ID found" }, { status: 401 })
     }
 
-    console.log("[API] Fetching clients for trainer:", trainerId)
+    const trainerId = trainerIdCookie.value
 
     // Fetch clients using the Firebase service
     const clients = await fetchClients(trainerId)
 
-    console.log("[API] Found clients:", clients.length)
-
-    // Map the client data to the expected format
-    const mappedClients = clients.map((client) => ({
-      id: client.id,
-      name: client.name,
-      email: client.email || "",
-      phone: client.phone || "",
-      status: client.status || "Active",
-      joinDate: client.createdAt ? new Date(client.createdAt.seconds * 1000).toISOString() : "",
-      lastWorkout: client.lastWorkout?.name || "",
-    }))
-
-    return NextResponse.json(mappedClients)
+    return NextResponse.json({ clients })
   } catch (error) {
-    console.error("[API] Error fetching clients:", error)
+    console.error("Error fetching clients:", error)
     return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const cookieStore = cookies()
+    const trainerIdCookie = cookieStore.get("trainerId")
+
+    if (!trainerIdCookie?.value) {
+      return NextResponse.json({ error: "Unauthorized - No trainer ID found" }, { status: 401 })
+    }
+
+    const trainerId = trainerIdCookie.value
+    const body = await request.json()
+
+    // Add client logic would go here
+    // For now, return success
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error creating client:", error)
+    return NextResponse.json({ error: "Failed to create client" }, { status: 500 })
   }
 }
