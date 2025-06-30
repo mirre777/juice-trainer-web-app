@@ -8,18 +8,28 @@ import { SheetsImportDialog } from "./sheets-import-dialog"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
+const SESSION_STORAGE_KEY = "hasSeenImportInstructions" // Define a key for session storage
+
 export function GoogleSheetsImport() {
   const [isLoading, setIsLoading] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [showImportDialog, setShowImportDialog] = useState(false)
-  const [showSheetLinkDialog, setShowSheetLinkDialog] = useState(false)
+  const [showImportDialog, setShowImportDialog] = useState(false) // For the instructions modal
+  const [showSheetLinkDialog, setShowSheetLinkDialog] = useState(false) // For the actual link input modal
   const [sheetLink, setSheetLink] = useState("")
   const [savedSheetLinks, setSavedSheetLinks] = useState<string[]>([])
   const { toast } = useToast()
 
-  // Check if we're already authenticated with Google and load storage flags
+  // New state to track if instructions have been seen in this session
+  const [hasSeenInstructions, setHasSeenInstructions] = useState(false)
+
+  // Check if we're already authenticated with Google and load session storage flag
   useEffect(() => {
     console.log("Google Sheets Import Component Mounted")
+
+    // Load hasSeenInstructions from sessionStorage
+    const seenInstructions = sessionStorage.getItem(SESSION_STORAGE_KEY) === "true"
+    setHasSeenInstructions(seenInstructions)
+    console.log("Initial hasSeenInstructions from sessionStorage:", seenInstructions)
 
     // Always show the import button in development mode for testing
     if (process.env.NODE_ENV === "development") {
@@ -115,29 +125,23 @@ export function GoogleSheetsImport() {
 
   // This function is called when the "Import Google Sheet" button is clicked
   const handleImportButtonClick = () => {
-    // Check if user has permanently dismissed the instructions
-    const dontShowAgain = localStorage.getItem("dontShowSheetsInstructions") === "true"
-    if (dontShowAgain) {
-      // Skip instructions and go directly to sheet link input
-      setShowSheetLinkDialog(true)
-      return
-    }
-
-    // Check if user has seen instructions in this session
-    const hasSeenInSession = sessionStorage.getItem("hasSeenSheetsInstructions") === "true"
-    if (hasSeenInSession) {
-      // Skip instructions and go directly to sheet link input
-      setShowSheetLinkDialog(true)
-    } else {
-      // Show instructions modal
+    if (!hasSeenInstructions) {
+      // If instructions haven't been seen, show the instructions modal
       setShowImportDialog(true)
+    } else {
+      // If instructions have been seen, directly show the sheet link input modal
+      setShowSheetLinkDialog(true)
     }
   }
 
   // This function is called when the SheetsImportDialog (instructions modal) is closed
   const handleSheetsImportDialogClose = (open: boolean) => {
-    setShowImportDialog(open)
+    setShowImportDialog(open) // Update the state for the instructions modal
     if (!open) {
+      // If the instructions modal is closing
+      sessionStorage.setItem(SESSION_STORAGE_KEY, "true") // Mark instructions as seen for this session
+      setHasSeenInstructions(true) // Update local state
+      console.log("Instructions acknowledged and session storage updated.")
       // After closing the instructions, automatically open the link input modal
       setShowSheetLinkDialog(true)
     }
@@ -219,6 +223,7 @@ export function GoogleSheetsImport() {
 
           <div className="flex flex-col w-full space-y-4">
             <div className="flex justify-between items-center w-full">
+              {/* This button now triggers the new logic */}
               <Button onClick={handleImportButtonClick} variant="outline">
                 <LinkIcon className="mr-2 h-4 w-4" />
                 Import Google Sheet
