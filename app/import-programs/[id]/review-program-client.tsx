@@ -1106,7 +1106,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
                 className="justify-start"
               >
-                Week {week.week_number} ({week.routines?.length || 0} routines)
+                Week {week.week_number}
+                {week.routines && (
+                  <span className="ml-2 text-sm text-gray-500">
+                    ({week.routines.length} routine{week.routines.length !== 1 ? "s" : ""})
+                  </span>
+                )}
               </Button>
             ))}
           </div>
