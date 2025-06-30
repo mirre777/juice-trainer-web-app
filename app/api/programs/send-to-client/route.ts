@@ -1,41 +1,53 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
 import { NextResponse } from "next/server"
-import { convertAndSendProgramToClient } from "@/lib/firebase/program-conversion-service"
-import { getTokenFromServer } from "@/lib/auth/token-service"
+import { convertAndSendProgramToClient, getClientUserId } from "@/lib/firebase/program-conversion-service"
 import type { WorkoutProgram } from "@/types/workout-program"
 
 export async function POST(request: Request) {
   try {
-    // Verify authentication
-    const token = await getTokenFromServer()
-    if (!token) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-
     const body = await request.json()
-    const { trainerId, clientId, program, message } = body
+    const { program, clientId, trainerId, message } = body
 
-    if (!trainerId || !clientId || !program) {
-      return NextResponse.json({ message: "Trainer ID, client ID, and program are required" }, { status: 400 })
+    // Validate required fields
+    if (!program || !clientId || !trainerId) {
+      return NextResponse.json({ message: "Program, client ID, and trainer ID are required" }, { status: 400 })
     }
 
-    console.log(`[API] Sending program to client: ${clientId}`)
+    // Validate program structure
+    if (!program.program_title || !program.program_weeks) {
+      return NextResponse.json({ message: "Program must have a title and weeks count" }, { status: 400 })
+    }
 
-    const result = await convertAndSendProgramToClient(trainerId, clientId, program as WorkoutProgram, message)
+    console.log(`[send-to-client] Sending program "${program.program_title}" to client: ${clientId}`)
+
+    // Get the client's actual userId from the trainer's client document
+    const clientUserId = await getClientUserId(trainerId, clientId)
+
+    if (!clientUserId) {
+      return NextResponse.json(
+        { message: "Client not found or client does not have a linked user account" },
+        { status: 404 },
+      )
+    }
+
+    console.log(`[send-to-client] Found client userId: ${clientUserId}`)
+
+    // Convert and send the program
+    const result = await convertAndSendProgramToClient(program as WorkoutProgram, clientUserId, message)
 
     if (!result.success) {
-      console.error("[API] Failed to send program:", result.error)
+      console.error("[send-to-client] Failed to send program:", result.error)
       return NextResponse.json({ message: "Failed to send program to client", error: result.error }, { status: 500 })
     }
 
+    console.log(`[send-to-client] Successfully sent program. Program ID: ${result.programId}`)
+
     return NextResponse.json({
-      message: "Program successfully sent to client",
       success: true,
+      programId: result.programId,
+      message: "Program successfully sent to client",
     })
   } catch (error) {
-    console.error("[API] Error in send-to-client endpoint:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    console.error("[send-to-client] Unexpected error:", error)
+    return NextResponse.json({ message: "Internal server error", error: error.message }, { status: 500 })
   }
 }

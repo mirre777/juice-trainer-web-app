@@ -6,6 +6,7 @@ export interface WorkoutProgram {
   routine_count: number
   routines: WorkoutRoutine[]
   is_periodized?: boolean // New field to indicate if program changes week by week
+  weeks?: ExerciseWeek[] // Added weeks to WorkoutProgram for periodized programs
 }
 
 export interface WorkoutRoutine {
@@ -146,4 +147,149 @@ export const SAMPLE_PERIODIZED_PROGRAM: WorkoutProgram = {
       ],
     },
   ],
+  weeks: [
+    // Week 1-3: Volume Phase
+    {
+      week_number: 1,
+      set_count: 4,
+      sets: [
+        { set_number: 1, warmup: true, reps: "8", rpe: "6", rest: "90s", notes: null },
+        { set_number: 2, warmup: false, reps: "8", rpe: "7", rest: "90s", notes: null },
+        { set_number: 3, warmup: false, reps: "8", rpe: "7", rest: "90s", notes: null },
+        { set_number: 4, warmup: false, reps: "8", rpe: "8", rest: "90s", notes: null },
+      ],
+    },
+    {
+      week_number: 2,
+      set_count: 4,
+      sets: [
+        { set_number: 1, warmup: true, reps: "8", rpe: "6", rest: "90s", notes: null },
+        { set_number: 2, warmup: false, reps: "8", rpe: "7.5", rest: "90s", notes: null },
+        { set_number: 3, warmup: false, reps: "8", rpe: "7.5", rest: "90s", notes: null },
+        { set_number: 4, warmup: false, reps: "8", rpe: "8.5", rest: "90s", notes: null },
+      ],
+    },
+    {
+      week_number: 3,
+      set_count: 4,
+      sets: [
+        { set_number: 1, warmup: true, reps: "8", rpe: "6", rest: "90s", notes: null },
+        { set_number: 2, warmup: false, reps: "8", rpe: "8", rest: "90s", notes: null },
+        { set_number: 3, warmup: false, reps: "8", rpe: "8", rest: "90s", notes: null },
+        { set_number: 4, warmup: false, reps: "8", rpe: "9", rest: "90s", notes: null },
+      ],
+    },
+    // Week 4: Deload
+    {
+      week_number: 4,
+      set_count: 3,
+      sets: [
+        { set_number: 1, warmup: true, reps: "8", rpe: "5", rest: "60s", notes: "Deload week" },
+        { set_number: 2, warmup: false, reps: "8", rpe: "6", rest: "60s", notes: null },
+        { set_number: 3, warmup: false, reps: "8", rpe: "6", rest: "60s", notes: null },
+      ],
+    },
+    // Week 5-7: Intensity Phase
+    {
+      week_number: 5,
+      set_count: 5,
+      sets: [
+        { set_number: 1, warmup: true, reps: "5", rpe: "6", rest: "120s", notes: null },
+        { set_number: 2, warmup: false, reps: "5", rpe: "7", rest: "120s", notes: null },
+        { set_number: 3, warmup: false, reps: "5", rpe: "7", rest: "120s", notes: null },
+        { set_number: 4, warmup: false, reps: "5", rpe: "8", rest: "120s", notes: null },
+        { set_number: 5, warmup: false, reps: "5", rpe: "8", rest: "120s", notes: null },
+      ],
+    },
+  ],
+}
+
+// Helper function to validate program structure for mobile conversion
+export function validateProgramForMobileConversion(program: WorkoutProgram): { isValid: boolean; errors: string[] } {
+  const errors: string[] = []
+
+  if (!program.program_title?.trim()) {
+    errors.push("Program title is required")
+  }
+
+  if (!program.program_weeks || program.program_weeks < 1) {
+    errors.push("Program must have at least 1 week")
+  }
+
+  if (program.is_periodized) {
+    if (!program.weeks || program.weeks.length === 0) {
+      errors.push("Periodized program must have weeks data")
+    }
+
+    if (program.weeks && program.weeks.length !== program.program_weeks) {
+      errors.push("Number of weeks in data doesn't match program_weeks")
+    }
+  } else {
+    if (!program.weeks || program.weeks.length === 0) {
+      if (!program.routines || program.routines.length === 0) {
+        errors.push("Non-periodized program must have routines")
+      }
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  }
+}
+
+// Helper function to estimate mobile app data size
+export function estimateMobileDataSize(program: WorkoutProgram): {
+  routineCount: number
+  exerciseCount: number
+  setCount: number
+} {
+  let routineCount = 0
+  let exerciseCount = 0
+  let setCount = 0
+
+  if (program.is_periodized && program.weeks) {
+    for (const week of program.weeks) {
+      if (week.routines) {
+        routineCount += week.routines.length
+        for (const routine of week.routines) {
+          if (routine.exercises) {
+            exerciseCount += routine.exercises.length
+            for (const exercise of routine.exercises) {
+              const weekData = exercise.weeks?.find((w) => w.week_number === week.week_number)
+              if (weekData?.sets) {
+                setCount += weekData.sets.length
+              }
+            }
+          }
+        }
+      }
+    }
+  } else {
+    // Non-periodized: multiply by number of weeks
+    const singleWeek = program.weeks?.[0] || { routines: program.routines || [] }
+    const weekRoutineCount = singleWeek.routines?.length || 0
+    let weekExerciseCount = 0
+    let weekSetCount = 0
+
+    if (singleWeek.routines) {
+      for (const routine of singleWeek.routines) {
+        if (routine.exercises) {
+          weekExerciseCount += routine.exercises.length
+          for (const exercise of routine.exercises) {
+            const firstWeekData = exercise.weeks?.[0]
+            if (firstWeekData?.sets) {
+              weekSetCount += firstWeekData.sets.length
+            }
+          }
+        }
+      }
+    }
+
+    routineCount = weekRoutineCount * program.program_weeks
+    exerciseCount = weekExerciseCount * program.program_weeks
+    setCount = weekSetCount * program.program_weeks
+  }
+
+  return { routineCount, exerciseCount, setCount }
 }
