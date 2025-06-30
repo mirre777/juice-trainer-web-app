@@ -1,224 +1,266 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Clock, User, CheckCircle } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { CheckCircle, Circle, Trophy, MessageCircle, Heart, ThumbsUp, FlameIcon as Fire } from "lucide-react"
 
 interface Exercise {
   id: string
   name: string
-  sets: number
+  weight: string
   reps: string
-  weight?: string
-  notes?: string
-  completed?: boolean
+  completed: boolean
+  isPR?: boolean
+  sets?: Array<{
+    number: number
+    weight: string
+    reps: string
+    isPR?: boolean
+  }>
+}
+
+interface Client {
+  id: string
+  name: string
+  image: string
+  date: string
+  programWeek: string
+  programTotal: string
+  daysCompleted: string
+  daysTotal: string
 }
 
 interface Workout {
-  id: string
-  title: string
-  date: string
-  duration?: string
-  exercises: Exercise[]
-  clientName: string
-  clientAvatar?: string
-  status: "pending" | "in-progress" | "completed"
+  day: string
+  focus: string
+  clientNote: string
 }
 
 interface ClientWorkoutViewProps {
-  workout?: Workout
-  onExerciseComplete?: (exerciseId: string) => void
-  onWorkoutComplete?: () => void
+  client: Client
+  workout: Workout
+  exercises: Exercise[]
+  personalRecords?: string[]
+  onEmojiSelect?: (emoji: string) => void
+  onComment?: (comment: string) => void
+  showInteractionButtons?: boolean
+  isMockData?: boolean
+  allClientWorkouts?: any[]
+  weeklyWorkouts?: any[]
 }
 
-export function ClientWorkoutView({ workout, onExerciseComplete, onWorkoutComplete }: ClientWorkoutViewProps) {
-  const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set())
+export function ClientWorkoutView({
+  client,
+  workout,
+  exercises,
+  personalRecords = [],
+  onEmojiSelect,
+  onComment,
+  showInteractionButtons = true,
+  isMockData = false,
+}: ClientWorkoutViewProps) {
+  const [comment, setComment] = useState("")
+  const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null)
 
-  // Default workout data if none provided
-  const defaultWorkout: Workout = {
-    id: "1",
-    title: "Upper Body Strength",
-    date: new Date().toISOString().split("T")[0],
-    duration: "45 min",
-    clientName: "John Doe",
-    clientAvatar: "/lemon-avatar.png",
-    status: "in-progress",
-    exercises: [
-      {
-        id: "1",
-        name: "Bench Press",
-        sets: 3,
-        reps: "8-10",
-        weight: "185 lbs",
-        notes: "Focus on controlled movement",
-      },
-      {
-        id: "2",
-        name: "Pull-ups",
-        sets: 3,
-        reps: "6-8",
-        notes: "Use assistance if needed",
-      },
-      {
-        id: "3",
-        name: "Shoulder Press",
-        sets: 3,
-        reps: "10-12",
-        weight: "135 lbs",
-      },
-    ],
+  const completedExercises = exercises.filter((ex) => ex.completed).length
+  const progressPercentage = (completedExercises / exercises.length) * 100
+
+  const handleEmojiClick = (emoji: string) => {
+    setSelectedEmoji(emoji)
+    onEmojiSelect?.(emoji)
   }
 
-  const currentWorkout = workout || defaultWorkout
-
-  const handleExerciseToggle = (exerciseId: string) => {
-    const newCompleted = new Set(completedExercises)
-    if (newCompleted.has(exerciseId)) {
-      newCompleted.delete(exerciseId)
-    } else {
-      newCompleted.add(exerciseId)
+  const handleCommentSubmit = () => {
+    if (comment.trim()) {
+      onComment?.(comment)
+      setComment("")
     }
-    setCompletedExercises(newCompleted)
-    onExerciseComplete?.(exerciseId)
   }
-
-  const allExercisesCompleted = currentWorkout.exercises.every((exercise) => completedExercises.has(exercise.id))
-
-  const completionPercentage = Math.round((completedExercises.size / currentWorkout.exercises.length) * 100)
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-sm border">
       {/* Header */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Avatar className="w-12 h-12">
-                <AvatarImage src={currentWorkout.clientAvatar || "/placeholder.svg"} alt={currentWorkout.clientName} />
-                <AvatarFallback>
-                  {currentWorkout.clientName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <CardTitle className="text-2xl">{currentWorkout.title}</CardTitle>
-                <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
-                  <div className="flex items-center space-x-1">
-                    <User className="w-4 h-4" />
-                    <span>{currentWorkout.clientName}</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>{new Date(currentWorkout.date).toLocaleDateString()}</span>
-                  </div>
-                  {currentWorkout.duration && (
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{currentWorkout.duration}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <Badge
-                variant={
-                  currentWorkout.status === "completed"
-                    ? "default"
-                    : currentWorkout.status === "in-progress"
-                      ? "secondary"
-                      : "outline"
-                }
-              >
-                {currentWorkout.status.replace("-", " ")}
-              </Badge>
-              <div className="text-sm text-gray-600 mt-1">{completionPercentage}% Complete</div>
-            </div>
+      <div className="p-4 border-b">
+        <div className="flex items-center gap-3 mb-3">
+          <Avatar className="h-12 w-12">
+            <AvatarImage src={client.image || "/placeholder.svg"} alt={client.name} />
+            <AvatarFallback>
+              {client.name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1">
+            <h3 className="font-semibold text-lg">{client.name}</h3>
+            <p className="text-sm text-gray-500">{client.date}</p>
           </div>
-        </CardHeader>
-      </Card>
+        </div>
 
-      {/* Progress Bar */}
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div
-          className="bg-green-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${completionPercentage}%` }}
-        />
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-gray-500">Program Progress</p>
+            <p className="font-medium">
+              Week {client.programWeek} of {client.programTotal}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500">This Week</p>
+            <p className="font-medium">
+              {client.daysCompleted}/{client.daysTotal} days
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Workout Info */}
+      <div className="p-4 border-b">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-semibold">
+            Day {workout.day} - {workout.focus}
+          </h4>
+          <Badge variant="secondary">
+            {completedExercises}/{exercises.length} done
+          </Badge>
+        </div>
+        <Progress value={progressPercentage} className="mb-3" />
+
+        {workout.clientNote && (
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <p className="text-sm font-medium text-blue-900 mb-1">Client Note:</p>
+            <p className="text-sm text-blue-800">{workout.clientNote}</p>
+          </div>
+        )}
       </div>
 
       {/* Exercises */}
-      <div className="space-y-4">
-        {currentWorkout.exercises.map((exercise, index) => (
-          <Card
-            key={exercise.id}
-            className={`transition-all duration-200 ${
-              completedExercises.has(exercise.id) ? "bg-green-50 border-green-200" : ""
-            }`}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-lg font-medium text-gray-500">{index + 1}.</span>
-                    <h3
-                      className={`text-lg font-semibold ${
-                        completedExercises.has(exercise.id) ? "line-through text-gray-500" : ""
-                      }`}
-                    >
-                      {exercise.name}
-                    </h3>
-                    {completedExercises.has(exercise.id) && <CheckCircle className="w-5 h-5 text-green-600" />}
-                  </div>
-
-                  <div className="mt-2 flex items-center space-x-6 text-sm text-gray-600">
-                    <span>
-                      <strong>Sets:</strong> {exercise.sets}
-                    </span>
-                    <span>
-                      <strong>Reps:</strong> {exercise.reps}
-                    </span>
-                    {exercise.weight && (
-                      <span>
-                        <strong>Weight:</strong> {exercise.weight}
-                      </span>
-                    )}
-                  </div>
-
-                  {exercise.notes && (
-                    <div className="mt-2 text-sm text-gray-600">
-                      <strong>Notes:</strong> {exercise.notes}
-                    </div>
+      <div className="p-4 space-y-3">
+        {exercises.map((exercise) => (
+          <Card key={exercise.id} className="border-l-4 border-l-green-500">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {exercise.completed ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-gray-400" />
                   )}
+                  <span className="font-medium">{exercise.name}</span>
+                  {exercise.isPR && <Trophy className="h-4 w-4 text-yellow-500" />}
                 </div>
-
-                <Button
-                  variant={completedExercises.has(exercise.id) ? "outline" : "default"}
-                  onClick={() => handleExerciseToggle(exercise.id)}
-                  className="ml-4"
-                >
-                  {completedExercises.has(exercise.id) ? "Undo" : "Complete"}
-                </Button>
               </div>
+
+              {exercise.sets ? (
+                <div className="space-y-1">
+                  {exercise.sets.map((set) => (
+                    <div key={set.number} className="flex items-center justify-between text-sm">
+                      <span>Set {set.number}</span>
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {set.weight} × {set.reps}
+                        </span>
+                        {set.isPR && <Trophy className="h-3 w-3 text-yellow-500" />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600">
+                  {exercise.weight} × {exercise.reps}
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Complete Workout Button */}
-      {allExercisesCompleted && (
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="p-6 text-center">
-            <h3 className="text-lg font-semibold text-green-800 mb-2">Great job! All exercises completed!</h3>
-            <Button onClick={onWorkoutComplete} className="bg-green-600 hover:bg-green-700">
-              Complete Workout
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Personal Records */}
+      {personalRecords.length > 0 && (
+        <div className="p-4 border-t">
+          <h5 className="font-semibold mb-2 flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-yellow-500" />
+            Personal Records
+          </h5>
+          <div className="space-y-1">
+            {personalRecords.map((record, index) => (
+              <p key={index} className="text-sm text-gray-600">
+                {record}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Interaction Buttons */}
+      {showInteractionButtons && (
+        <div className="p-4 border-t">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex gap-2">
+              <Button
+                variant={selectedEmoji === "❤️" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleEmojiClick("❤️")}
+              >
+                <Heart className="h-4 w-4 mr-1" />
+                ❤️
+              </Button>
+              <Button
+                variant={selectedEmoji === "👍" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleEmojiClick("👍")}
+              >
+                <ThumbsUp className="h-4 w-4 mr-1" />👍
+              </Button>
+              <Button
+                variant={selectedEmoji === "🔥" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleEmojiClick("🔥")}
+              >
+                <Fire className="h-4 w-4 mr-1" />🔥
+              </Button>
+            </div>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <MessageCircle className="h-4 w-4 mr-1" />
+                  Comment
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Comment</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Textarea
+                    placeholder="Great work! Keep it up..."
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setComment("")}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCommentSubmit}>Send Comment</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      )}
+
+      {isMockData && (
+        <div className="p-4 border-t bg-gray-50">
+          <p className="text-xs text-gray-500 text-center">This is demo data. Sign up to create real workouts!</p>
+        </div>
       )}
     </div>
   )

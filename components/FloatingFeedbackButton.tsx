@@ -1,26 +1,29 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { MessageCircle, X, Send } from "lucide-react"
-import { useFeedback } from "@/context/FeedbackContext"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { MessageCircle, Send } from "lucide-react"
 
-export function FloatingFeedbackButton() {
-  const { isOpen, openFeedback, closeFeedback, submitFeedback } = useFeedback()
+export default function FloatingFeedbackButton() {
+  const [isOpen, setIsOpen] = useState(false)
   const [feedback, setFeedback] = useState("")
-  const [type, setType] = useState<"bug" | "feature" | "general">("general")
+  const [type, setType] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!feedback.trim()) return
+  const handleSubmit = async () => {
+    if (!feedback.trim() || !type) return
 
     setIsSubmitting(true)
     try {
-      await submitFeedback(feedback, type)
+      // Mock submission
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      console.log("Feedback submitted:", { feedback, type })
       setFeedback("")
-      setType("general")
+      setType("")
+      setIsOpen(false)
     } catch (error) {
       console.error("Failed to submit feedback:", error)
     } finally {
@@ -30,72 +33,57 @@ export function FloatingFeedbackButton() {
 
   return (
     <>
-      {/* Floating Button */}
-      {!isOpen && (
-        <button
-          onClick={openFeedback}
-          className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-all duration-200 z-50"
-          aria-label="Open feedback"
-        >
-          <MessageCircle size={24} />
-        </button>
-      )}
+      <Button
+        onClick={() => setIsOpen(true)}
+        className="fixed bottom-4 right-4 z-50 rounded-full w-12 h-12 shadow-lg"
+        size="icon"
+      >
+        <MessageCircle className="h-5 w-5" />
+      </Button>
 
-      {/* Feedback Modal */}
-      {isOpen && (
-        <div className="fixed bottom-6 right-6 bg-white rounded-lg shadow-xl border w-80 z-50">
-          <div className="p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Send Feedback</h3>
-              <button onClick={closeFeedback} className="text-gray-500 hover:text-gray-700" aria-label="Close feedback">
-                <X size={20} />
-              </button>
-            </div>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Feedback</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Select value={type} onValueChange={setType}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select feedback type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bug">Bug Report</SelectItem>
+                <SelectItem value="feature">Feature Request</SelectItem>
+                <SelectItem value="improvement">Improvement</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as "bug" | "feature" | "general")}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="general">General Feedback</option>
-                  <option value="bug">Bug Report</option>
-                  <option value="feature">Feature Request</option>
-                </select>
-              </div>
+            <Textarea
+              placeholder="Tell us what you think..."
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              rows={4}
+            />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
-                <textarea
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="Tell us what you think..."
-                  rows={4}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting || !feedback.trim()}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-md flex items-center justify-center gap-2 transition-colors"
-              >
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmit} disabled={!feedback.trim() || !type || isSubmitting}>
                 {isSubmitting ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  "Sending..."
                 ) : (
-                  <Send size={16} />
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Send
+                  </>
                 )}
-                {isSubmitting ? "Sending..." : "Send Feedback"}
-              </button>
-            </form>
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
-
-export default FloatingFeedbackButton
