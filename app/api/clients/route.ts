@@ -30,21 +30,25 @@ export async function GET() {
       console.log("🔍 Querying Firestore for clients of trainer:", userId)
 
       // Import collection and query functions from firebase/firestore
-      const { collection, query, where, getDocs } = await import("firebase/firestore")
+      const { collection, query, orderBy, getDocs } = await import("firebase/firestore")
 
-      // Query clients where trainerId matches the current user
-      const clientsRef = collection(db, "clients")
-      const q = query(clientsRef, where("trainerId", "==", userId))
+      // Query clients from the trainer's subcollection (correct path)
+      const clientsRef = collection(db, "users", userId, "clients")
+      const q = query(clientsRef, orderBy("createdAt", "desc"))
       const querySnapshot = await getDocs(q)
 
       console.log("✅ Clients query completed, found:", querySnapshot.size, "clients")
 
       const clients: any[] = []
       querySnapshot.forEach((doc) => {
-        clients.push({
-          id: doc.id,
-          ...doc.data(),
-        })
+        const data = doc.data()
+        // Filter out deleted clients
+        if (data.status !== "Deleted") {
+          clients.push({
+            id: doc.id,
+            ...data,
+          })
+        }
       })
 
       console.log("📤 Sending clients response:", clients.length, "clients")
