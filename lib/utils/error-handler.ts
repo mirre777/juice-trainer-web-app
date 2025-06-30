@@ -211,4 +211,5 @@ export function logAuditEvent(eventData: any): void {
   return
 }
 
+// Export the AppError type
 export type { AppError }

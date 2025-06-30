@@ -1,14 +1,15 @@
 "use client"
 
 import { useState } from "react"
+import { MessageCircle, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MessageCircle, Send } from "lucide-react"
+import { useFeedback } from "@/context/FeedbackContext"
 
 export default function FloatingFeedbackButton() {
-  const [isOpen, setIsOpen] = useState(false)
+  const { isOpen, openFeedback, closeFeedback, submitFeedback } = useFeedback()
   const [feedback, setFeedback] = useState("")
   const [type, setType] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -18,12 +19,9 @@ export default function FloatingFeedbackButton() {
 
     setIsSubmitting(true)
     try {
-      // Mock submission
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      console.log("Feedback submitted:", { feedback, type })
+      await submitFeedback(feedback, type)
       setFeedback("")
       setType("")
-      setIsOpen(false)
     } catch (error) {
       console.error("Failed to submit feedback:", error)
     } finally {
@@ -34,14 +32,14 @@ export default function FloatingFeedbackButton() {
   return (
     <>
       <Button
-        onClick={() => setIsOpen(true)}
+        onClick={openFeedback}
         className="fixed bottom-4 right-4 z-50 rounded-full w-12 h-12 shadow-lg"
         size="icon"
       >
         <MessageCircle className="h-5 w-5" />
       </Button>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={closeFeedback}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send Feedback</DialogTitle>
@@ -66,8 +64,8 @@ export default function FloatingFeedbackButton() {
               rows={4}
             />
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsOpen(false)}>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={closeFeedback}>
                 Cancel
               </Button>
               <Button onClick={handleSubmit} disabled={!feedback.trim() || !type || isSubmitting}>

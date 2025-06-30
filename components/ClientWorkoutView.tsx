@@ -1,269 +1,212 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Progress } from "@/components/ui/progress"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { CheckCircle, Circle, Trophy, MessageCircle, Heart, ThumbsUp, FlameIcon as Fire } from "lucide-react"
+import { Calendar, Clock, User, Dumbbell } from "lucide-react"
+import LoadingSpinner from "@/components/shared/loading-spinner"
 
 interface Exercise {
   id: string
   name: string
-  weight: string
+  sets: number
   reps: string
-  completed: boolean
-  isPR?: boolean
-  sets?: Array<{
-    number: number
-    weight: string
-    reps: string
-    isPR?: boolean
-  }>
-}
-
-interface Client {
-  id: string
-  name: string
-  image: string
-  date: string
-  programWeek: string
-  programTotal: string
-  daysCompleted: string
-  daysTotal: string
+  weight?: string
+  notes?: string
 }
 
 interface Workout {
-  day: string
-  focus: string
-  clientNote: string
+  id: string
+  title: string
+  date: string
+  duration?: number
+  exercises: Exercise[]
+  status: "pending" | "completed" | "skipped"
+  clientName: string
+  clientAvatar?: string
 }
 
 interface ClientWorkoutViewProps {
-  client: Client
-  workout: Workout
-  exercises: Exercise[]
-  personalRecords?: string[]
-  onEmojiSelect?: (emoji: string) => void
-  onComment?: (comment: string) => void
-  showInteractionButtons?: boolean
-  isMockData?: boolean
-  allClientWorkouts?: any[]
-  weeklyWorkouts?: any[]
+  workoutId?: string
+  clientId?: string
 }
 
-export function ClientWorkoutView({
-  client,
-  workout,
-  exercises,
-  personalRecords = [],
-  onEmojiSelect,
-  onComment,
-  showInteractionButtons = true,
-  isMockData = false,
-}: ClientWorkoutViewProps) {
-  const [comment, setComment] = useState("")
-  const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null)
+export default function ClientWorkoutView({ workoutId, clientId }: ClientWorkoutViewProps) {
+  const [workout, setWorkout] = useState<Workout | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const completedExercises = exercises.filter((ex) => ex.completed).length
-  const progressPercentage = (completedExercises / exercises.length) * 100
+  useEffect(() => {
+    // Simulate loading workout data
+    const loadWorkout = async () => {
+      try {
+        setLoading(true)
 
-  const handleEmojiClick = (emoji: string) => {
-    setSelectedEmoji(emoji)
-    onEmojiSelect?.(emoji)
+        // Simulate API call delay
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        // Mock workout data
+        const mockWorkout: Workout = {
+          id: workoutId || "1",
+          title: "Upper Body Strength",
+          date: new Date().toISOString().split("T")[0],
+          duration: 45,
+          clientName: "John Doe",
+          clientAvatar: "/lemon-avatar.png",
+          status: "pending",
+          exercises: [
+            {
+              id: "1",
+              name: "Bench Press",
+              sets: 3,
+              reps: "8-10",
+              weight: "185 lbs",
+              notes: "Focus on controlled movement",
+            },
+            {
+              id: "2",
+              name: "Pull-ups",
+              sets: 3,
+              reps: "6-8",
+              notes: "Use assistance if needed",
+            },
+            {
+              id: "3",
+              name: "Shoulder Press",
+              sets: 3,
+              reps: "10-12",
+              weight: "65 lbs",
+            },
+          ],
+        }
+
+        setWorkout(mockWorkout)
+      } catch (err) {
+        setError("Failed to load workout")
+        console.error("Error loading workout:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadWorkout()
+  }, [workoutId, clientId])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <LoadingSpinner size="lg" />
+      </div>
+    )
   }
 
-  const handleCommentSubmit = () => {
-    if (comment.trim()) {
-      onComment?.(comment)
-      setComment("")
+  if (error || !workout) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-muted-foreground">{error || "Workout not found"}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "skipped":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
     }
   }
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-sm border">
+    <div className="max-w-4xl mx-auto p-4 space-y-6">
       {/* Header */}
-      <div className="p-4 border-b">
-        <div className="flex items-center gap-3 mb-3">
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={client.image || "/placeholder.svg"} alt={client.name} />
-            <AvatarFallback>
-              {client.name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg">{client.name}</h3>
-            <p className="text-sm text-gray-500">{client.date}</p>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={workout.clientAvatar || "/placeholder.svg"} alt={workout.clientName} />
+                <AvatarFallback>
+                  <User className="h-6 w-6" />
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <CardTitle className="text-xl">{workout.title}</CardTitle>
+                <p className="text-muted-foreground flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  {workout.clientName}
+                </p>
+              </div>
+            </div>
+            <Badge className={getStatusColor(workout.status)}>
+              {workout.status.charAt(0).toUpperCase() + workout.status.slice(1)}
+            </Badge>
           </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-gray-500">Program Progress</p>
-            <p className="font-medium">
-              Week {client.programWeek} of {client.programTotal}
-            </p>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Calendar className="h-4 w-4" />
+              {new Date(workout.date).toLocaleDateString()}
+            </div>
+            {workout.duration && (
+              <div className="flex items-center gap-1">
+                <Clock className="h-4 w-4" />
+                {workout.duration} min
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Dumbbell className="h-4 w-4" />
+              {workout.exercises.length} exercises
+            </div>
           </div>
-          <div>
-            <p className="text-gray-500">This Week</p>
-            <p className="font-medium">
-              {client.daysCompleted}/{client.daysTotal} days
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Workout Info */}
-      <div className="p-4 border-b">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="font-semibold">
-            Day {workout.day} - {workout.focus}
-          </h4>
-          <Badge variant="secondary">
-            {completedExercises}/{exercises.length} done
-          </Badge>
-        </div>
-        <Progress value={progressPercentage} className="mb-3" />
-
-        {workout.clientNote && (
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <p className="text-sm font-medium text-blue-900 mb-1">Client Note:</p>
-            <p className="text-sm text-blue-800">{workout.clientNote}</p>
-          </div>
-        )}
-      </div>
+        </CardHeader>
+      </Card>
 
       {/* Exercises */}
-      <div className="p-4 space-y-3">
-        {exercises.map((exercise) => (
-          <Card key={exercise.id} className="border-l-4 border-l-green-500">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  {exercise.completed ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <Circle className="h-5 w-5 text-gray-400" />
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Exercises</h2>
+        {workout.exercises.map((exercise, index) => (
+          <Card key={exercise.id}>
+            <CardContent className="pt-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="font-medium text-lg">
+                    {index + 1}. {exercise.name}
+                  </h3>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                    <span>{exercise.sets} sets</span>
+                    <span>{exercise.reps} reps</span>
+                    {exercise.weight && <span>{exercise.weight}</span>}
+                  </div>
+                  {exercise.notes && (
+                    <p className="mt-2 text-sm text-muted-foreground italic">Note: {exercise.notes}</p>
                   )}
-                  <span className="font-medium">{exercise.name}</span>
-                  {exercise.isPR && <Trophy className="h-4 w-4 text-yellow-500" />}
                 </div>
               </div>
-
-              {exercise.sets ? (
-                <div className="space-y-1">
-                  {exercise.sets.map((set) => (
-                    <div key={set.number} className="flex items-center justify-between text-sm">
-                      <span>Set {set.number}</span>
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {set.weight} × {set.reps}
-                        </span>
-                        {set.isPR && <Trophy className="h-3 w-3 text-yellow-500" />}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-600">
-                  {exercise.weight} × {exercise.reps}
-                </div>
-              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Personal Records */}
-      {personalRecords.length > 0 && (
-        <div className="p-4 border-t">
-          <h5 className="font-semibold mb-2 flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-yellow-500" />
-            Personal Records
-          </h5>
-          <div className="space-y-1">
-            {personalRecords.map((record, index) => (
-              <p key={index} className="text-sm text-gray-600">
-                {record}
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Interaction Buttons */}
-      {showInteractionButtons && (
-        <div className="p-4 border-t">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex gap-2">
-              <Button
-                variant={selectedEmoji === "❤️" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleEmojiClick("❤️")}
-              >
-                <Heart className="h-4 w-4 mr-1" />
-                ❤️
-              </Button>
-              <Button
-                variant={selectedEmoji === "👍" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleEmojiClick("👍")}
-              >
-                <ThumbsUp className="h-4 w-4 mr-1" />👍
-              </Button>
-              <Button
-                variant={selectedEmoji === "🔥" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleEmojiClick("🔥")}
-              >
-                <Fire className="h-4 w-4 mr-1" />🔥
-              </Button>
-            </div>
-
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <MessageCircle className="h-4 w-4 mr-1" />
-                  Comment
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Comment</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <Textarea
-                    placeholder="Great work! Keep it up..."
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    rows={3}
-                  />
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setComment("")}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleCommentSubmit}>Send Comment</Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      )}
-
-      {isMockData && (
-        <div className="p-4 border-t bg-gray-50">
-          <p className="text-xs text-gray-500 text-center">This is demo data. Sign up to create real workouts!</p>
+      {/* Actions */}
+      {workout.status === "pending" && (
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline">Skip Workout</Button>
+          <Button>Mark Complete</Button>
         </div>
       )}
     </div>
   )
 }
-
-export default ClientWorkoutView

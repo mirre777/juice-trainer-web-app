@@ -19,12 +19,16 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
 
   const submitFeedback = async (feedback: string, type: string) => {
     try {
-      // Mock feedback submission - in real app would send to API
+      // Here you would typically send feedback to your backend
       console.log("Feedback submitted:", { feedback, type })
+
+      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
+
       closeFeedback()
     } catch (error) {
       console.error("Failed to submit feedback:", error)
+      throw error
     }
   }
 
