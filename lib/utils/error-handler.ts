@@ -199,3 +199,5 @@ export function logAuditEvent(eventData: any): void {
   console.log("Audit logging disabled:", eventData)
   return
 }
+
+export type { AppError }

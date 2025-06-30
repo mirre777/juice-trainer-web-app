@@ -1,38 +1,42 @@
 import type React from "react"
-import { Sen, Inter } from "next/font/google"
-import ClientLayout from "./ClientLayout"
-import { DemoBanner } from "@/components/demo-banner"
-import { ToastProvider } from "@/components/ui/toast-context"
+import type { Metadata } from "next"
 import "./globals.css"
+import { AuthProvider } from "@/context/AuthContext"
+import { ThemeProvider } from "@/components/theme-provider"
+import { ToastProvider } from "@/components/providers/toast-provider"
+import { FeedbackProvider } from "@/context/FeedbackContext"
+import { FloatingFeedbackButton } from "@/components/FloatingFeedbackButton"
+import { Inter } from "next/font/google"
 
-// Initialize the Sen font
-const sen = Sen({
-  subsets: ["latin"],
-  weight: ["400", "700", "800"],
-  variable: "--font-sen",
-  display: "swap",
-})
-
-// Initialize the Inter font
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
+  variable: "--font-sans",
 })
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const metadata: Metadata = {
+  title: "v0 App",
+  description: "Created with v0",
+  generator: "v0.dev",
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
   return (
-    <html lang="en" className={`${sen.variable} ${inter.variable}`}>
-      <body>
-        <ToastProvider>
-          <DemoBanner />
-          <ClientLayout>{children}</ClientLayout>
-        </ToastProvider>
+    <html lang="en">
+      <body className={inter.className}>
+        <AuthProvider>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+            <ToastProvider />
+            <FeedbackProvider>
+              {children}
+              <FloatingFeedbackButton />
+            </FeedbackProvider>
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   )
 }
-
-export const metadata = {
-      generator: 'v0.dev'
-    };

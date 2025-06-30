@@ -4,12 +4,13 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
-import { getCookie } from "cookies-next"
+import { useAuth } from "@/context/AuthContext"
 import { subscribeToClients } from "@/lib/firebase/client-service"
 import { ClientsList } from "@/components/clients/clients-list"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
 import type { Client } from "@/types/client"
+import LoadingSpinner from "@/components/shared/loading-spinner"
 
 export function ClientPage() {
   const [clients, setClients] = useState<Client[]>([])
@@ -21,22 +22,21 @@ export function ClientPage() {
   const [statusFilter, setStatusFilter] = useState("All")
   const [allClientsExpanded, setAllClientsExpanded] = useState(false)
   const router = useRouter()
+  const { user } = useAuth()
 
   useEffect(() => {
-    const userId = getCookie("user_id")?.toString()
-
-    if (!userId) {
+    if (!user?.uid) {
       console.log("[ClientPage] No user ID available")
       router.push("/login")
       return
     }
 
-    console.log("[ClientPage] Setting up client subscription for user:", userId)
+    console.log("[ClientPage] Setting up client subscription for user:", user.uid)
     setLoading(true)
     setError(null)
 
     // Subscribe to real-time client updates
-    const unsubscribe = subscribeToClients(userId, (clientsData, error) => {
+    const unsubscribe = subscribeToClients(user.uid, (clientsData, error) => {
       console.log("[ClientPage] Received clients update:", {
         clientsCount: clientsData.length,
         error: error?.message,
@@ -64,7 +64,7 @@ export function ClientPage() {
       console.log("[ClientPage] Cleaning up client subscription")
       unsubscribe()
     }
-  }, [router])
+  }, [user?.uid, router])
 
   // Filter clients based on search and status
   useEffect(() => {
@@ -123,7 +123,7 @@ export function ClientPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-500"></div>
+        <LoadingSpinner size="lg" />
       </div>
     )
   }

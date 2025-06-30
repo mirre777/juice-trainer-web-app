@@ -229,3 +229,6 @@ export function ClientWorkoutView({
     </div>
   )
 }
+
+// Add this at the end of the file
+export default ClientWorkoutView
