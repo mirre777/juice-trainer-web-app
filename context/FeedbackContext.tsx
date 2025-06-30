@@ -3,20 +3,19 @@
 import type React from "react"
 import { createContext, useContext, useState, useCallback } from "react"
 
-interface Feedback {
-  id: string
+interface FeedbackData {
   type: "bug" | "feature" | "general"
   message: string
   email?: string
-  timestamp: Date
-  status: "pending" | "submitted" | "error"
+  page?: string
 }
 
 interface FeedbackContextType {
-  feedbacks: Feedback[]
+  isOpen: boolean
   isSubmitting: boolean
-  submitFeedback: (feedback: Omit<Feedback, "id" | "timestamp" | "status">) => Promise<void>
-  clearFeedbacks: () => void
+  openFeedback: () => void
+  closeFeedback: () => void
+  submitFeedback: (data: FeedbackData) => Promise<void>
 }
 
 const FeedbackContext = createContext<FeedbackContextType | undefined>(undefined)
@@ -30,49 +29,56 @@ export function useFeedback() {
 }
 
 export function FeedbackProvider({ children }: { children: React.ReactNode }) {
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
+  const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const submitFeedback = useCallback(async (feedbackData: Omit<Feedback, "id" | "timestamp" | "status">) => {
+  const openFeedback = useCallback(() => {
+    setIsOpen(true)
+  }, [])
+
+  const closeFeedback = useCallback(() => {
+    setIsOpen(false)
+  }, [])
+
+  const submitFeedback = useCallback(async (data: FeedbackData) => {
     setIsSubmitting(true)
-
-    const newFeedback: Feedback = {
-      ...feedbackData,
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp: new Date(),
-      status: "pending",
-    }
-
-    setFeedbacks((prev) => [...prev, newFeedback])
-
     try {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Update status to submitted
-      setFeedbacks((prev) => prev.map((f) => (f.id === newFeedback.id ? { ...f, status: "submitted" as const } : f)))
+      // Log feedback data (in real app, this would be sent to an API)
+      console.log("Feedback submitted:", {
+        ...data,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+      })
 
-      console.log("Feedback submitted:", newFeedback)
+      // Store in localStorage for demo purposes
+      const existingFeedback = JSON.parse(localStorage.getItem("feedback") || "[]")
+      existingFeedback.push({
+        ...data,
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+      })
+      localStorage.setItem("feedback", JSON.stringify(existingFeedback))
+
+      setIsOpen(false)
     } catch (error) {
-      // Update status to error
-      setFeedbacks((prev) => prev.map((f) => (f.id === newFeedback.id ? { ...f, status: "error" as const } : f)))
+      console.error("Failed to submit feedback:", error)
       throw error
     } finally {
       setIsSubmitting(false)
     }
   }, [])
 
-  const clearFeedbacks = useCallback(() => {
-    setFeedbacks([])
-  }, [])
-
   return (
     <FeedbackContext.Provider
       value={{
-        feedbacks,
+        isOpen,
         isSubmitting,
+        openFeedback,
+        closeFeedback,
         submitFeedback,
-        clearFeedbacks,
       }}
     >
       {children}
