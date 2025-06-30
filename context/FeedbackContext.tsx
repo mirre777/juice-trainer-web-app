@@ -6,7 +6,7 @@ interface FeedbackData {
   type: "bug" | "feature" | "general"
   message: string
   email?: string
-  rating?: number
+  page?: string
 }
 
 interface FeedbackContextType {
@@ -19,19 +19,7 @@ interface FeedbackContextType {
 
 const FeedbackContext = createContext<FeedbackContextType | undefined>(undefined)
 
-export function useFeedback() {
-  const context = useContext(FeedbackContext)
-  if (context === undefined) {
-    throw new Error("useFeedback must be used within a FeedbackProvider")
-  }
-  return context
-}
-
-interface FeedbackProviderProps {
-  children: ReactNode
-}
-
-export function FeedbackProvider({ children }: FeedbackProviderProps) {
+export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -43,27 +31,36 @@ export function FeedbackProvider({ children }: FeedbackProviderProps) {
     try {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // In a real app, you would send this to your feedback API
       console.log("Feedback submitted:", data)
-
-      // Close the feedback modal after successful submission
       closeFeedback()
     } catch (error) {
       console.error("Failed to submit feedback:", error)
-      throw error
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const value: FeedbackContextType = {
-    isOpen,
-    openFeedback,
-    closeFeedback,
-    submitFeedback,
-    isSubmitting,
-  }
-
-  return <FeedbackContext.Provider value={value}>{children}</FeedbackContext.Provider>
+  return (
+    <FeedbackContext.Provider
+      value={{
+        isOpen,
+        openFeedback,
+        closeFeedback,
+        submitFeedback,
+        isSubmitting,
+      }}
+    >
+      {children}
+    </FeedbackContext.Provider>
+  )
 }
+
+export function useFeedback() {
+  const context = useContext(FeedbackContext)
+  if (!context) {
+    throw new Error("useFeedback must be used within a FeedbackProvider")
+  }
+  return context
+}
+
+export default FeedbackProvider

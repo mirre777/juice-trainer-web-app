@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
+import ToastProvider from "@/components/providers/toast-provider"
 import { AuthProvider } from "@/context/AuthContext"
 import { FeedbackProvider } from "@/context/FeedbackContext"
 import FloatingFeedbackButton from "@/components/FloatingFeedbackButton"
@@ -26,11 +27,13 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>
-            <FeedbackProvider>
-              {children}
-              <FloatingFeedbackButton />
-              <Toaster />
-            </FeedbackProvider>
+            <ToastProvider>
+              <FeedbackProvider>
+                {children}
+                <FloatingFeedbackButton />
+                <Toaster />
+              </FeedbackProvider>
+            </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
