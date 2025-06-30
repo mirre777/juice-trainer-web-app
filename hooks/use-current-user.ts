@@ -13,16 +13,15 @@ export function useCurrentUser() {
     try {
       // Try to get the user ID from the cookie
       const userIdFromCookie = getCookie("user_id") as string
-      console.log("User ID from cookie:", userIdFromCookie)
-
+      console.log("[useCurrentUser] User ID from cookie:", userIdFromCookie) // Added log
       if (userIdFromCookie) {
         setUserId(userIdFromCookie)
       } else {
-        console.warn("No user ID found in cookies")
+        console.warn("[useCurrentUser] No user ID found in cookies") // Added log
         // Fallback to checking if we're in demo mode
         const pathname = window.location.pathname
         if (pathname.includes("/demo/")) {
-          console.log("Demo mode detected, using demo user ID")
+          console.log("[useCurrentUser] Demo mode detected, using demo user ID") // Added log
           setUserId("demo-user-123")
         }
       }
@@ -34,12 +33,13 @@ export function useCurrentUser() {
         errorType: ErrorType.AUTH_ERROR,
       })
 
-      console.error("Error getting current user:", appError)
+      console.error("[useCurrentUser] Error getting current user:", appError) // Added log
       setError(appError)
     } finally {
       setLoading(false)
+      console.log("[useCurrentUser] Finished loading user data. userId:", userId, "loading:", false) // Added final log
     }
   }, [])
 
-  return { userId, loading, error }
+  return { user: { uid: userId }, loading, error } // Return user as an object with uid
 }

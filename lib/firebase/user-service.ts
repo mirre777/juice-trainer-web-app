@@ -1,6 +1,6 @@
 // lib/firebase/user-service.ts
 
-import { auth, db } from "./firebase"
+import { auth, db } from "./firebase" // Revert to client-side db and auth
 import {
   collection,
   doc,
@@ -8,14 +8,14 @@ import {
   getDocs,
   query,
   where,
-  addDoc,
   setDoc,
   updateDoc,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
+  addDoc,
 } from "firebase/firestore"
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth"
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth" // Re-add client-side auth functions
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
 export const createUserWithAuth = async (email: string, password: string) => {
@@ -24,7 +24,7 @@ export const createUserWithAuth = async (email: string, password: string) => {
     const user = userCredential.user
 
     // Create a user document in Firestore
-    const userDocRef = doc(db, "users", user.uid)
+    const userDocRef = doc(db, "users", user.uid) // Use client-side db
     await setDoc(userDocRef, {
       email: user.email,
       uid: user.uid,
@@ -66,7 +66,7 @@ export async function getUserById(userId: string): Promise<any | null> {
       return null
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     const [userDoc, error] = await tryCatch(() => getDoc(userRef), ErrorType.DB_READ_FAILED, {
       function: "getUserById",
       userId,
@@ -109,7 +109,7 @@ export async function getUserByEmail(email: string): Promise<any | null> {
       return null
     }
 
-    const usersRef = collection(db, "users")
+    const usersRef = collection(db, "users") // Use client-side db
     const q = query(usersRef, where("email", "==", email.toLowerCase()))
     const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "getUserByEmail",
@@ -168,7 +168,7 @@ export async function createUser(userData: {
       console.log(`[createUser] Creating Firebase Auth user for: ${userData.email}`)
 
       const [userCredential, authError] = await tryCatch(
-        () => createUserWithEmailAndPassword(auth, userData.email, userData.password!),
+        () => createUserWithEmailAndPassword(auth, userData.email, userData.password!), // Use client-side auth
         ErrorType.AUTH_FAILED,
         { function: "createUser", email: userData.email },
       )
@@ -183,7 +183,7 @@ export async function createUser(userData: {
     } else {
       // Fallback: create Firestore-only user (for existing flow compatibility)
       console.log(`[createUser] Creating Firestore-only user for: ${userData.email}`)
-      const usersRef = collection(db, "users")
+      const usersRef = collection(db, "users") // Use client-side db
       const [docRef, firestoreError] = await tryCatch(
         () => addDoc(usersRef, { email: userData.email.toLowerCase() }),
         ErrorType.DB_WRITE_FAILED,
@@ -216,7 +216,7 @@ export async function createUser(userData: {
       userDocData.role = userData.role
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     const [, firestoreError] = await tryCatch(() => setDoc(userRef, userDocData), ErrorType.DB_WRITE_FAILED, {
       function: "createUser",
       userId,
@@ -258,7 +258,7 @@ export async function updateUser(userId: string, updates: any): Promise<{ succes
       return { success: false, error }
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     const [, error] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -300,7 +300,7 @@ export async function updateUserLastLogin(userId: string): Promise<{ success: bo
       return { success: false, error }
     }
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     const [, error] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -347,7 +347,7 @@ export async function storeInvitationCode(
 
     console.log(`[storeInvitationCode] Storing invitation code ${inviteCode} for user ${userId}`)
 
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     const [, updateError] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -398,7 +398,7 @@ export async function generateUniversalInviteCode(
     // Generate a simple 8-character code
     const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase()
 
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(db, "users", trainerId) // Use client-side db
     const [, error] = await tryCatch(
       () =>
         updateDoc(trainerRef, {
@@ -448,7 +448,7 @@ export async function signupWithUniversalCode(userData: {
     }
 
     // Find trainer with this universal invite code
-    const usersRef = collection(db, "users")
+    const usersRef = collection(db, "users") // Use client-side db
     const q = query(usersRef, where("universalInviteCode", "==", userData.universalInviteCode))
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "signupWithUniversalCode",
@@ -490,7 +490,7 @@ export async function signupWithUniversalCode(userData: {
     }
 
     // Update user with pending approval status
-    const userRef = doc(db, "users", userId)
+    const userRef = doc(db, "users", userId) // Use client-side db
     const [, updateError] = await tryCatch(
       () =>
         updateDoc(userRef, {
@@ -508,7 +508,7 @@ export async function signupWithUniversalCode(userData: {
     }
 
     // Add user to trainer's pending users list
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(db, "users", trainerId) // Use client-side db
     console.log(`[signupWithUniversalCode] Adding user ${userId} to trainer ${trainerId} pending list`)
 
     const [, addToPendingError] = await tryCatch(
@@ -550,7 +550,7 @@ export async function getPendingUsers(trainerId: string): Promise<any[]> {
     }
 
     // Get trainer document to get pending users list
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(db, "users", trainerId) // Use client-side db
     const [trainerDoc, trainerError] = await tryCatch(() => getDoc(trainerRef), ErrorType.DB_READ_FAILED, {
       function: "getPendingUsers",
       trainerId,
@@ -609,8 +609,8 @@ export async function approveUser(
       return { success: false, error }
     }
 
-    const userRef = doc(db, "users", userId)
-    const trainerRef = doc(db, "users", trainerId)
+    const userRef = doc(db, "users", userId) // Use client-side db
+    const trainerRef = doc(db, "users", trainerId) // Use client-side db
 
     if (action === "approve") {
       // Update user status to approved
@@ -660,7 +660,7 @@ export async function approveUser(
 
           if (result.success && result.clientId) {
             // Link the new client to the user
-            const clientRef = doc(db, "users", trainerId, "clients", result.clientId)
+            const clientRef = doc(db, "users", trainerId, "clients", result.clientId) // Use client-side db
             await updateDoc(clientRef, {
               userId: userId,
               status: "Active",
@@ -671,7 +671,7 @@ export async function approveUser(
         }
       } else if (matchToClientId) {
         // Match to existing client
-        const clientRef = doc(db, "users", trainerId, "clients", matchToClientId)
+        const clientRef = doc(db, "users", trainerId, "clients", matchToClientId) // Use client-side db
         const [, updateClientError] = await tryCatch(
           () =>
             updateDoc(clientRef, {
@@ -753,7 +753,7 @@ export async function updateUniversalInviteCode(
 
     // Allow empty string to clear the invite code
     if (newCode === "") {
-      const trainerRef = doc(db, "users", trainerId)
+      const trainerRef = doc(db, "users", trainerId) // Use client-side db
       const [, error] = await tryCatch(
         () =>
           updateDoc(trainerRef, {
@@ -785,7 +785,7 @@ export async function updateUniversalInviteCode(
     }
 
     // Check if code is already taken by another trainer
-    const usersRef = collection(db, "users")
+    const usersRef = collection(db, "users") // Use client-side db
     const q = query(usersRef, where("universalInviteCode", "==", newCode.toUpperCase()))
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "updateUniversalInviteCode",
@@ -811,7 +811,7 @@ export async function updateUniversalInviteCode(
       }
     }
 
-    const trainerRef = doc(db, "users", trainerId)
+    const trainerRef = doc(db, "users", trainerId) // Use client-side db
     const [, error] = await tryCatch(
       () =>
         updateDoc(trainerRef, {
@@ -841,7 +841,7 @@ export async function updateUniversalInviteCode(
 
 export const getUserData = async (uid: string) => {
   try {
-    const userDocRef = doc(db, "users", uid)
+    const userDocRef = doc(db, "users", uid) // Use client-side db
     const docSnap = await getDoc(userDocRef)
 
     if (docSnap.exists()) {

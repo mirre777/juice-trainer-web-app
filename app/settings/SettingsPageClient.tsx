@@ -210,7 +210,15 @@ export default function SettingsPageClient() {
                   </div>
                   {saveMessage && (
                     <p
-                      className={`text-sm ${saveMessage.includes("Error") || saveMessage.includes("Failed") || saveMessage.includes("Authentication") || saveMessage.includes("Server") ? "text-red-600" : "text-green-600"}`}
+                      className={`text-sm ${
+                        saveMessage.includes("Error") ||
+                        saveMessage.includes("Failed") ||
+                        saveMessage.includes("Authentication") ||
+                        saveMessage.includes("Server") ||
+                        saveMessage.includes("Network")
+                          ? "text-red-600"
+                          : "text-green-600"
+                      }`}
                     >
                       {saveMessage}
                     </p>

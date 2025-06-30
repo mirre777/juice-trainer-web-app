@@ -16,6 +16,7 @@ import {
   Info,
   Save,
   Send,
+  Loader2,
   ChevronUp,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
@@ -34,14 +35,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { useCurrentUser } from "@/hooks/use-current-user"
+import { sendProgramToClient } from "@/app/actions/program-assignment-actions"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
+import type { Client } from "@/types/client"
 
 interface ReviewProgramClientProps {
   importData: any
 }
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
+  console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
+  const { toast } = useToast()
+  const { user: trainer, loading: isTrainerLoading } = useCurrentUser() // Get loading state
+
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
   const [isSaving, setIsSaving] = useState(false)
@@ -54,16 +65,27 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
 
-  // Placeholder values as client data is not directly available in importData
-  const clientNameForModal = "Emilie Rentinger"
-  const dateForModal = "May 9, 2025" // Or format new Date()
+  const [clients, setClients] = useState<Client[]>([])
+  const [loadingClients, setLoadingClients] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [isAssigning, setIsAssigning] = useState(false)
 
-  // Initialize programState from importData on component mount or importData change
+  const clientNameForModal = selectedClientId
+    ? clients.find((c) => c.id === selectedClientId)?.name || "Selected Client"
+    : "Select a Client"
+  const dateForModal = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+
+  // Log trainer and loading state on every render
+  console.log("[ReviewProgramClient] Current trainer state from useCurrentUser:", { trainer, isTrainerLoading })
+
   useEffect(() => {
     if (importData?.program) {
       const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
 
-      // Ensure program_weeks is a number, default to 4 if not present or invalid
       initialProgram.program_weeks =
         Number.isInteger(initialProgram.program_weeks) && initialProgram.program_weeks > 0
           ? initialProgram.program_weeks
@@ -71,7 +93,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
 
-      // Normalize data structure: Always use 'weeks' array and ensure set_numbers
       let normalizedWeeks: ExerciseWeek[] = []
 
       if (initialProgram.is_periodized) {
@@ -121,12 +142,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         initialProgram.program_weeks = 1
       }
 
-      // --- NEW: Normalize set_number for all exercises in all routines/weeks ---
       normalizedWeeks.forEach((week) => {
         week.routines?.forEach((routine) => {
           routine.exercises.forEach((exercise) => {
             if (exercise.weeks && exercise.weeks.length > 0) {
-              // For periodized programs, iterate through each week's sets
               exercise.weeks.forEach((exWeek) => {
                 if (exWeek.sets) {
                   exWeek.sets.forEach((set, setIndex) => {
@@ -137,7 +156,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 }
               })
             } else if (exercise.sets) {
-              // For non-periodized programs (or if 'weeks' is not used at exercise level), iterate through top-level sets
               exercise.sets.forEach((set, setIndex) => {
                 if (typeof set.set_number !== "number" || set.set_number <= 0) {
                   set.set_number = setIndex + 1
@@ -147,30 +165,147 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           })
         })
       })
-      // --- END NEW NORMALIZATION ---
 
       setProgramState({
         ...initialProgram,
         weeks: normalizedWeeks,
-        routines: [], // Ensure top-level routines are always empty
+        routines: [],
       })
-      setCurrentWeek(1) // Always start at week 1 for display
+      setCurrentWeek(1)
       setHasChanges(false)
       setJustSaved(false)
     }
   }, [importData])
 
-  // Derived state for current routines based on current week
+  // This useEffect will now only trigger when showSendProgramDialog or trainer changes.
+  // The direct call in the button onClick will ensure fetchClients runs when the button is pressed.
+  useEffect(() => {
+    console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
+    console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
+    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
+
+    // This useEffect is primarily for reacting to changes in showSendProgramDialog
+    // and ensuring clients are fetched if the dialog is opened and trainer data is ready.
+    // The direct call in the button handler is the primary trigger.
+    if (showSendProgramDialog && trainer?.uid && clients.length === 0 && !loadingClients) {
+      console.log(
+        `[ReviewProgramClient] Condition met: Dialog opened, trainer UID (${trainer.uid}) available, no clients loaded. Calling fetchClients...`,
+      )
+      fetchClients(trainer.uid)
+    } else if (showSendProgramDialog && !trainer?.uid && !isTrainerLoading) {
+      setLoadingClients(false)
+      console.error(
+        "[ReviewProgramClient] Dialog opened but trainer UID is missing and not loading. Cannot fetch clients.",
+      )
+      toast({
+        title: "Authentication Error",
+        description: "Could not retrieve trainer information. Please log in again.",
+        variant: "destructive",
+      })
+    }
+  }, [showSendProgramDialog, trainer, toast, clients.length, loadingClients, isTrainerLoading])
+
+  const fetchClients = async (trainerId: string) => {
+    setLoadingClients(true)
+    setClients([]) // Clear previous clients
+    setSelectedClientId("") // Clear previous selection
+    console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
+    try {
+      const response = await fetch(`/api/clients?trainerId=${trainerId}`)
+
+      // Always get raw text first for debugging, regardless of status
+      const rawResponseText = await response.text()
+      console.log("[ReviewProgramClient] Raw API response text:", rawResponseText)
+
+      // NEW: Check if rawResponseText is empty or undefined before parsing
+      if (!rawResponseText) {
+        console.error("[ReviewProgramClient] API response text is empty or undefined. Cannot parse JSON.")
+        toast({
+          title: "Error",
+          description: "Received empty or invalid response from client API. Please try again.",
+          variant: "destructive",
+        })
+        setClients([])
+        return // Exit early
+      }
+
+      if (!response.ok) {
+        console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", rawResponseText)
+        toast({
+          title: "Error",
+          description: `Failed to load clients: ${response.statusText || "Server error"}. Details: ${rawResponseText.substring(0, 100)}`,
+          variant: "destructive",
+        })
+        setClients([])
+        return // Exit early if response is not OK
+      }
+
+      // Check content type before parsing as JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error(
+          "[ReviewProgramClient] API response is not JSON. Content-Type:",
+          contentType,
+          "Raw response:",
+          rawResponseText,
+        )
+        toast({
+          title: "Error",
+          description: "Received unexpected response from client API. Please try again.",
+          variant: "destructive",
+        })
+        setClients([])
+        return // Exit early if not JSON
+      }
+
+      let data: { clients?: Client[]; error?: string }
+      try {
+        data = JSON.parse(rawResponseText) // Parse the raw text we already got
+        console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients)
+        setClients(data.clients || [])
+        if (data.clients && data.clients.length > 0) {
+          setSelectedClientId(data.clients[0].id)
+          console.log("[ReviewProgramClient] First client selected:", data.clients[0].id)
+        } else {
+          setSelectedClientId("")
+          console.log("[ReviewProgramClient] No clients found, selectedClientId cleared.")
+        }
+      } catch (jsonError) {
+        console.error(
+          "[ReviewProgramClient] Failed to parse JSON response:",
+          jsonError,
+          "Raw response that failed parsing:",
+          rawResponseText,
+        )
+        toast({
+          title: "Error",
+          description: "Failed to parse client data. Please try again.",
+          variant: "destructive",
+        })
+        setClients([])
+      }
+    } catch (error) {
+      console.error("[ReviewProgramClient] Error fetching clients (network/unexpected):", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while fetching clients.",
+        variant: "destructive",
+      })
+      setClients([])
+    } finally {
+      setLoadingClients(false)
+      console.log("[ReviewProgramClient] Finished fetching clients.")
+    }
+  }
+
   const currentRoutines: WorkoutRoutine[] = useMemo(() => {
     if (!programState || !programState.weeks || programState.weeks.length === 0) return []
     return programState.weeks[currentWeek - 1]?.routines || []
   }, [programState, currentWeek])
 
-  // Week navigation
   const goToPreviousWeek = () => setCurrentWeek(Math.max(1, currentWeek - 1))
   const goToNextWeek = () => setCurrentWeek(Math.min(programState?.program_weeks || 1, currentWeek + 1))
 
-  // Handle changes to program title and notes
   const handleProgramTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setProgramState((prev) => {
       if (!prev) return prev
@@ -189,7 +324,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
   }
 
-  // Handle changes to program weeks (only relevant for periodized programs)
   const handleProgramWeeksChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newWeeksCount = Number.parseInt(e.target.value, 10)
     if (isNaN(newWeeksCount) || newWeeksCount < 1) return
@@ -207,31 +341,26 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           if (currentWeeks[i]) {
             newWeeksArray.push(currentWeeks[i])
           } else {
-            // Copy the last available week's data, or create empty if no weeks exist
             const lastWeekData = currentWeeks[currentWeeks.length - 1] || { routines: [] }
             newWeeksArray.push({
               week_number: i + 1,
-              set_count: 0, // Will be derived
-              sets: [], // Will be derived
-              routines: JSON.parse(JSON.stringify(lastWeekData.routines)), // Deep copy
+              set_count: 0,
+              sets: [],
+              routines: JSON.parse(JSON.stringify(lastWeekData.routines)),
             })
           }
         }
         updatedProgram.weeks = newWeeksArray
-        // Adjust currentWeek if it's now out of bounds
         if (currentWeek > newWeeksCount) {
           setCurrentWeek(newWeeksCount)
         }
       }
-      // If not periodized, program_weeks should always be 1, so this input should be disabled.
-      // No change needed here for non-periodized as it's handled by togglePeriodization.
       return updatedProgram
     })
     setHasChanges(true)
     setJustSaved(false)
   }
 
-  // Toggle between periodized and non-periodized
   const togglePeriodization = () => {
     if (!programState) return
 
@@ -239,20 +368,18 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
 
     if (programState.is_periodized) {
-      // Switching from Periodized to Non-Periodized
-      setShowSelectWeekDialog(true) // Open dialog to select which week to keep
+      setShowSelectWeekDialog(true)
     } else {
-      // Switching from Non-Periodized to Periodized
       const currentSingleWeekRoutines = programState.weeks?.[0]?.routines || []
       const newWeeks: ExerciseWeek[] = []
-      const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4 // Use existing weeks or default to 4
+      const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4
 
       for (let i = 0; i < defaultWeeks; i++) {
         newWeeks.push({
           week_number: i + 1,
-          set_count: 0, // Will be derived from exercises
-          sets: [], // Will be derived from exercises
-          routines: JSON.parse(JSON.stringify(currentSingleWeekRoutines)), // Deep copy routines
+          set_count: 0,
+          sets: [],
+          routines: JSON.parse(JSON.stringify(currentSingleWeekRoutines)),
         })
       }
 
@@ -262,14 +389,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           ...prev,
           is_periodized: true,
           weeks: newWeeks,
-          program_weeks: defaultWeeks, // Update program_weeks
+          program_weeks: defaultWeeks,
         }
       })
-      setCurrentWeek(1) // Reset current week to 1
+      setCurrentWeek(1)
     }
   }
 
-  // Handle selection of week when switching from periodized to non-periodized
   const handleSelectWeekForNonPeriodized = (weekNumber: number) => {
     if (!programState || !programState.weeks) return
 
@@ -280,12 +406,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         return {
           ...prev,
           is_periodized: false,
-          weeks: [JSON.parse(JSON.stringify(selectedWeekData))], // Keep only the selected week
-          program_weeks: 1, // Non-periodized always has 1 week
+          weeks: [JSON.parse(JSON.stringify(selectedWeekData))],
+          program_weeks: 1,
         }
       })
       setShowSelectWeekDialog(false)
-      setCurrentWeek(1) // Reset current week for display purposes
+      setCurrentWeek(1)
       setHasChanges(true)
       setJustSaved(false)
     }
@@ -298,18 +424,20 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     try {
       await updateDoc(doc(db, "sheets_imports", importData.id), {
         name: programState.program_title,
-        program: programState, // Save the entire programState object
+        program: programState,
         status: "reviewed",
         updatedAt: new Date(),
       })
       setHasChanges(false)
       setJustSaved(true)
-      // Re-initialize importData to reflect the saved state for correct revert behavior
-      // In a real app, you might refetch importData or update it via a parent callback
       importData.program = JSON.parse(JSON.stringify(programState))
     } catch (error) {
       console.error("Error saving program:", error)
-      alert("Failed to save changes. Please try again.")
+      toast({
+        title: "Error",
+        description: "Failed to save changes. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsSaving(false)
     }
@@ -322,17 +450,15 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setCurrentWeek(1)
       setHasChanges(false)
       setJustSaved(false)
-      setExpandedRoutines({ "0": true }) // Reset expanded routines
+      setExpandedRoutines({ "0": true })
     }
   }
 
-  // Add empty set to exercise
   const addSet = (routineIndex: number, exerciseIndex: number) => {
     setProgramState((prev) => {
       if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
+      const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise) {
@@ -344,8 +470,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           weight: "",
           rpe: "",
           rest: "",
-          duration_sec: null, // Use duration_sec as per type
-          notes: null, // Use notes as per type
+          duration_sec: null,
+          notes: null,
         }
         if (!targetExercise.sets) targetExercise.sets = []
         targetExercise.sets.push(newSet)
@@ -356,13 +482,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
   }
 
-  // Duplicate specific set
   const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
     setProgramState((prev) => {
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise && targetExercise.sets && targetExercise.sets[setIndex]) {
@@ -383,13 +507,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setJustSaved(false)
   }
 
-  // Delete set
   const deleteSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
     setProgramState((prev) => {
       if (!prev) return null
       const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
 
       if (targetExercise && targetExercise.sets) {
@@ -407,9 +529,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const updateSetField = (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
     setProgramState((prev) => {
       if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev)) // Deep copy for immutability
+      const updatedProgram = JSON.parse(JSON.stringify(prev))
 
-      // Always access through the weeks array
       const weekData = updatedProgram.weeks[currentWeek - 1]
       if (weekData && weekData.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
         weekData.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
@@ -438,11 +559,53 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     return { name: "Taper", color: "bg-green-100 text-green-800" }
   }
 
-  const handleSendProgram = () => {
-    // In a real application, this would trigger an API call to send the program to the client
-    console.log("Sending program to client:", programState?.program_title, "with message:", messageToClient)
-    setShowSendProgramDialog(false)
-    // Optionally, show a success toast notification
+  const handleSendProgram = async () => {
+    if (!programState || !selectedClientId) {
+      toast({
+        title: "Error",
+        description: "Please select a client to send the program.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsAssigning(true)
+    try {
+      const result = await sendProgramToClient(programState, selectedClientId)
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+        setShowSendProgramDialog(false)
+        setMessageToClient("")
+        setSelectedClientId("")
+      } else {
+        toast({
+          title: "Error",
+          description: result.message,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error assigning program:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred during program assignment.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsAssigning(false)
+    }
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2)
   }
 
   if (!programState) {
@@ -452,6 +615,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       </div>
     )
   }
+
+  // THIS LOG SHOULD APPEAR EVERY TIME THE COMPONENT RENDERS, showing the current state of the dialog
+  console.log("[ReviewProgramClient] showSendProgramDialog state at render:", showSendProgramDialog)
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -479,6 +645,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
         <div className="flex gap-2">
+          {console.log(
+            `[ReviewProgramClient] Button disabled state check: hasChanges=${hasChanges}, isSaving=${isSaving}, isTrainerLoading=${isTrainerLoading}`,
+          )}
           <Button
             variant="ghost"
             onClick={revertChanges}
@@ -513,8 +682,20 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </Button>
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => setShowSendProgramDialog(true)}
-            disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
+            onClick={() => {
+              console.log("Send to Client button clicked! (Directly from onClick)") // NEW LOG
+              console.log(
+                "[ReviewProgramClient] 'Send to Client' button clicked. showSendProgramDialog will be set to true.",
+              )
+              console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid) // Log trainer UID at click
+
+              // Ensure fetchClients is called directly without the conditional block
+              fetchClients(trainer?.uid || "DEBUG_MISSING_UID") // Pass UID or a debug string
+
+              setShowSendProgramDialog(true)
+              console.log("[ReviewProgramClient] showSendProgramDialog set to true.") // NEW LOG
+            }}
+            disabled={hasChanges || isSaving || isTrainerLoading} // Keep disabled if trainer is loading or has unsaved changes
           >
             <Send className="h-4 w-4" />
             Send to Client
@@ -547,15 +728,13 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               onChange={handleProgramWeeksChange}
               className="w-full border-transparent focus:border-lime-500"
               min={1}
-              disabled={!programState.is_periodized} // Disable if not periodized
+              disabled={!programState.is_periodized}
             />
           </div>
         </div>
 
         {/* Program Notes */}
         <div className="mb-8">
-          {" "}
-          {/* Added mb-6 here */}
           <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
             Program Notes
           </label>
@@ -595,14 +774,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       {programState.is_periodized && (
         <Card className="p-4 mb-6">
           <div className="flex items-center justify-between">
-            {" "}
-            {/* This container will push items to ends */}
             <Button variant="ghost" size="icon" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
-              <ChevronLeft className="h-6 w-6" /> {/* Increased size */}
+              <ChevronLeft className="h-6 w-6" />
             </Button>
             <div className="flex-1 text-center">
-              {" "}
-              {/* This will center the text */}
               <div className="text-lg font-semibold">
                 Week {currentWeek}/{programState.program_weeks}
               </div>
@@ -613,7 +788,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               onClick={goToNextWeek}
               disabled={currentWeek === programState.program_weeks}
             >
-              <ChevronRight className="h-6 w-6" /> {/* Increased size */}
+              <ChevronRight className="h-6 w-6" />
             </Button>
           </div>
 
@@ -811,12 +986,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
       {/* Send Program Confirmation Dialog */}
       <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Confirm Sending Program</DialogTitle>
             <DialogDescription>You are about to send the following program:</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
             <Card className="p-4">
               <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
               <div className="flex items-center text-sm text-gray-600 mb-1">
@@ -837,6 +1012,51 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               </div>
             </Card>
 
+            {/* Client Selection Section */}
+            <div className="space-y-2">
+              <h4 className="font-semibold text-gray-800">Select Client:</h4>
+              {loadingClients ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                  <span className="ml-2 text-gray-600">Loading clients...</span>
+                </div>
+              ) : clients.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
+              ) : (
+                <>
+                  {console.log(
+                    "[ReviewProgramClient] Rendering RadioGroup. Clients:",
+                    clients,
+                    "Selected ID:",
+                    selectedClientId,
+                  )}
+                  <RadioGroup
+                    value={selectedClientId}
+                    onValueChange={setSelectedClientId}
+                    className="max-h-48 overflow-y-auto"
+                  >
+                    {clients.map((client) => (
+                      <div
+                        key={client.id}
+                        className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                      >
+                        <RadioGroupItem value={client.id} id={`client-${client.id}`} />
+                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
+                            {client.name}
+                          </Label>
+                          {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </>
+              )}
+            </div>
+
             <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
               <Info className="h-4 w-4" />
               <span>
@@ -844,12 +1064,23 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               </span>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)}>
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isAssigning}>
               Cancel
             </Button>
-            <Button className="bg-lime-400 hover:bg-lime-500 text-gray-800" onClick={handleSendProgram}>
-              Send Program
+            <Button
+              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+              onClick={handleSendProgram}
+              disabled={isAssigning || !selectedClientId || !programState}
+            >
+              {isAssigning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Sending...
+                </>
+              ) : (
+                "Send Program"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -871,7 +1102,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             <Button
               variant="destructive"
               onClick={() => {
-                setHasChanges(false) // Ensure changes are marked as discarded
+                setHasChanges(false)
                 router.push("/import-programs")
               }}
             >

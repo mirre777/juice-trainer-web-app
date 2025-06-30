@@ -1,167 +1,191 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { PageLayout } from "@/components/shared/page-layout"
-import { ClientsList } from "@/components/clients/clients-list"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { PlusCircle } from "lucide-react"
-import { useCurrentUser } from "@/hooks/use-current-user"
-import { subscribeToClients, linkPendingClientsWithUsers } from "@/lib/firebase/client-service"
-import { AddClientModal } from "@/components/clients/add-client-modal"
-import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
-import { useErrorHandler } from "@/hooks/use-error-handler"
-import { useToast } from "@/hooks/use-toast"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Users, Search, Plus, Mail, Phone } from "lucide-react"
+
+interface Client {
+  id: string
+  name: string
+  email: string
+  phone?: string
+  status: string
+  joinDate: string
+  lastWorkout?: string
+}
 
 export default function ClientPage() {
-  const [clients, setClients] = useState([])
-  const [filteredClients, setFilteredClients] = useState([])
+  const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("All")
-  const { userId } = useCurrentUser()
-  const { toast } = useToast()
-  const { error, handleError } = useErrorHandler({
-    context: { component: "ClientsPage" },
-  })
+  const router = useRouter()
 
-  // Use a ref to track if we've already set up the subscription
-  const subscriptionSetup = useRef(false)
-  // Use a ref to store the unsubscribe function
-  const unsubscribeRef = useRef(() => {})
-  // Use a ref to track if we've already run the linking process
-  const linkingProcessRun = useRef(false)
-
-  // Set up real-time listener for clients - only once when userId is available
   useEffect(() => {
-    // If we don't have a userId or we've already set up the subscription, do nothing
-    if (!userId || subscriptionSetup.current) {
-      return
-    }
+    fetchClients()
+  }, [])
 
-    console.log("Setting up real-time listener for clients")
-    setLoading(true)
-
+  const fetchClients = async () => {
     try {
-      // Mark that we're setting up the subscription
-      subscriptionSetup.current = true
+      setLoading(true)
+      setError(null)
 
-      // First, try to link any pending clients with user accounts
-      if (!linkingProcessRun.current) {
-        console.log("Running client-user linking process")
-        linkPendingClientsWithUsers(userId)
-          .then(() => {
-            console.log("Client-user linking process completed")
-            linkingProcessRun.current = true
-          })
-          .catch((err) => {
-            console.error("Error in client-user linking process:", err)
-          })
-      }
+      const response = await fetch("/api/clients", {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
 
-      // Subscribe to client changes
-      unsubscribeRef.current = subscribeToClients(userId, (updatedClients, subscriptionError) => {
-        if (subscriptionError) {
-          handleError(subscriptionError, { operation: "subscribeToClients" })
-          toast({
-            title: "Error loading clients",
-            description: "There was a problem loading your clients. Please try again.",
-            variant: "destructive",
-          })
-          setLoading(false)
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push("/login")
           return
         }
+        throw new Error(`Failed to fetch clients: ${response.status}`)
+      }
 
-        console.log("Received updated clients:", updatedClients)
-
-        // Force a re-render by creating a new array
-        setClients([...updatedClients])
-        setLoading(false)
-      })
+      const clientsData = await response.json()
+      setClients(clientsData)
     } catch (err) {
-      handleError(err, { operation: "subscribeToClients" })
-      toast({
-        title: "Error loading clients",
-        description: "There was a problem loading your clients. Please try again.",
-        variant: "destructive",
-      })
+      console.error("Error fetching clients:", err)
+      setError(err instanceof Error ? err.message : "Failed to load clients")
+    } finally {
       setLoading(false)
     }
+  }
 
-    // Cleanup subscription on unmount
-    return () => {
-      console.log("Cleaning up client subscription")
-      unsubscribeRef.current()
-    }
-  }, [userId, handleError, toast])
+  const filteredClients = clients.filter(
+    (client) =>
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.email.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
-  // Force re-filtering when clients change
-  useEffect(() => {
-    if (clients && clients.length > 0) {
-      console.log("Clients changed, re-filtering...")
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-24 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-      let filtered = [...clients]
-
-      // Apply search filter
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase()
-        filtered = filtered.filter(
-          (client) =>
-            (client.name && typeof client.name === "string" && client.name.toLowerCase().includes(term)) ||
-            (client.email && typeof client.email === "string" && client.email.toLowerCase().includes(term)),
-        )
-      }
-
-      // Apply status filter
-      if (statusFilter !== "All") {
-        filtered = filtered.filter((client) => client.status === statusFilter)
-      }
-
-      setFilteredClients(filtered)
-    } else {
-      setFilteredClients([])
-    }
-  }, [clients, searchTerm, statusFilter])
-
-  const handleClientAdded = (newClient) => {
-    setIsAddClientModalOpen(false)
-    toast({
-      title: "Client added",
-      description: `${newClient.name} has been added to your clients.`,
-    })
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <p className="text-red-600 mb-4">Error: {error}</p>
+                <Button onClick={fetchClients} variant="outline">
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <PageLayout>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <ClientsFilterBar onSearch={setSearchTerm} onStatusChange={setStatusFilter} statusFilter={statusFilter} />
-          <Button
-            onClick={() => setIsAddClientModalOpen(true)}
-            className="bg-[#CCFF00] text-black hover:bg-[#b8e600]"
-            data-testid="add-client-button"
-            data-add-client-button="true"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
+    <div className="container mx-auto p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Clients</h1>
+          <Button className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
             Add Client
           </Button>
         </div>
 
-        {error && (
-          <div className="p-4 bg-red-50 text-red-800 rounded-md">
-            <p className="font-medium">Error loading clients</p>
-            <p className="text-sm text-red-600">{error.message}</p>
+        {/* Search and Filters */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search clients..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Clients List */}
+        {filteredClients.length === 0 ? (
+          <Card>
+            <CardContent className="p-12">
+              <div className="text-center">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No clients found</h3>
+                <p className="text-gray-500 mb-4">
+                  {searchTerm ? "No clients match your search." : "Get started by adding your first client."}
+                </p>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Client
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {filteredClients.map((client) => (
+              <Card key={client.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                        <Users className="h-6 w-6 text-gray-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium">{client.name}</h3>
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Mail className="h-4 w-4" />
+                            {client.email}
+                          </div>
+                          {client.phone && (
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-4 w-4" />
+                              {client.phone}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Badge variant={client.status === "active" ? "default" : "secondary"}>{client.status}</Badge>
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
-
-        <ClientsList clients={filteredClients} loading={loading} />
       </div>
-
-      <AddClientModal
-        isOpen={isAddClientModalOpen}
-        onClose={() => setIsAddClientModalOpen(false)}
-        onClientAdded={handleClientAdded}
-      />
-    </PageLayout>
+    </div>
   )
 }

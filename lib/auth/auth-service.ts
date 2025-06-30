@@ -1,238 +1,134 @@
-// Authentication service for handling login, signup, and session management
-
-import { db } from "@/lib/firebase/firebase"
-import { doc, getDoc, setDoc } from "firebase/firestore"
 import {
-  getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
+  onAuthStateChanged,
+  type User,
 } from "firebase/auth"
-import { cookies } from "next/headers"
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { auth } from "@/lib/firebase/firebase"
+import { doc, setDoc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase"
+
+export interface AuthUser {
+  uid: string
+  email: string | null
+  displayName: string | null
+  role?: string
+}
 
 // Sign in with email and password
-export async function signIn(email: string, password: string) {
+export const signIn = async (email: string, password: string): Promise<AuthUser> => {
   try {
-    // Validate input
-    if (!email || !password) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "signIn" },
-        "Email and password are required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    const auth = getAuth()
-    const [userCredential, authError] = await tryCatch(
-      () => signInWithEmailAndPassword(auth, email, password),
-      ErrorType.AUTH_INVALID_CREDENTIALS,
-      { function: "signIn", email },
-    )
-
-    if (authError || !userCredential) {
-      return { success: false, error: authError }
-    }
-
+    const userCredential = await signInWithEmailAndPassword(auth, email, password)
     const user = userCredential.user
 
-    // Set auth cookie
-    const [token, tokenError] = await tryCatch(() => user.getIdToken(), ErrorType.AUTH_TOKEN_EXPIRED, {
-      function: "signIn",
-      uid: user.uid,
+    // Get the ID token
+    const idToken = await user.getIdToken()
+
+    // Store the token in a cookie via API call
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idToken }),
     })
 
-    if (tokenError || !token) {
-      return { success: false, error: tokenError }
+    if (!response.ok) {
+      throw new Error("Failed to set authentication cookie")
     }
 
-    cookies().set("auth_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: "/",
-    })
+    // Get user role from Firestore
+    const userDoc = await getDoc(doc(db, "users", user.uid))
+    const userData = userDoc.data()
 
-    return { success: true, user }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "signIn", email },
-      "Unexpected error during sign in",
-    )
-    logError(appError)
-    return { success: false, error: appError }
+    return {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      role: userData?.role || "client",
+    }
+  } catch (error) {
+    console.error("Sign in error:", error)
+    throw error
   }
 }
 
 // Sign up with email and password
-export async function signUp(email: string, password: string, userData: any) {
+export const signUp = async (email: string, password: string, displayName: string): Promise<AuthUser> => {
   try {
-    // Validate input
-    if (!email || !password || !userData) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "signUp" },
-        "Email, password, and user data are required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    const auth = getAuth()
-    const [userCredential, authError] = await tryCatch(
-      () => createUserWithEmailAndPassword(auth, email, password),
-      ErrorType.AUTH_EMAIL_IN_USE,
-      { function: "signUp", email },
-    )
-
-    if (authError || !userCredential) {
-      return { success: false, error: authError }
-    }
-
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
     const user = userCredential.user
 
     // Create user document in Firestore
-    const [, docError] = await tryCatch(
-      () =>
-        setDoc(doc(db, "users", user.uid), {
-          email: user.email,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          createdAt: new Date(),
-          ...userData,
-        }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "signUp", uid: user.uid },
-    )
+    await setDoc(doc(db, "users", user.uid), {
+      email: user.email,
+      displayName,
+      role: "trainer", // Default role
+      createdAt: new Date().toISOString(),
+      approved: false, // Requires approval
+    })
 
-    if (docError) {
-      // This is critical, but we've already created the auth user
-      logError(docError)
-      return { success: false, error: docError }
+    // Get the ID token
+    const idToken = await user.getIdToken()
+
+    // Store the token in a cookie via API call
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idToken }),
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to set authentication cookie")
     }
 
-    // Set auth cookie
-    const [token, tokenError] = await tryCatch(() => user.getIdToken(), ErrorType.AUTH_TOKEN_EXPIRED, {
-      function: "signUp",
+    return {
       uid: user.uid,
-    })
-
-    if (tokenError || !token) {
-      return { success: false, error: tokenError }
+      email: user.email,
+      displayName: user.displayName,
+      role: "trainer",
     }
-
-    cookies().set("auth_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: "/",
-    })
-
-    return { success: true, user }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "signUp", email },
-      "Unexpected error during sign up",
-    )
-    logError(appError)
-    return { success: false, error: appError }
+  } catch (error) {
+    console.error("Sign up error:", error)
+    throw error
   }
 }
 
 // Sign out
-export async function signOut() {
+export const signOut = async (): Promise<void> => {
   try {
-    const auth = getAuth()
-    const [, authError] = await tryCatch(() => firebaseSignOut(auth), ErrorType.AUTH_UNAUTHORIZED, {
-      function: "signOut",
+    // Clear the authentication cookie
+    await fetch("/api/auth/logout", {
+      method: "POST",
     })
 
-    if (authError) {
-      // Log but continue with cookie removal
-      logError(authError)
-    }
-
-    // Remove auth cookie - update this to be more explicit
-    cookies().delete("auth_token", {
-      path: "/",
-      // Make sure we're using the same cookie settings as when we set it
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-    })
-
-    return { success: true }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "signOut" },
-      "Unexpected error during sign out",
-    )
-    logError(appError)
-    return { success: false, error: appError }
+    // Sign out from Firebase
+    await firebaseSignOut(auth)
+  } catch (error) {
+    console.error("Sign out error:", error)
+    throw error
   }
 }
 
 // Get current user
-export async function getCurrentUser() {
-  try {
-    const auth = getAuth()
-    const user = auth.currentUser
-
-    if (!user) {
-      const error = createError(
-        ErrorType.AUTH_UNAUTHORIZED,
-        null,
-        { function: "getCurrentUser" },
-        "No user is signed in",
-      )
-      return { success: false, error }
-    }
-
-    // Get user data from Firestore
-    const [userDoc, docError] = await tryCatch(() => getDoc(doc(db, "users", user.uid)), ErrorType.DB_READ_FAILED, {
-      function: "getCurrentUser",
-      uid: user.uid,
+export const getCurrentUser = (): Promise<User | null> => {
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe()
+      resolve(user)
     })
+  })
+}
 
-    if (docError || !userDoc) {
-      return { success: false, error: docError }
-    }
-
-    if (!userDoc.exists()) {
-      const error = createError(
-        ErrorType.DB_DOCUMENT_NOT_FOUND,
-        null,
-        { function: "getCurrentUser", uid: user.uid },
-        "User document not found",
-      )
-      return { success: false, error }
-    }
-
-    return {
-      success: true,
-      user: {
-        uid: user.uid,
-        email: user.email,
-        ...userDoc.data(),
-      },
-    }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "getCurrentUser" },
-      "Unexpected error getting current user",
-    )
-    logError(appError)
-    return { success: false, error: appError }
+// Check if user is authenticated
+export const isAuthenticated = async (): Promise<boolean> => {
+  try {
+    const response = await fetch("/api/auth/me")
+    return response.ok
+  } catch (error) {
+    return false
   }
 }
