@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Users, Search, Plus, Mail, Phone } from "lucide-react"
+import { fetchClients } from "@/lib/firebase/client-service"
 
 interface Client {
   id: string
@@ -14,8 +15,11 @@ interface Client {
   email: string
   phone?: string
   status: string
-  joinDate: string
+  joinDate?: string
   lastWorkout?: string
+  initials?: string
+  bgColor?: string
+  textColor?: string
 }
 
 export default function ClientPage() {
@@ -26,32 +30,51 @@ export default function ClientPage() {
   const router = useRouter()
 
   useEffect(() => {
-    fetchClients()
+    fetchClientsData()
   }, [])
 
-  const fetchClients = async () => {
+  const fetchClientsData = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const response = await fetch("/api/clients", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          router.push("/login")
-          return
-        }
-        throw new Error(`Failed to fetch clients: ${response.status}`)
+      // Get trainer ID from cookie
+      const getCookie = (name: string) => {
+        const value = `; ${document.cookie}`
+        const parts = value.split(`; ${name}=`)
+        if (parts.length === 2) return parts.pop()?.split(";").shift()
+        return null
       }
 
-      const clientsData = await response.json()
-      setClients(clientsData)
+      const trainerId = getCookie("user_id")
+
+      if (!trainerId) {
+        router.push("/login")
+        return
+      }
+
+      console.log("Fetching clients for trainer:", trainerId)
+
+      // Use the Firebase client service directly instead of API route
+      const clientsData = await fetchClients(trainerId)
+
+      console.log("Fetched clients:", clientsData)
+
+      // Map the client data to match the interface
+      const mappedClients = clientsData.map((client) => ({
+        id: client.id,
+        name: client.name,
+        email: client.email || "",
+        phone: client.phone || "",
+        status: client.status || "Active",
+        joinDate: client.createdAt ? new Date(client.createdAt.seconds * 1000).toLocaleDateString() : "",
+        lastWorkout: client.lastWorkout?.name || "",
+        initials: client.initials,
+        bgColor: client.bgColor,
+        textColor: client.textColor,
+      }))
+
+      setClients(mappedClients)
     } catch (err) {
       console.error("Error fetching clients:", err)
       setError(err instanceof Error ? err.message : "Failed to load clients")
@@ -91,7 +114,7 @@ export default function ClientPage() {
             <CardContent className="p-6">
               <div className="text-center">
                 <p className="text-red-600 mb-4">Error: {error}</p>
-                <Button onClick={fetchClients} variant="outline">
+                <Button onClick={fetchClientsData} variant="outline">
                   Try Again
                 </Button>
               </div>
@@ -154,15 +177,21 @@ export default function ClientPage() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                        <Users className="h-6 w-6 text-gray-400" />
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-medium"
+                        style={{
+                          backgroundColor: client.bgColor || "#f3f4f6",
+                          color: client.textColor || "#111827",
+                        }}
+                      >
+                        {client.initials || client.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
                         <h3 className="text-lg font-medium">{client.name}</h3>
                         <div className="flex items-center gap-4 text-sm text-gray-500">
                           <div className="flex items-center gap-1">
                             <Mail className="h-4 w-4" />
-                            {client.email}
+                            {client.email || "No email"}
                           </div>
                           {client.phone && (
                             <div className="flex items-center gap-1">
@@ -171,10 +200,11 @@ export default function ClientPage() {
                             </div>
                           )}
                         </div>
+                        {client.joinDate && <p className="text-xs text-gray-400 mt-1">Joined: {client.joinDate}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <Badge variant={client.status === "active" ? "default" : "secondary"}>{client.status}</Badge>
+                      <Badge variant={client.status === "Active" ? "default" : "secondary"}>{client.status}</Badge>
                       <Button variant="outline" size="sm">
                         View Details
                       </Button>
