@@ -54,9 +54,32 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
 
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [clients, setClients] = useState<any[]>([])
+  const [loadingClients, setLoadingClients] = useState(false)
+
   // Placeholder values as client data is not directly available in importData
   const clientNameForModal = "Emilie Rentinger"
   const dateForModal = "May 9, 2025" // Or format new Date()
+
+  const fetchClients = async () => {
+    setLoadingClients(true)
+    try {
+      const response = await fetch("/api/clients")
+      if (response.ok) {
+        const clientsData = await response.json()
+        setClients(clientsData)
+      }
+    } catch (error) {
+      console.error("Error fetching clients:", error)
+    } finally {
+      setLoadingClients(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchClients()
+  }, [])
 
   // Initialize programState from importData on component mount or importData change
   useEffect(() => {
@@ -438,11 +461,41 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     return { name: "Taper", color: "bg-green-100 text-green-800" }
   }
 
-  const handleSendProgram = () => {
-    // In a real application, this would trigger an API call to send the program to the client
-    console.log("Sending program to client:", programState?.program_title, "with message:", messageToClient)
-    setShowSendProgramDialog(false)
-    // Optionally, show a success toast notification
+  const handleSendProgram = async () => {
+    if (!selectedClientId || !programState) {
+      alert("Please select a client")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const response = await fetch("/api/programs/send-to-client", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          trainerId: "current-trainer-id", // You'll need to get this from auth context
+          clientId: selectedClientId,
+          program: programState,
+          message: messageToClient,
+        }),
+      })
+
+      if (response.ok) {
+        setShowSendProgramDialog(false)
+        setMessageToClient("")
+        alert("Program successfully sent to client!")
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to send program: ${errorData.message}`)
+      }
+    } catch (error) {
+      console.error("Error sending program:", error)
+      alert("Failed to send program. Please try again.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   if (!programState) {
@@ -825,6 +878,23 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               <div className="flex items-center text-sm text-gray-600 mb-3">
                 <Calendar className="h-4 w-4 mr-2" /> {dateForModal}
               </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Client</label>
+                <select
+                  value={selectedClientId}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-lime-500 focus:border-lime-500"
+                >
+                  <option value="">Choose a client...</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-start text-sm text-gray-600">
                 <MessageSquare className="h-4 w-4 mr-2 mt-1" />
                 <Textarea
