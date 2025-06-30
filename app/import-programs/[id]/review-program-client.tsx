@@ -1103,4 +1103,30 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               <Button
                 key={week.week_number}
                 variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
-                onClick={() => setSelectedWeekForN
+                onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
+                className="justify-start"
+              >
+                Week {week.week_number} ({week.routines?.length || 0} routines)
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedWeekForNonPeriodized) {
+                  handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
+                }
+              }}
+              disabled={!selectedWeekForNonPeriodized}
+            >
+              Keep Week {selectedWeekForNonPeriodized}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
