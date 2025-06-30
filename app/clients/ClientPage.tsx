@@ -4,42 +4,42 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
-import { useAuth } from "@/context/AuthContext"
+import { getCookie } from "cookies-next"
 import { subscribeToClients } from "@/lib/firebase/client-service"
 import { ClientsList } from "@/components/clients/clients-list"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
-import { LoadingSpinner } from "@/components/shared/loading-spinner"
 import type { Client } from "@/types/client"
 
-export default function ClientPage() {
-  const { user } = useAuth()
+export function ClientPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [filteredClients, setFilteredClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("All")
+  const [allClientsExpanded, setAllClientsExpanded] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
-    if (!user?.uid) {
-      console.log("[ClientPage] No user UID available")
-      setLoading(false)
+    const userId = getCookie("user_id")?.toString()
+
+    if (!userId) {
+      console.log("[ClientPage] No user ID available")
+      router.push("/login")
       return
     }
 
-    console.log("[ClientPage] Setting up client subscription for user:", user.uid)
+    console.log("[ClientPage] Setting up client subscription for user:", userId)
     setLoading(true)
     setError(null)
 
     // Subscribe to real-time client updates
-    const unsubscribe = subscribeToClients(user.uid, (clientsData, error) => {
+    const unsubscribe = subscribeToClients(userId, (clientsData, error) => {
       console.log("[ClientPage] Received clients update:", {
         clientsCount: clientsData.length,
         error: error?.message,
-        clients: clientsData.map((c) => ({ id: c.id, name: c.name, status: c.status })),
       })
 
       if (error) {
@@ -51,14 +51,7 @@ export default function ClientPage() {
 
       // Filter out deleted clients and invalid data
       const validClients = clientsData.filter((client) => {
-        const isValid =
-          client && client.id && client.name && client.status !== "Deleted" && !client.name.includes("channel?VER=") // Filter out corrupted data
-
-        if (!isValid) {
-          console.log("[ClientPage] Filtering out invalid client:", client)
-        }
-
-        return isValid
+        return client && client.id && client.name && client.status !== "Deleted"
       })
 
       console.log("[ClientPage] Setting valid clients:", validClients.length)
@@ -71,60 +64,66 @@ export default function ClientPage() {
       console.log("[ClientPage] Cleaning up client subscription")
       unsubscribe()
     }
-  }, [user?.uid])
+  }, [router])
 
-  // Filter clients based on search term and status
+  // Filter clients based on search and status
   useEffect(() => {
     let filtered = clients
 
     // Apply search filter
-    if (searchTerm.trim()) {
+    if (searchQuery.trim()) {
       filtered = filtered.filter(
         (client) =>
-          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.email?.toLowerCase().includes(searchTerm.toLowerCase()),
+          client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (client.email && client.email.toLowerCase().includes(searchQuery.toLowerCase())),
       )
     }
 
     // Apply status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((client) => {
-        switch (statusFilter) {
-          case "active":
-            return client.status === "Active"
-          case "pending":
-            return client.status === "Pending"
-          case "inactive":
-            return client.status === "Inactive"
-          default:
-            return true
-        }
-      })
+    if (statusFilter !== "All") {
+      filtered = filtered.filter((client) => client.status === statusFilter)
     }
 
-    console.log("[ClientPage] Filtered clients:", {
-      total: clients.length,
-      filtered: filtered.length,
-      searchTerm,
-      statusFilter,
-    })
-
     setFilteredClients(filtered)
-  }, [clients, searchTerm, statusFilter])
+  }, [clients, searchQuery, statusFilter])
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  const handleStatusChange = (status: string) => {
+    setStatusFilter(status)
+  }
+
+  const handleExpandAll = () => {
+    setAllClientsExpanded(true)
+  }
+
+  const handleCollapseAll = () => {
+    setAllClientsExpanded(false)
+  }
 
   const handleAddClient = () => {
     setShowAddModal(true)
   }
 
-  const handleClientAdded = () => {
+  const handleClientAdded = (clientId: string) => {
     setShowAddModal(false)
+    // The subscription will automatically update the clients list
+  }
+
+  const handleGoToClient = (clientId: string) => {
+    router.push(`/clients/${clientId}`)
+  }
+
+  const handleClientDeleted = () => {
     // The subscription will automatically update the clients list
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingSpinner />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-500"></div>
       </div>
     )
   }
@@ -139,14 +138,18 @@ export default function ClientPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Clients</h1>
-          <p className="text-muted-foreground">Manage your coaching clients ({clients.length} total)</p>
+          <p className="text-muted-foreground">Manage your coaching clients</p>
         </div>
-        <Button onClick={handleAddClient} className="flex items-center gap-2">
+        <Button
+          onClick={handleAddClient}
+          className="flex items-center gap-2 bg-lime-500 hover:bg-lime-600"
+          data-add-client-button="true"
+        >
           <Plus className="h-4 w-4" />
           Add Client
         </Button>
@@ -154,24 +157,42 @@ export default function ClientPage() {
 
       {/* Filter Bar */}
       <ClientsFilterBar
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
+        onSearch={handleSearch}
+        onStatusChange={handleStatusChange}
+        onExpandAll={handleExpandAll}
+        onCollapseAll={handleCollapseAll}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        clientsCount={filteredClients.length}
-      />
+      >
+        <Button
+          onClick={handleAddClient}
+          className="bg-lime-500 hover:bg-lime-600 text-black"
+          data-add-client-button="true"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Client
+        </Button>
+      </ClientsFilterBar>
 
       {/* Clients List */}
-      <ClientsList clients={filteredClients} loading={loading} onAddClient={handleAddClient} />
+      <ClientsList
+        clients={filteredClients}
+        allClientsExpanded={allClientsExpanded}
+        progressBarColor="#d2ff28"
+        loading={loading}
+        onClientDeleted={handleClientDeleted}
+      />
 
       {/* Add Client Modal */}
       {showAddModal && (
         <AddClientModal
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
-          onClientAdded={handleClientAdded}
+          onAddClient={handleClientAdded}
+          onGoToClient={handleGoToClient}
         />
       )}
     </div>
   )
 }
+
+export default ClientPage

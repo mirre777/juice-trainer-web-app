@@ -48,38 +48,35 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
         credentials: "include",
+        body: JSON.stringify(body),
       })
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || `${mode} failed`)
-      }
+      if (response.ok) {
+        console.log(`${mode} successful:`, data)
 
-      console.log(`${mode} successful:`, data)
+        if (onSuccess) {
+          onSuccess()
+        }
 
-      // Call onSuccess callback if provided
-      if (onSuccess) {
-        onSuccess()
-      }
-
-      // For login, redirect to overview page
-      if (mode === "login") {
-        // Use window.location for immediate redirect without refresh issues
-        setTimeout(() => {
-          window.location.href = "/overview"
-        }, 100)
+        // For login, redirect to overview immediately
+        if (mode === "login") {
+          // Use window.location.href for immediate redirect without refresh issues
+          setTimeout(() => {
+            window.location.href = "/overview"
+          }, 200)
+        } else {
+          // For signup, redirect to login or overview based on response
+          router.push(data.redirectTo || "/login")
+        }
       } else {
-        // For signup, redirect to login or welcome page
-        setTimeout(() => {
-          window.location.href = "/login"
-        }, 100)
+        setError(data.error || `${mode} failed`)
       }
-    } catch (error) {
-      console.error(`${mode} error:`, error)
-      setError(error instanceof Error ? error.message : `${mode} failed`)
+    } catch (err) {
+      console.error(`${mode} error:`, err)
+      setError(`An error occurred during ${mode}`)
     } finally {
       setLoading(false)
     }
@@ -95,6 +92,12 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           {mode === "signup" && (
             <>
               <div className="grid grid-cols-2 gap-4">
@@ -103,7 +106,6 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
                   <Input
                     id="firstName"
                     type="text"
-                    placeholder="John"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     required
@@ -115,7 +117,6 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
                   <Input
                     id="lastName"
                     type="text"
-                    placeholder="Doe"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     required
@@ -131,26 +132,32 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
             <Input
               id="email"
               type="email"
-              placeholder="m@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading}
+              autoComplete="email"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              {mode === "login" && (
+                <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                  Forgot password?
+                </Link>
+              )}
+            </div>
             <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
-                className="pr-10"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
               />
               <Button
                 type="button"
@@ -171,22 +178,16 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 disabled={loading}
+                autoComplete="new-password"
               />
             </div>
           )}
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full bg-lime-500 hover:bg-lime-600 text-black" disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -203,27 +204,19 @@ export function AuthForm({ mode, onSuccess }: AuthFormProps) {
             {mode === "login" ? (
               <>
                 Don't have an account?{" "}
-                <Link href="/signup" className="text-primary hover:underline">
+                <Link href="/signup" className="text-blue-600 hover:underline">
                   Sign up
                 </Link>
               </>
             ) : (
               <>
                 Already have an account?{" "}
-                <Link href="/login" className="text-primary hover:underline">
+                <Link href="/login" className="text-blue-600 hover:underline">
                   Login
                 </Link>
               </>
             )}
           </div>
-
-          {mode === "login" && (
-            <div className="text-center">
-              <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-                Forgot password?
-              </Link>
-            </div>
-          )}
         </form>
       </CardContent>
     </Card>
