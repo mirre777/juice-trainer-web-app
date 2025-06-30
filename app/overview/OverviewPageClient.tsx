@@ -1,310 +1,91 @@
 "use client"
 
-import type React from "react"
-import { ClientWorkoutView } from "@/components/client-workout-view"
-import { PlusCircle } from "lucide-react"
-import Link from "next/link"
 import { useState, useEffect } from "react"
-import { fetchClients } from "@/lib/firebase/client-service"
-import { ClientRequests } from "@/components/dashboard-alt/client-requests"
-import Image from "next/image"
-import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Users, Calendar, TrendingUp, DollarSign } from "lucide-react"
+import { Users, Calendar, TrendingUp, Activity } from "lucide-react"
+import { fetchClients } from "@/lib/firebase/client-service"
+import { getUserWorkouts } from "@/lib/firebase/workout-service"
+import type { Client } from "@/types/client"
 import { useRouter } from "next/navigation"
 
-interface OverviewData {
+interface OverviewStats {
   totalClients: number
   activeClients: number
-  upcomingSessions: number
-  monthlyRevenue: number
+  pendingClients: number
+  completedWorkouts: number
 }
 
-interface DashboardStats {
-  totalClients: number
-  activeClients: number
-  upcomingSessions: number
-  monthlyRevenue: number
-}
-
-const defaultRevenue = {
-  thisMonth: "€0",
-  activeClients: 0,
-}
-
-const OverviewPageClient: React.FC = () => {
-  const [clientWorkout, setClientWorkout] = useState<any>(null)
-  const [checkIns, setCheckIns] = useState<any[]>([])
-  const [revenue, setRevenue] = useState(defaultRevenue)
-  const [sessions, setSessions] = useState<any[]>([])
+export default function OverviewPageClient() {
+  const [clients, setClients] = useState<Client[]>([])
+  const [stats, setStats] = useState<OverviewStats>({
+    totalClients: 0,
+    activeClients: 0,
+    pendingClients: 0,
+    completedWorkouts: 0,
+  })
   const [loading, setLoading] = useState(true)
-  const [trainerId, setTrainerId] = useState<string | null>(null)
-  const [data, setData] = useState<OverviewData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-
-        // Get trainer ID from cookie (same approach as other pages)
-        const getCookie = (name: string) => {
-          const value = `; ${document.cookie}`
-          const parts = value.split(`; ${name}=`)
-          if (parts.length === 2) return parts.pop()?.split(";").shift()
-          return null
-        }
-
-        const currentTrainerId = getCookie("user_id")
-        setTrainerId(currentTrainerId)
-
-        if (currentTrainerId) {
-          try {
-            // Fetch clients directly from Firebase
-            const clients = await fetchClients(currentTrainerId)
-            const totalClients = clients.length
-            setRevenue((prev) => ({ ...prev, activeClients: totalClients }))
-
-            // Fetch the latest workout across all clients
-            const latestWorkoutData = await fetchLatestWorkoutAcrossClients(currentTrainerId)
-            if (latestWorkoutData) {
-              setClientWorkout(latestWorkoutData)
-            }
-
-            // Fetch dashboard data
-            const clientsResponse = await fetch("/api/clients", {
-              method: "GET",
-              credentials: "include",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            })
-
-            if (clientsResponse.ok) {
-              const clientsData = await clientsResponse.json()
-              const clients = clientsData.clients || []
-
-              const overviewData: OverviewData = {
-                totalClients: clients.length,
-                activeClients: clients.filter((client: any) => client.status === "active").length,
-                upcomingSessions: 0, // TODO: Implement sessions count
-                monthlyRevenue: 0, // TODO: Implement revenue calculation
-              }
-
-              setData(overviewData)
-            } else {
-              if (clientsResponse.status === 401) {
-                router.push("/login")
-                return
-              }
-              throw new Error(`Failed to fetch clients: ${clientsResponse.status}`)
-            }
-          } catch (error) {
-            console.error("Error fetching clients:", error)
-          }
-        }
-
-        // Set static fallback data for other sections
-        setCheckIns([])
-        setSessions([])
-      } catch (err) {
-        console.error("Error fetching overview data:", err)
-        setError(err instanceof Error ? err.message : "Failed to load dashboard")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
+    loadOverviewData()
   }, [])
 
-  const parseWorkoutDate = (workout: any) => {
+  const loadOverviewData = async () => {
     try {
-      // Try to get the date from startedAt first, then createdAt
-      const dateValue = workout.startedAt || workout.createdAt
+      setLoading(true)
+      setError(null)
 
-      if (!dateValue) {
-        console.warn(`[Overview] Oops, no date found for workout: ${workout.name || "Unknown"}`)
-        return null
+      // Get user ID from cookie
+      const userIdCookie = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("user_id="))
+        ?.split("=")[1]
+
+      if (!userIdCookie) {
+        router.push("/login")
+        return
       }
 
-      // Handle Firestore timestamp
-      if (typeof dateValue === "object" && dateValue.seconds) {
-        return new Date(dateValue.seconds * 1000)
+      console.log("Loading overview data for trainer:", userIdCookie)
+
+      // Fetch clients using the client service
+      const clientsData = await fetchClients(userIdCookie)
+      console.log("Fetched clients:", clientsData)
+
+      setClients(clientsData)
+
+      // Calculate stats
+      const totalClients = clientsData.length
+      const activeClients = clientsData.filter((client) => client.status === "Active").length
+      const pendingClients = clientsData.filter((client) => client.status === "Pending").length
+
+      // Get workout completion stats
+      let completedWorkouts = 0
+      for (const client of clientsData) {
+        if (client.userId) {
+          try {
+            const workouts = await getUserWorkouts(client.userId)
+            completedWorkouts += workouts.filter((workout) => workout.status === "completed").length
+          } catch (workoutError) {
+            console.error(`Error fetching workouts for client ${client.id}:`, workoutError)
+          }
+        }
       }
 
-      // Handle string date
-      const parsedDate = new Date(dateValue)
-      if (isNaN(parsedDate.getTime())) {
-        console.warn(`[Overview] Oops, invalid date found for workout: ${workout.name || "Unknown"} - ${dateValue}`)
-        return null
-      }
-
-      return parsedDate
-    } catch (error) {
-      console.error(`[Overview] Oops, error parsing date for workout: ${workout.name || "Unknown"}`, error)
-      return null
-    }
-  }
-
-  // NEW: Function to get the start and end of the current week (Monday to Sunday)
-  const getCurrentWeekRange = (referenceDate: Date) => {
-    const date = new Date(referenceDate)
-    const day = date.getDay()
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1) // Adjust when day is Sunday
-
-    const monday = new Date(date.setDate(diff))
-    monday.setHours(0, 0, 0, 0)
-
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
-    sunday.setHours(23, 59, 59, 999)
-
-    return { start: monday, end: sunday }
-  }
-
-  // NEW: Function to fetch weekly workouts for a specific client
-  const fetchWeeklyWorkoutsForClient = async (userId: string, referenceDate: Date) => {
-    try {
-      console.log(`[Overview] Fetching weekly workouts for user: ${userId}`)
-
-      const { getUserWorkouts } = await import("@/lib/firebase/workout-service")
-      const { workouts, error } = await getUserWorkouts(userId)
-
-      if (error || workouts.length === 0) {
-        console.log(`[Overview] No workouts found for user ${userId}`)
-        return []
-      }
-
-      const { start, end } = getCurrentWeekRange(referenceDate)
-      console.log(`[Overview] Week range: ${start.toISOString()} to ${end.toISOString()}`)
-
-      const weeklyWorkouts = workouts.filter((workout) => {
-        const workoutDate = parseWorkoutDate(workout)
-        if (!workoutDate) return false
-
-        return workoutDate >= start && workoutDate <= end
+      setStats({
+        totalClients,
+        activeClients,
+        pendingClients,
+        completedWorkouts,
       })
-
-      console.log(`[Overview] Found ${weeklyWorkouts.length} workouts for this week`)
-      return weeklyWorkouts
     } catch (error) {
-      console.error(`[Overview] Error fetching weekly workouts for user ${userId}:`, error)
-      return []
-    }
-  }
-
-  const fetchLatestWorkoutAcrossClients = async (trainerId: string) => {
-    try {
-      console.log(`[Overview] Fetching latest workout across all clients for trainer: ${trainerId}`)
-
-      // First, get all clients
-      const clients = await fetchClients(trainerId)
-      console.log(`[Overview] Found ${clients.length} clients`)
-
-      const validClients = clients.filter((client) => client.userId)
-      console.log(`[Overview] Found ${validClients.length} clients with userId out of ${clients.length} total clients`)
-
-      if (validClients.length === 0) {
-        console.log("[Overview] No clients with userId found - returning null")
-        return null
-      }
-
-      let latestWorkout = null
-      let latestWorkoutDate = null
-      let clientInfo = null
-      let weeklyWorkouts = []
-
-      // Check each client for their latest workout
-      for (const client of validClients) {
-        try {
-          // Import the workout service function
-          const { getUserWorkouts } = await import("@/lib/firebase/workout-service")
-          const { workouts, error } = await getUserWorkouts(client.userId)
-
-          if (error || workouts.length === 0) {
-            console.log(`[Overview] No workouts found for client ${client.name}`)
-            continue
-          }
-
-          // Find the most recent workout for this client
-          let clientLatestWorkout = null
-          let clientLatestDate = null
-
-          for (const workout of workouts) {
-            const workoutDate = parseWorkoutDate(workout)
-
-            if (!workoutDate) {
-              console.log(`[Overview] Skipping workout ${workout.name} - no valid date`)
-              continue
-            }
-
-            if (!clientLatestDate || workoutDate > clientLatestDate) {
-              clientLatestWorkout = workout
-              clientLatestDate = workoutDate
-            }
-          }
-
-          // If no workout had a valid date, skip this client
-          if (!clientLatestWorkout || !clientLatestDate) {
-            console.log(`[Overview] No workouts with valid dates found for client ${client.name}`)
-            continue
-          }
-
-          // Check if this is the latest workout overall
-          if (!latestWorkoutDate || clientLatestDate > latestWorkoutDate) {
-            console.log(
-              `[Overview] New latest workout found: ${clientLatestWorkout.name} (${clientLatestDate.toISOString()})`,
-            )
-            latestWorkout = clientLatestWorkout
-            latestWorkoutDate = clientLatestDate
-            clientInfo = {
-              id: client.id,
-              name: client.name,
-              initials: client.initials,
-              bgColor: client.bgColor,
-              textColor: client.textColor,
-              userId: client.userId, // Add this line
-            }
-
-            // NEW: Fetch weekly workouts for this client
-            weeklyWorkouts = await fetchWeeklyWorkoutsForClient(client.userId, clientLatestDate)
-          }
-
-          console.log(
-            `[Overview] Found workout for ${client.name}: ${clientLatestWorkout.name} (${clientLatestDate.toISOString()})`,
-          )
-        } catch (clientError) {
-          console.error(`[Overview] Error fetching workouts for client ${client.name}:`, clientError)
-        }
-      }
-
-      if (!latestWorkout || !clientInfo || !latestWorkoutDate) {
-        console.log("[Overview] No valid workouts found - all clients either have no userId or no workouts")
-        return null
-      }
-
-      if (latestWorkout && clientInfo && latestWorkoutDate) {
-        console.log(
-          `[Overview] Latest workout found: ${latestWorkout.name} by ${clientInfo.name} (${latestWorkoutDate.toISOString()})`,
-        )
-        return {
-          client: clientInfo,
-          workout: latestWorkout,
-          exercises: latestWorkout.exercises || [],
-          personalRecords: latestWorkout.personalRecords || [],
-          weeklyWorkouts: weeklyWorkouts,
-          userId: clientInfo.userId, // Change from clientInfo.userId to client.userId
-        }
-      }
-
-      console.log("[Overview] No workouts with valid dates found across all clients")
-      return null
-    } catch (error) {
-      console.error("[Overview] Error fetching latest workout across clients:", error)
-      return null
+      console.error("Error loading overview data:", error)
+      setError(error instanceof Error ? error.message : "Failed to load overview data")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -314,9 +95,14 @@ const OverviewPageClient: React.FC = () => {
         <div className="max-w-6xl mx-auto">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-24 bg-gray-200 rounded"></div>
               ))}
             </div>
           </div>
@@ -333,7 +119,7 @@ const OverviewPageClient: React.FC = () => {
             <CardContent className="p-6">
               <div className="text-center">
                 <p className="text-red-600 mb-4">Error: {error}</p>
-                <Button onClick={() => {}} variant="outline">
+                <Button onClick={loadOverviewData} variant="outline">
                   Try Again
                 </Button>
               </div>
@@ -349,6 +135,7 @@ const OverviewPageClient: React.FC = () => {
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Overview</h1>
+          <Button onClick={() => router.push("/clients")}>View All Clients</Button>
         </div>
 
         {/* Stats Cards */}
@@ -359,220 +146,87 @@ const OverviewPageClient: React.FC = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{data?.totalClients || 0}</div>
-              <p className="text-xs text-muted-foreground">All registered clients</p>
+              <div className="text-2xl font-bold">{stats.totalClients}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Active Clients</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{data?.activeClients || 0}</div>
-              <p className="text-xs text-muted-foreground">Currently active</p>
+              <div className="text-2xl font-bold">{stats.activeClients}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Upcoming Sessions</CardTitle>
+              <CardTitle className="text-sm font-medium">Pending Clients</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{data?.upcomingSessions || 0}</div>
-              <p className="text-xs text-muted-foreground">This week</p>
+              <div className="text-2xl font-bold">{stats.pendingClients}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Completed Workouts</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${data?.monthlyRevenue || 0}</div>
-              <p className="text-xs text-muted-foreground">This month</p>
+              <div className="text-2xl font-bold">{stats.completedWorkouts}</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Quick Actions */}
+        {/* Recent Clients */}
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle>Recent Clients</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button onClick={() => router.push("/clients")} className="h-20">
-                <div className="text-center">
-                  <Users className="h-6 w-6 mx-auto mb-2" />
-                  <div>Manage Clients</div>
-                </div>
-              </Button>
-              <Button onClick={() => router.push("/calendar")} variant="outline" className="h-20">
-                <div className="text-center">
-                  <Calendar className="h-6 w-6 mx-auto mb-2" />
-                  <div>View Calendar</div>
-                </div>
-              </Button>
-              <Button onClick={() => router.push("/programs")} variant="outline" className="h-20">
-                <div className="text-center">
-                  <TrendingUp className="h-6 w-6 mx-auto mb-2" />
-                  <div>Create Program</div>
-                </div>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Left Column */}
-            <div className="space-y-8">
-              {/* Client Workout View */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                {clientWorkout ? (
-                  <ClientWorkoutView
-                    client={clientWorkout.client}
-                    workout={clientWorkout.workout}
-                    exercises={clientWorkout.exercises}
-                    personalRecords={clientWorkout.personalRecords}
-                    weeklyWorkouts={clientWorkout.weeklyWorkouts} // NEW: Pass weekly workouts
-                    userId={clientWorkout.userId} // Pass the userId here
-                    onEmojiSelect={() => {}}
-                    onComment={() => {}}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="rounded-full bg-gray-100 p-3 mb-4">
-                      <PlusCircle className="h-6 w-6 text-gray-400" />
+            {clients.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No clients yet</h3>
+                <p className="text-gray-500 mb-4">Get started by adding your first client.</p>
+                <Button onClick={() => router.push("/clients")}>Add Client</Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {clients.slice(0, 5).map((client) => (
+                  <div key={client.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium">{client.initials}</span>
+                      </div>
+                      <div>
+                        <h3 className="font-medium">{client.name}</h3>
+                        <p className="text-sm text-gray-500">{client.email}</p>
+                      </div>
                     </div>
-                    <h3 className="text-lg font-medium mb-2">No recent workouts</h3>
-                    <p className="text-gray-500 mb-4 max-w-md">
-                      Your clients' recent workouts will appear here once they complete them.
-                    </p>
-                    <Link href="/clients">
-                      <button className="inline-flex items-center justify-center px-4 py-2 bg-[#CCFF00] text-black font-medium rounded-md hover:bg-[#b8e600] transition-colors">
-                        Add Client
-                      </button>
-                    </Link>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant={client.status === "Active" ? "default" : "secondary"}>{client.status}</Badge>
+                      <Button variant="outline" size="sm" onClick={() => router.push(`/clients/${client.id}`)}>
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {clients.length > 5 && (
+                  <div className="text-center pt-4">
+                    <Button variant="outline" onClick={() => router.push("/clients")}>
+                      View All {clients.length} Clients
+                    </Button>
                   </div>
                 )}
               </div>
-
-              {/* Check-ins - Entire widget wrapped */}
-              <ComingSoonOverlay>
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 min-h-[200px]">
-                  <h2 className="text-xl font-semibold mb-4">Check-ins</h2>
-                  <div className="space-y-4">
-                    {checkIns.length > 0 ? (
-                      <div className="space-y-4">
-                        {checkIns.map((checkIn) => (
-                          <div key={checkIn.id} className="p-3 border border-gray-100 rounded-lg">
-                            <div className="flex justify-between">
-                              <span className="font-medium">{checkIn.client}</span>
-                              <span className="text-sm text-gray-500">{checkIn.date}</span>
-                            </div>
-                            <p className="mt-1 text-gray-700">{checkIn.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <p className="text-gray-500 mb-4">No check-ins yet. Client check-ins will appear here.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </ComingSoonOverlay>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-8">
-              {/* Quick Stats (formerly Revenue Overview) */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                <h2 className="text-xl font-semibold mb-4">Quick Stats</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-gray-500 text-sm">Total Clients</p>
-                    <div className="flex items-center justify-between">
-                      <p className="text-2xl font-bold">{revenue.activeClients}</p>
-                      {revenue.activeClients === 0 && (
-                        <Image
-                          src="/sleeping-mascot.png"
-                          alt="No clients yet"
-                          width={50}
-                          height={50}
-                          className="opacity-60"
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Upcoming Sessions - Entire widget wrapped */}
-              <ComingSoonOverlay message="Sessions Coming Soon">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 min-h-[250px]">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold">Upcoming Sessions</h2>
-                    <Link href="/calendar" className="text-zinc-700 text-sm underline">
-                      View All Sessions
-                    </Link>
-                  </div>
-
-                  <div>
-                    {sessions.length > 0 ? (
-                      <div className="space-y-3">
-                        {sessions.map((session) => (
-                          <div
-                            key={session.id}
-                            className="flex justify-between items-center p-3 border border-gray-100 rounded-lg"
-                          >
-                            <div>
-                              <p className="font-medium">{session.client}</p>
-                              <p className="text-sm text-gray-500">{session.time}</p>
-                            </div>
-                            <span className="px-2 py-1 bg-lime-100 text-lime-800 rounded text-xs">{session.type}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <p className="text-gray-500 mb-4">
-                          No upcoming sessions. Schedule sessions from the Calendar page.
-                        </p>
-                        <Link href="/calendar">
-                          <button className="inline-flex items-center justify-center px-4 py-2 bg-[#CCFF00] text-black font-medium rounded-md hover:bg-[#b8e600] transition-colors">
-                            Sync Calendar
-                          </button>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </ComingSoonOverlay>
-
-              {/* New Client Requests */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-semibold">New Client Requests</h2>
-                  <Link href="/clients" className="text-zinc-700 text-sm underline">
-                    Go to Clients
-                  </Link>
-                </div>
-
-                <ClientRequests trainerId={trainerId} hideTitle={true} />
-              </div>
-            </div>
-          </div>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
-
-export default OverviewPageClient

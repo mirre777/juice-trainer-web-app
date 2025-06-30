@@ -32,7 +32,7 @@ export async function GET() {
       // Import collection and query functions from firebase/firestore
       const { collection, query, where, getDocs } = await import("firebase/firestore")
 
-      // Query clients where trainerId matches the current user
+      // ❌ WRONG: Query clients where trainerId matches the current user
       const clientsRef = collection(db, "clients")
       const q = query(clientsRef, where("trainerId", "==", userId))
       const querySnapshot = await getDocs(q)

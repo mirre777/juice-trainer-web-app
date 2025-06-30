@@ -2,190 +2,176 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
+import { ClientsList } from "@/components/clients/clients-list"
+import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
+import { AddClientModal } from "@/components/clients/add-client-modal"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Users, Search, Plus, Mail, Phone } from "lucide-react"
-
-interface Client {
-  id: string
-  name: string
-  email: string
-  phone?: string
-  status: string
-  joinDate: string
-  lastWorkout?: string
-}
+import { PlusCircle } from "lucide-react"
+import type { Client } from "@/types/client"
+import { useToast } from "@/hooks/use-toast"
+import { fetchClients } from "@/lib/firebase/client-service"
 
 export default function ClientPage() {
   const [clients, setClients] = useState<Client[]>([])
+  const [filteredClients, setFilteredClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("All")
+  const [allClientsExpanded, setAllClientsExpanded] = useState(false)
+  const [showAddClientModal, setShowAddClientModal] = useState(false)
+  const { toast } = useToast()
   const router = useRouter()
 
-  useEffect(() => {
-    fetchClients()
-  }, [])
-
-  const fetchClients = async () => {
+  // Fetch clients using the client service (same as Overview page)
+  const fetchClientsData = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const response = await fetch("/api/clients", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
+      // Get user ID from cookie (same approach as Overview page)
+      const userIdCookie = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("user_id="))
+        ?.split("=")[1]
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          router.push("/login")
-          return
-        }
-        throw new Error(`Failed to fetch clients: ${response.status}`)
+      if (!userIdCookie) {
+        router.push("/login")
+        return
       }
 
-      const clientsData = await response.json()
-      setClients(clientsData)
-    } catch (err) {
-      console.error("Error fetching clients:", err)
-      setError(err instanceof Error ? err.message : "Failed to load clients")
+      console.log("Fetching clients for trainer:", userIdCookie)
+
+      // Use the same client service as Overview page
+      const clientsData = await fetchClients(userIdCookie)
+      console.log("Fetched clients:", clientsData)
+
+      // Filter out deleted clients
+      const activeClients = clientsData.filter((client) => client.status !== "Deleted")
+
+      setClients(activeClients)
+      setFilteredClients(activeClients)
+
+      toast({
+        title: "Success",
+        description: `Loaded ${activeClients.length} clients`,
+      })
+    } catch (error) {
+      console.error("Error fetching clients:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch clients"
+      setError(errorMessage)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredClients = clients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  // Initial fetch
+  useEffect(() => {
+    fetchClientsData()
+  }, [])
 
-  if (loading) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+  // Filter clients based on search and status
+  useEffect(() => {
+    let filtered = clients
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(
+        (client) =>
+          client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          client.email?.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    }
+
+    // Apply status filter
+    if (statusFilter !== "All") {
+      filtered = filtered.filter((client) => client.status === statusFilter)
+    }
+
+    setFilteredClients(filtered)
+  }, [clients, searchQuery, statusFilter])
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+  }
+
+  const handleStatusChange = (status: string) => {
+    setStatusFilter(status)
+  }
+
+  const handleExpandAll = () => {
+    setAllClientsExpanded(true)
+  }
+
+  const handleCollapseAll = () => {
+    setAllClientsExpanded(false)
+  }
+
+  const handleClientDeleted = () => {
+    // Refresh the clients list after deletion
+    fetchClientsData()
+  }
+
+  const handleClientAdded = () => {
+    // Refresh the clients list after adding a new client
+    fetchClientsData()
   }
 
   if (error) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="max-w-6xl mx-auto">
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">
-                <p className="text-red-600 mb-4">Error: {error}</p>
-                <Button onClick={fetchClients} variant="outline">
-                  Try Again
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Error Loading Clients</h1>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={fetchClientsData}>Try Again</Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Clients</h1>
-          <Button className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Add Client
-          </Button>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
+          <p className="text-gray-600 mt-2">Manage your coaching clients</p>
         </div>
-
-        {/* Search and Filters */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search clients..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Clients List */}
-        {filteredClients.length === 0 ? (
-          <Card>
-            <CardContent className="p-12">
-              <div className="text-center">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No clients found</h3>
-                <p className="text-gray-500 mb-4">
-                  {searchTerm ? "No clients match your search." : "Get started by adding your first client."}
-                </p>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Client
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {filteredClients.map((client) => (
-              <Card key={client.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                        <Users className="h-6 w-6 text-gray-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-medium">{client.name}</h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <Mail className="h-4 w-4" />
-                            {client.email}
-                          </div>
-                          {client.phone && (
-                            <div className="flex items-center gap-1">
-                              <Phone className="h-4 w-4" />
-                              {client.phone}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <Badge variant={client.status === "active" ? "default" : "secondary"}>{client.status}</Badge>
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
       </div>
+
+      <ClientsFilterBar
+        onSearch={handleSearch}
+        onStatusChange={handleStatusChange}
+        onExpandAll={handleExpandAll}
+        onCollapseAll={handleCollapseAll}
+        statusFilter={statusFilter}
+      >
+        <Button
+          onClick={() => setShowAddClientModal(true)}
+          className="bg-[#d2ff28] text-black hover:bg-[#c1f01f] font-medium"
+          data-add-client-button="true"
+        >
+          <PlusCircle className="h-4 w-4 mr-2" />
+          Add Client
+        </Button>
+      </ClientsFilterBar>
+
+      <ClientsList
+        clients={filteredClients}
+        allClientsExpanded={allClientsExpanded}
+        loading={loading}
+        onClientDeleted={handleClientDeleted}
+      />
+
+      <AddClientModal
+        isOpen={showAddClientModal}
+        onClose={() => setShowAddClientModal(false)}
+        onClientAdded={handleClientAdded}
+      />
     </div>
   )
 }
