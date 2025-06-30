@@ -14,6 +14,35 @@ import { db } from "@/lib/firebase/firebase"
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { useDebounce } from "@/hooks/use-debounce"
 
+// Safe toast hook that doesn't break during SSR
+function useSafeToast() {
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  const toast = useCallback(
+    (options: any) => {
+      if (isClient && typeof window !== "undefined") {
+        // Use a simple alert as fallback if toast provider is not available
+        if (options.title) {
+          alert(`${options.title}${options.description ? ": " + options.description : ""}`)
+        }
+      }
+    },
+    [isClient],
+  )
+
+  return {
+    toast: {
+      success: toast,
+      error: toast,
+      default: toast,
+    },
+  }
+}
+
 interface SheetsImport {
   id: string
   createdAt: any
@@ -25,28 +54,6 @@ interface SheetsImport {
   programName?: string
   name?: string
   description?: string
-}
-
-// Safe toast hook that doesn't break during SSR
-function useSafeToast() {
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
-
-  const toast = useCallback(
-    (options: { title: string; description?: string; variant?: string }) => {
-      if (isClient && typeof window !== "undefined") {
-        // Simple console log for now to avoid toast provider issues
-        console.log("Toast:", options)
-        // You can implement a simple notification system here if needed
-      }
-    },
-    [isClient],
-  )
-
-  return { toast: { success: toast, error: toast, default: toast } }
 }
 
 // Utility function to format date and get day name
@@ -244,9 +251,7 @@ export default function ImportProgramsClient() {
     setDismissedNotifications((prev) => {
       const newDismissed = new Set(prev)
       programIds.forEach((id) => newDismissed.add(id))
-      if (typeof window !== "undefined") {
-        localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(newDismissed)))
-      }
+      localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(newDismissed)))
       return newDismissed
     })
     setActiveToastId(null)
@@ -489,9 +494,12 @@ export default function ImportProgramsClient() {
         ? `Your Program "${formatProgramName(newlyCompleted[0])}" Is Ready!`
         : `${newlyCompleted.length} Programs Are Ready!`
 
-    console.log("Program completion notification:", title)
+    toast.success({
+      title,
+      description:
+        "Your workout program is now good to go! Review it, edit if needed, and you're all set to send it out. 💪",
+    })
 
-    // Mark as dismissed immediately to avoid repeated notifications
     markProgramsAsDismissed(programIdsToDismiss)
   }
 
@@ -791,9 +799,7 @@ export default function ImportProgramsClient() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (typeof window !== "undefined") {
-                    localStorage.setItem("doNotShowInstructionsAgain", "true")
-                  }
+                  localStorage.setItem("doNotShowInstructionsAgain", "true")
                   setDoNotShowInstructionsAgain(true)
                   setShowInstructionsDialog(false)
                 }}

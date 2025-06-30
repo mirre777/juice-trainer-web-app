@@ -1,11 +1,11 @@
 import { Suspense } from "react"
-import ImportProgramsClient from "../../import-programs/ImportProgramsClient"
+import DemoImportProgramsWrapper from "./demo-import-programs-wrapper"
 import LoadingSpinner from "@/components/shared/loading-spinner"
 
 export default function DemoImportProgramsPage() {
   return (
     <Suspense fallback={<LoadingSpinner />}>
-      <ImportProgramsClient />
+      <DemoImportProgramsWrapper />
     </Suspense>
   )
 }

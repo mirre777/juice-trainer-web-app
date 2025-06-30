@@ -67,14 +67,24 @@ export enum ErrorType {
   NOT_IMPLEMENTED = "NOT_IMPLEMENTED",
 }
 
-export interface AppError {
-  type: ErrorType
-  message: string
-  originalError?: any
-  metadata?: any
-  timestamp?: Date
+export interface AppError extends Error {
+  code?: string
   statusCode?: number
-  stack?: string
+  details?: any
+}
+
+export class CustomError extends Error implements AppError {
+  code?: string
+  statusCode?: number
+  details?: any
+
+  constructor(message: string, code?: string, statusCode?: number, details?: any) {
+    super(message)
+    this.name = "CustomError"
+    this.code = code
+    this.statusCode = statusCode
+    this.details = details
+  }
 }
 
 export function createError(
@@ -86,8 +96,9 @@ export function createError(
   const errorMessage = message || originalError?.message || `An error of type ${type} occurred`
 
   const error: AppError = {
-    type,
+    name: "AppError",
     message: errorMessage,
+    code: type,
     originalError,
     metadata,
   }
@@ -97,10 +108,11 @@ export function createError(
 
 export function logError(error: AppError): void {
   console.error("APP ERROR:", {
-    type: error.type,
+    type: error.code,
     message: error.message,
     metadata: error.metadata,
     originalError: error.originalError,
+    details: error.details,
   })
 }
 
@@ -160,7 +172,7 @@ export function handleApiError(
   logError(appError)
 
   let statusCode = 500 // Default server error
-  switch (appError.type) {
+  switch (appError.code) {
     case ErrorType.API_INVALID_PARAMS:
       statusCode = 400
       break
@@ -191,6 +203,30 @@ export async function tryCatch<T>(
     logError(appError)
     return [null, appError]
   }
+}
+
+export function handleError(error: unknown): AppError {
+  if (error instanceof CustomError) {
+    return error
+  }
+
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    }
+  }
+
+  return {
+    name: "UnknownError",
+    message: "An unknown error occurred",
+    stack: undefined,
+  }
+}
+
+export function createAppError(message: string, code?: string, statusCode?: number, details?: any): AppError {
+  return new CustomError(message, code, statusCode, details)
 }
 
 export function logAuditEvent(eventData: any): void {
