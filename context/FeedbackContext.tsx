@@ -1,59 +1,25 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import type React from "react"
+import { createContext, useContext, useState, useCallback } from "react"
 
-interface FeedbackData {
+interface Feedback {
+  id: string
   type: "bug" | "feature" | "general"
   message: string
   email?: string
-  page?: string
+  timestamp: Date
+  status: "pending" | "submitted" | "error"
 }
 
 interface FeedbackContextType {
-  isOpen: boolean
-  openFeedback: () => void
-  closeFeedback: () => void
-  submitFeedback: (data: FeedbackData) => Promise<void>
+  feedbacks: Feedback[]
   isSubmitting: boolean
+  submitFeedback: (feedback: Omit<Feedback, "id" | "timestamp" | "status">) => Promise<void>
+  clearFeedbacks: () => void
 }
 
 const FeedbackContext = createContext<FeedbackContextType | undefined>(undefined)
-
-export function FeedbackProvider({ children }: { children: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const openFeedback = () => setIsOpen(true)
-  const closeFeedback = () => setIsOpen(false)
-
-  const submitFeedback = async (data: FeedbackData) => {
-    setIsSubmitting(true)
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      console.log("Feedback submitted:", data)
-      closeFeedback()
-    } catch (error) {
-      console.error("Failed to submit feedback:", error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <FeedbackContext.Provider
-      value={{
-        isOpen,
-        openFeedback,
-        closeFeedback,
-        submitFeedback,
-        isSubmitting,
-      }}
-    >
-      {children}
-    </FeedbackContext.Provider>
-  )
-}
 
 export function useFeedback() {
   const context = useContext(FeedbackContext)
@@ -61,6 +27,57 @@ export function useFeedback() {
     throw new Error("useFeedback must be used within a FeedbackProvider")
   }
   return context
+}
+
+export function FeedbackProvider({ children }: { children: React.ReactNode }) {
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const submitFeedback = useCallback(async (feedbackData: Omit<Feedback, "id" | "timestamp" | "status">) => {
+    setIsSubmitting(true)
+
+    const newFeedback: Feedback = {
+      ...feedbackData,
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: new Date(),
+      status: "pending",
+    }
+
+    setFeedbacks((prev) => [...prev, newFeedback])
+
+    try {
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // Update status to submitted
+      setFeedbacks((prev) => prev.map((f) => (f.id === newFeedback.id ? { ...f, status: "submitted" as const } : f)))
+
+      console.log("Feedback submitted:", newFeedback)
+    } catch (error) {
+      // Update status to error
+      setFeedbacks((prev) => prev.map((f) => (f.id === newFeedback.id ? { ...f, status: "error" as const } : f)))
+      throw error
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [])
+
+  const clearFeedbacks = useCallback(() => {
+    setFeedbacks([])
+  }, [])
+
+  return (
+    <FeedbackContext.Provider
+      value={{
+        feedbacks,
+        isSubmitting,
+        submitFeedback,
+        clearFeedbacks,
+      }}
+    >
+      {children}
+    </FeedbackContext.Provider>
+  )
 }
 
 export default FeedbackProvider
