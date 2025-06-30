@@ -197,10 +197,10 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
   }
 }
 
-// Get all clients for a specific trainer
+// Get all clients for a specific trainer - ENHANCED WITH DETAILED DEBUGGING
 export async function fetchClients(trainerUid: string): Promise<Client[]> {
   try {
-    console.log("Fetching clients for trainer:", trainerUid)
+    console.log(`[fetchClients] 🔍 Starting fetch for trainer: ${trainerUid}`)
 
     if (!trainerUid) {
       const error = createError(
@@ -210,35 +210,68 @@ export async function fetchClients(trainerUid: string): Promise<Client[]> {
         "No trainer UID provided",
       )
       logError(error)
+      console.log(`[fetchClients] ❌ No trainer UID provided`)
       return []
     }
 
     const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
     const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
 
-    console.log("Executing Firestore query...")
+    console.log(`[fetchClients] 📡 Executing Firestore query on path: /users/${trainerUid}/clients`)
     const [clientsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       trainerUid,
       function: "fetchClients",
     })
 
     if (error || !clientsSnapshot) {
+      console.log(`[fetchClients] ❌ Query failed:`, error)
       return []
     }
 
-    console.log(`Found ${clientsSnapshot.size} clients`)
+    console.log(`[fetchClients] 📊 Raw Firestore query returned ${clientsSnapshot.size} documents`)
 
     const clients: Client[] = []
+    let validCount = 0
+    let invalidCount = 0
+
     clientsSnapshot.forEach((doc) => {
       const data = doc.data()
-      console.log(`Processing client: ${doc.id}`, data)
+      console.log(`[fetchClients] 🔍 Processing document ${doc.id}:`, {
+        name: data.name,
+        status: data.status,
+        userId: data.userId || "NO_USER_ID",
+        isTemporary: data.isTemporary,
+        email: data.email || "NO_EMAIL",
+      })
+
       const client = mapClientData(doc.id, data)
       if (client) {
         clients.push(client)
+        validCount++
+        console.log(`[fetchClients] ✅ Added client: ${client.name} (${client.status})`)
+      } else {
+        invalidCount++
+        console.log(`[fetchClients] ❌ Skipped invalid client data for document ${doc.id}`)
       }
     })
 
-    console.log("Returning clients:", clients)
+    console.log(`[fetchClients] 📈 Summary:`)
+    console.log(`[fetchClients]   - Total documents: ${clientsSnapshot.size}`)
+    console.log(`[fetchClients]   - Valid clients: ${validCount}`)
+    console.log(`[fetchClients]   - Invalid clients: ${invalidCount}`)
+    console.log(`[fetchClients]   - Returning: ${clients.length} clients`)
+
+    // Log each client being returned
+    clients.forEach((client, index) => {
+      console.log(`[fetchClients] Client ${index + 1}:`, {
+        id: client.id,
+        name: client.name,
+        status: client.status,
+        userId: client.userId || "NO_USER_ID",
+        email: client.email || "NO_EMAIL",
+      })
+    })
+
     return clients
   } catch (error) {
     const appError = createError(
@@ -248,6 +281,7 @@ export async function fetchClients(trainerUid: string): Promise<Client[]> {
       "Unexpected error fetching trainer clients",
     )
     logError(appError)
+    console.log(`[fetchClients] ❌ Unexpected error:`, error)
     return []
   }
 }
