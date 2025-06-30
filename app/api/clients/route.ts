@@ -12,24 +12,24 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.substring(7)
-    const decodedToken = await verifyAuthToken(token)
+    const decoded = await verifyAuthToken(token)
 
-    if (!decodedToken || !decodedToken.uid) {
+    if (!decoded) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const userId = decodedToken.uid
+    const userId = decoded.uid
 
     // Get trainer ID from query params
     const { searchParams } = new URL(request.url)
     const trainerId = searchParams.get("trainerId") || userId
 
-    // Fetch clients from the trainer's subcollection
+    // Query clients from the trainer's subcollection
     const clientsRef = collection(db, "users", trainerId, "clients")
     const clientsQuery = query(clientsRef, where("deleted", "!=", true))
 
-    const clientsSnapshot = await getDocs(clientsQuery)
-    const clients = clientsSnapshot.docs.map((doc) => ({
+    const snapshot = await getDocs(clientsQuery)
+    const clients = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }))
