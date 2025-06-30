@@ -32,6 +32,9 @@ const ImportProgramsClient = dynamic(() => import("./ImportProgramsClient"), {
   ),
 })
 
-export default function ImportProgramsWrapper() {
+export function ImportProgramsWrapper() {
   return <ImportProgramsClient />
 }
+
+// Also export as default for backward compatibility
+export default ImportProgramsWrapper
