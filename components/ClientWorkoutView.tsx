@@ -1,304 +1,193 @@
 "use client"
 
-import type React from "react"
-import { useState } from "react"
-import { doc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
-import { db } from "../lib/firebase/firebase"
-import { Button } from "./ui/button"
-import { useToast } from "@/hooks/use-toast"
-import { useAuthContext } from "@/context/AuthContext"
-import { Card } from "./ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { TrendingUp } from "lucide-react"
 
-interface ClientWorkoutViewProps {
-  workout: any
-  userId: string
-  clientId?: string
-  client?: any
-  isMockData?: boolean
-}
-
-const ClientWorkoutView: React.FC<ClientWorkoutViewProps> = ({
-  workout,
-  userId,
-  clientId,
-  client,
-  isMockData = false,
-}) => {
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
-  const [showCommentInput, setShowCommentInput] = useState(false)
-  const [comment, setComment] = useState("")
-  const { toast } = useToast()
-  const { user, isAuthenticated } = useAuthContext()
-
-  // Add defensive checks at the beginning
-  if (!workout) {
-    console.warn("ClientWorkoutView: workout prop is undefined or null")
-    return <div className="p-4 text-center">No workout data available</div>
-  }
-
-  const saveReaction = async (emoji: string) => {
-    try {
-      // 🔍 ENHANCED DEBUG LOGGING TO FIND THE SOURCE
-      console.log("=== REACTION DEBUG INFO ===")
-      console.log("🔥 PROPS ANALYSIS:")
-      console.log("- userId prop:", userId)
-      console.log("- clientId prop:", clientId)
-      console.log("- client prop:", client)
-      console.log("- workout prop:", workout)
-      console.log("")
-      console.log("🔥 WORKOUT ANALYSIS:")
-      console.log("- workout.id:", workout?.id)
-      console.log("- workout.userId:", workout?.userId) // Check if workout has userId
-      console.log("- workout.clientId:", workout?.clientId) // Check if workout has clientId
-      console.log("- workout.ownerId:", workout?.ownerId) // Check if workout has ownerId
-      console.log("")
-      console.log("🔥 CLIENT ANALYSIS:")
-      console.log("- client?.id:", client?.id)
-      console.log("- client?.userId:", client?.userId) // Check if client has userId
-      console.log("- client?.firebaseUid:", client?.firebaseUid) // Check if client has firebaseUid
-      console.log("")
-
-      // 🎯 TRY MULTIPLE STRATEGIES TO GET THE CORRECT USER ID
-      let actualUserId = null
-
-      // Strategy 1: Use workout's owner information
-      if (workout?.userId) {
-        actualUserId = workout.userId
-        console.log("✅ Using workout.userId:", actualUserId)
-      }
-      // Strategy 2: Use workout's clientId if it exists
-      else if (workout?.clientId) {
-        actualUserId = workout.clientId
-        console.log("✅ Using workout.clientId:", actualUserId)
-      }
-      // Strategy 3: Use client's userId if available
-      else if (client?.userId) {
-        actualUserId = client.userId
-        console.log("✅ Using client.userId:", actualUserId)
-      }
-      // Strategy 4: Use client's firebaseUid if available
-      else if (client?.firebaseUid) {
-        actualUserId = client.firebaseUid
-        console.log("✅ Using client.firebaseUid:", actualUserId)
-      }
-      // Strategy 5: Fall back to props
-      else {
-        actualUserId = userId || clientId || client?.id
-        console.log("⚠️ Using fallback:", actualUserId)
-      }
-
-      console.log("")
-      console.log("🎯 FINAL DECISION:")
-      console.log("- Selected userId:", actualUserId)
-      console.log("- Workout ID:", workout?.id)
-      console.log("- Full path:", `users/${actualUserId}/workouts/${workout?.id}`)
-      console.log("========================")
-
-      if (!workout?.id || !actualUserId) {
-        console.error("❌ Missing required data:", {
-          workoutId: workout?.id,
-          actualUserId,
-        })
-        toast({
-          title: "Error saving reaction",
-          description: "Missing workout or user information",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (isMockData) {
-        console.log("🎭 Mock data - not saving to database")
-        toast({
-          title: "Reaction saved (demo)",
-          description: "This is demo mode, reaction not saved to database",
-        })
-        return
-      }
-
-      // 🔍 LOG THE EXACT PATH BEING USED
-      const documentPath = `users/${actualUserId}/workouts/${workout.id}`
-      console.log("🔥 Attempting to save reaction to path:", documentPath)
-
-      const workoutRef = doc(db, documentPath)
-
-      await updateDoc(workoutRef, {
-        reactions: arrayUnion({
-          emoji,
-          trainerId: userId, // Keep original userId as trainerId (the trainer reacting)
-          timestamp: new Date().toISOString(),
-        }),
-        updatedAt: serverTimestamp(),
-      })
-
-      console.log("✅ Reaction saved successfully!")
-      toast({
-        title: "Reaction saved",
-        description: "Your reaction has been saved",
-      })
-    } catch (error) {
-      console.error("❌ Error saving reaction:", error)
-      console.error("Error details:", {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      })
-      toast({
-        title: "Error saving reaction",
-        description: error.message || "Please try again later",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const saveComment = async () => {
-    try {
-      // Apply the same logic for comments
-      let actualUserId = null
-
-      if (workout?.userId) {
-        actualUserId = workout.userId
-      } else if (workout?.clientId) {
-        actualUserId = workout.clientId
-      } else if (client?.userId) {
-        actualUserId = client.userId
-      } else if (client?.firebaseUid) {
-        actualUserId = client.firebaseUid
-      } else {
-        actualUserId = userId || clientId || client?.id
-      }
-
-      if (!comment.trim()) return
-
-      console.log("=== COMMENT DEBUG INFO ===")
-      console.log("Comment:", comment)
-      console.log("actualUserId:", actualUserId)
-      console.log("workout.id:", workout?.id)
-      console.log("Full path:", `users/${actualUserId}/workouts/${workout?.id}`)
-      console.log("========================")
-
-      if (!workout?.id || !actualUserId) {
-        console.error("❌ Missing required data for comment:", {
-          workoutId: workout?.id,
-          actualUserId,
-        })
-        toast({
-          title: "Error saving comment",
-          description: "Missing workout or user information",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (isMockData) {
-        console.log("🎭 Mock data - not saving comment to database")
-        toast({
-          title: "Comment saved (demo)",
-          description: "This is demo mode, comment not saved to database",
-        })
-        setComment("")
-        setShowCommentInput(false)
-        return
-      }
-
-      const workoutRef = doc(db, `users/${actualUserId}/workouts/${workout.id}`)
-
-      await updateDoc(workoutRef, {
-        comments: arrayUnion({
-          comment,
-          trainerId: userId, // Keep original userId as trainerId
-          timestamp: new Date().toISOString(),
-        }),
-        updatedAt: serverTimestamp(),
-      })
-
-      console.log("✅ Comment saved successfully!")
-      toast({
-        title: "Comment saved",
-        description: "Your comment has been saved",
-      })
-
-      setComment("")
-      setShowCommentInput(false)
-    } catch (error) {
-      console.error("❌ Error saving comment:", error)
-      toast({
-        title: "Error saving comment",
-        description: error.message || "Please try again later",
-        variant: "destructive",
-      })
-    }
+export function ClientWorkoutView() {
+  const workoutData = {
+    client: {
+      name: "Michael Thompson",
+      avatar: "/lemon-avatar.png",
+      initials: "MT",
+    },
+    program: {
+      week: 3,
+      totalWeeks: 8,
+      day: 3,
+      totalDays: 4,
+    },
+    workout: {
+      name: "Lower Body",
+      status: "HAPPENING NOW",
+      date: "Unknown Date",
+    },
+    exercises: [
+      {
+        name: "Back Squat",
+        weight: "120 kg",
+        reps: "5",
+        status: "completed",
+        sets: [
+          { weight: "120 kg", reps: "5 reps" },
+          { weight: "120 kg", reps: "5 reps" },
+          { weight: "120 kg", reps: "5 reps" },
+        ],
+      },
+      {
+        name: "Romanian DL",
+        status: "not-completed",
+        note: "Not Completed",
+      },
+      {
+        name: "Leg Press",
+        weight: "200 kg",
+        reps: "10",
+        status: "completed",
+      },
+      {
+        name: "Leg Extension",
+        weight: "70 kg",
+        reps: "12",
+        status: "completed",
+      },
+    ],
+    clientNote:
+      "Felt strong today but had some tightness in my right hamstring during Romanian deadlifts. Reduced the weight slightly for the last two sets.",
+    personalRecords: {
+      exercise: "Back Squat",
+      record: "120 kg • 5 reps",
+    },
   }
 
   return (
-    <div className="relative">
-      {/* Workout content would go here */}
-      {workout.notes && workout.notes.trim() !== "" && (
-        <Card className="mb-6 p-4 border-2 border-primary bg-white shadow-sm">
-          <h3 className="text-lg font-semibold mb-2">Client Note:</h3>
-          <p className="text-sm text-gray-700">{workout.notes}</p>
-        </Card>
-      )}
-
-      {isAuthenticated && (
-        <div className="fixed bottom-20 left-0 right-0 flex justify-center gap-4 z-50">
-          <Button
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="rounded-full w-12 h-12 bg-white shadow-lg flex items-center justify-center hover:bg-gray-100"
-          >
-            <span className="text-xl">😊</span>
-          </Button>
-
-          <Button
-            onClick={() => setShowCommentInput(!showCommentInput)}
-            className="rounded-full w-12 h-12 bg-white shadow-lg flex items-center justify-center hover:bg-gray-100"
-          >
-            <span className="text-xl">💬</span>
-          </Button>
-        </div>
-      )}
-
-      {isAuthenticated && showEmojiPicker && (
-        <div className="fixed bottom-36 left-0 right-0 flex justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-4 flex gap-2">
-            {["👍", "👏", "🔥", "💪", "👊", "🎉"].map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => {
-                  saveReaction(emoji)
-                  setShowEmojiPicker(false)
-                }}
-                className="text-2xl hover:scale-125 transition-transform"
-              >
-                {emoji}
-              </button>
-            ))}
+    <div className="max-w-2xl mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Avatar className="h-12 w-12">
+            <AvatarImage src={workoutData.client.avatar || "/placeholder.svg"} alt={workoutData.client.name} />
+            <AvatarFallback className="bg-yellow-100 text-yellow-800">{workoutData.client.initials}</AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="text-xl font-semibold">{workoutData.client.name}</h2>
+            <p className="text-gray-500">{workoutData.workout.date}</p>
           </div>
         </div>
-      )}
+        <div className="text-right">
+          <div className="text-sm text-gray-500">
+            Program week {workoutData.program.week}/{workoutData.program.totalWeeks}
+          </div>
+          <div className="text-sm text-gray-500">
+            Days {workoutData.program.day}/{workoutData.program.totalDays}
+          </div>
+        </div>
+      </div>
 
-      {isAuthenticated && showCommentInput && (
-        <div className="fixed bottom-36 left-0 right-0 flex justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-4 w-full max-w-md mx-4">
-            <input
-              type="text"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Add a comment..."
-              className="w-full border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <div className="flex justify-end mt-2">
-              <Button onClick={() => setShowCommentInput(false)} variant="outline" className="mr-2">
-                Cancel
-              </Button>
-              <Button onClick={saveComment}>Send</Button>
+      {/* Week Progress */}
+      <div className="flex justify-center space-x-2">
+        {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
+          <div
+            key={index}
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+              index < workoutData.program.day ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Workout Status */}
+      <div className="flex items-center space-x-2">
+        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+        <span className="text-green-600 font-medium text-sm">{workoutData.workout.status}</span>
+      </div>
+
+      {/* Workout Title */}
+      <h1 className="text-2xl font-bold">{workoutData.workout.name}</h1>
+
+      {/* Client Note */}
+      <Card className="border-l-4 border-l-yellow-400">
+        <CardContent className="p-4">
+          <h3 className="font-medium text-sm text-gray-700 mb-2">Client Note:</h3>
+          <p className="text-sm text-gray-600">{workoutData.clientNote}</p>
+        </CardContent>
+      </Card>
+
+      {/* Exercises */}
+      <div className="grid grid-cols-2 gap-4">
+        {workoutData.exercises.map((exercise, index) => (
+          <Card
+            key={index}
+            className={`${
+              exercise.status === "completed"
+                ? "border-green-200 bg-green-50"
+                : exercise.status === "not-completed"
+                  ? "border-yellow-200 bg-yellow-50"
+                  : "border-gray-200"
+            }`}
+          >
+            <CardContent className="p-4">
+              <h3 className="font-medium">{exercise.name}</h3>
+              {exercise.weight && exercise.reps ? (
+                <p className="text-sm text-gray-600">
+                  {exercise.weight} • {exercise.reps}
+                </p>
+              ) : exercise.note ? (
+                <p className="text-sm text-yellow-600">{exercise.note}</p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Exercise Detail */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">{workoutData.exercises[0].name}</h3>
+            <Button variant="link" className="text-sm text-blue-600">
+              View history
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-sm text-gray-500">Highest</p>
+            <p className="font-semibold">{workoutData.personalRecords.record}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 mb-2">Sets</p>
+            <div className="space-y-2">
+              {workoutData.exercises[0].sets?.map((set, index) => (
+                <div key={index} className="flex items-center justify-between text-sm">
+                  <span className="w-6">{index + 1}</span>
+                  <span>
+                    {set.weight} • {set.reps}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
+        </CardContent>
+      </Card>
+
+      {/* Personal Records */}
+      <Card>
+        <CardHeader>
+          <h3 className="text-lg font-semibold">Recent Personal Records</h3>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">No personal records available yet</p>
+            <p className="text-sm text-gray-400">Personal records will appear here as clients achieve new milestones</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
-
-// Export as default to fix the deployment error
-export default ClientWorkoutView

@@ -4,12 +4,12 @@ import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { getCookie } from "cookies-next"
-import { Button } from "@/components/ui/button"
-import { ClientWorkoutView } from "@/components/client-workout-view"
+import { ClientWorkoutView } from "@/components/ClientWorkoutView"
+import { AuthForm } from "@/components/auth/auth-form"
 import { getSharedWorkout } from "@/lib/firebase/shared-workout-service"
 import type { FirebaseWorkout } from "@/lib/firebase/workout-service"
 
-export default function LandingPage() {
+export default function HomePage() {
   const router = useRouter()
   const pathname = usePathname()
 
@@ -37,7 +37,7 @@ export default function LandingPage() {
       // Check for auth token on the client side as a fallback
       const authToken = getCookie("auth_token")
       if (authToken && authToken.toString().trim() !== "") {
-        console.log("[LandingPage] Auth token found, redirecting to overview")
+        console.log("[HomePage] Auth token found, redirecting to overview")
         router.push("/overview")
       }
     }
@@ -52,135 +52,106 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="h-screen w-full flex flex-col lg:flex-row relative overflow-hidden">
-      {/* Right side - Welcome Content with Buttons (Top on mobile, full width when workout hidden) */}
-      <div
-        className={`w-full ${showWorkoutOnMobile ? "lg:w-1/2" : "lg:w-1/2"} bg-white flex items-center justify-center lg:order-2 ${showWorkoutOnMobile ? "h-1/2 lg:h-full" : "h-full lg:h-full"}`}
-      >
-        <div className="w-full max-w-md px-6">
-          <div className="text-center space-y-4 lg:space-y-6">
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold">Juice</h1>
-              <p className="text-gray-500 mt-2">Track your clients' fitness journey</p>
-              <p className="mt-3 lg:mt-4 text-gray-600 text-sm lg:text-base">
-                The complete coaching platform for personal trainers. Manage clients, create programs, track progress,
-                and grow your business.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 lg:gap-4 mt-6 lg:mt-8">
-              <Link href="/login" className="w-full">
-                <Button
-                  variant="outline"
-                  className="w-full py-2.5 lg:py-3 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Login
-                </Button>
-              </Link>
-              <Link href="/signup" className="w-full">
-                <Button className="w-full py-2.5 lg:py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black hover:bg-gray-800">
-                  Sign Up
-                </Button>
-              </Link>
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid lg:grid-cols-2 gap-8 items-start">
+          {/* Left side - Workout Demo */}
+          <div className="bg-white rounded-lg shadow-sm border">
+            <ClientWorkoutView
+              client={{
+                id: sharedWorkout?.id || "client-1",
+                name: sharedWorkout?.clientName || "Michael Thompson",
+                image: "/lemon-avatar.png", // Use the new lemon avatar
+                date: sharedWorkout?.date || "April 25, 2025",
+                programWeek: "3",
+                programTotal: "8",
+                daysCompleted: "3",
+                daysTotal: "4",
+              }}
+              workout={{
+                day: "2",
+                focus: sharedWorkout?.focus || "Lower Body",
+                clientNote:
+                  sharedWorkout?.notes ||
+                  "Felt strong today but had some tightness in my right hamstring during Romanian deadlifts. Reduced the weight slightly for the last two sets.",
+              }}
+              exercises={
+                sharedWorkout?.exercises?.map((exercise, index) => ({
+                  id: exercise.id || `ex-${index}`,
+                  name: exercise.name,
+                  weight: exercise.sets?.[0]?.weight ? `${exercise.sets[0].weight} kg` : "0 kg",
+                  reps: exercise.sets?.[0]?.reps?.toString() || "0",
+                  completed: exercise.sets?.some((set) => set.weight > 0) || false,
+                  isPR: exercise.sets?.some((set) => set.isPR) || false,
+                  sets:
+                    exercise.sets?.map((set, setIndex) => ({
+                      number: setIndex + 1,
+                      weight: `${set.weight} kg`,
+                      reps: set.reps.toString(),
+                      isPR: set.isPR || false,
+                    })) || [],
+                })) || [
+                  // Fallback to mock data
+                  {
+                    id: "ex-1",
+                    name: "Back Squat",
+                    weight: "120 kg",
+                    reps: "5",
+                    completed: true,
+                    sets: [
+                      { number: 1, weight: "120 kg", reps: "5" },
+                      { number: 2, weight: "120 kg", reps: "5" },
+                      { number: 3, weight: "120 kg", reps: "5" },
+                    ],
+                  },
+                  {
+                    id: "ex-2",
+                    name: "Romanian DL",
+                    weight: "100 kg",
+                    reps: "10",
+                    completed: false,
+                  },
+                  {
+                    id: "ex-3",
+                    name: "Leg Press",
+                    weight: "200 kg",
+                    reps: "10",
+                    completed: true,
+                    isPR: true,
+                    sets: [
+                      { number: 1, weight: "200 kg", reps: "10", isPR: true },
+                      { number: 2, weight: "200 kg", reps: "8" },
+                      { number: 3, weight: "180 kg", reps: "12" },
+                    ],
+                  },
+                  {
+                    id: "ex-4",
+                    name: "Leg Extension",
+                    weight: "70 kg",
+                    reps: "12",
+                    completed: true,
+                    sets: [
+                      { number: 1, weight: "70 kg", reps: "12" },
+                      { number: 2, weight: "70 kg", reps: "12" },
+                      { number: 3, weight: "70 kg", reps: "12" },
+                    ],
+                  },
+                ]
+              }
+              personalRecords={sharedWorkout?.personalRecords || []}
+              onEmojiSelect={handleEmojiSelect}
+              onComment={handleComment}
+              showInteractionButtons={false}
+              isMockData={!sharedWorkout}
+              allClientWorkouts={[]}
+              weeklyWorkouts={[]}
+            />
           </div>
-        </div>
-      </div>
 
-      {/* Left side - Demo Workout (Hidden on mobile unless /share/ in URL) */}
-      <div
-        className={`w-full lg:w-1/2 flex items-center justify-center p-0 bg-white lg:order-1 overflow-y-auto ${showWorkoutOnMobile ? "h-1/2 lg:h-full" : "hidden lg:flex lg:h-full"}`}
-      >
-        <div className="w-full h-full overflow-y-auto">
-          <ClientWorkoutView
-            client={{
-              id: sharedWorkout?.id || "client-1",
-              name: sharedWorkout?.clientName || "Michael Thompson",
-              image: "/lemon-avatar.png", // Use the new lemon avatar
-              date: sharedWorkout?.date || "April 25, 2025",
-              programWeek: "3",
-              programTotal: "8",
-              daysCompleted: "3",
-              daysTotal: "4",
-            }}
-            workout={{
-              day: "2",
-              focus: sharedWorkout?.focus || "Lower Body",
-              clientNote:
-                sharedWorkout?.notes ||
-                "Felt strong today but had some tightness in my right hamstring during Romanian deadlifts. Reduced the weight slightly for the last two sets.",
-            }}
-            exercises={
-              sharedWorkout?.exercises?.map((exercise, index) => ({
-                id: exercise.id || `ex-${index}`,
-                name: exercise.name,
-                weight: exercise.sets?.[0]?.weight ? `${exercise.sets[0].weight} kg` : "0 kg",
-                reps: exercise.sets?.[0]?.reps?.toString() || "0",
-                completed: exercise.sets?.some((set) => set.weight > 0) || false,
-                isPR: exercise.sets?.some((set) => set.isPR) || false,
-                sets:
-                  exercise.sets?.map((set, setIndex) => ({
-                    number: setIndex + 1,
-                    weight: `${set.weight} kg`,
-                    reps: set.reps.toString(),
-                    isPR: set.isPR || false,
-                  })) || [],
-              })) || [
-                // Fallback to mock data
-                {
-                  id: "ex-1",
-                  name: "Back Squat",
-                  weight: "120 kg",
-                  reps: "5",
-                  completed: true,
-                  sets: [
-                    { number: 1, weight: "120 kg", reps: "5" },
-                    { number: 2, weight: "120 kg", reps: "5" },
-                    { number: 3, weight: "120 kg", reps: "5" },
-                  ],
-                },
-                {
-                  id: "ex-2",
-                  name: "Romanian DL",
-                  weight: "100 kg",
-                  reps: "10",
-                  completed: false,
-                },
-                {
-                  id: "ex-3",
-                  name: "Leg Press",
-                  weight: "200 kg",
-                  reps: "10",
-                  completed: true,
-                  isPR: true,
-                  sets: [
-                    { number: 1, weight: "200 kg", reps: "10", isPR: true },
-                    { number: 2, weight: "200 kg", reps: "8" },
-                    { number: 3, weight: "180 kg", reps: "12" },
-                  ],
-                },
-                {
-                  id: "ex-4",
-                  name: "Leg Extension",
-                  weight: "70 kg",
-                  reps: "12",
-                  completed: true,
-                  sets: [
-                    { number: 1, weight: "70 kg", reps: "12" },
-                    { number: 2, weight: "70 kg", reps: "12" },
-                    { number: 3, weight: "70 kg", reps: "12" },
-                  ],
-                },
-              ]
-            }
-            personalRecords={sharedWorkout?.personalRecords || []}
-            onEmojiSelect={handleEmojiSelect}
-            onComment={handleComment}
-            showInteractionButtons={false}
-            isMockData={!sharedWorkout}
-            allClientWorkouts={[]}
-            weeklyWorkouts={[]}
-          />
+          {/* Right side - Login Form */}
+          <div className="flex items-center justify-center">
+            <AuthForm mode="login" />
+          </div>
         </div>
       </div>
 
