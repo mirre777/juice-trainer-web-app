@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
-import ClientPage from "./ClientPage"
 import { ProtectedRoute } from "@/components/auth/protected-route"
+import ClientPage from "./ClientPage"
 
 export const metadata: Metadata = {
   title: "Clients | Juice",
-  description: "Manage your coaching clients",
+  description: "Manage your clients and their workout programs",
 }
 
 export default function ClientsPage() {

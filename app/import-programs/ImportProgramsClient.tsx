@@ -13,35 +13,7 @@ import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy,
 import { db } from "@/lib/firebase/firebase"
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { useDebounce } from "@/hooks/use-debounce"
-
-// Safe toast hook that doesn't break during SSR
-function useSafeToast() {
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
-
-  const toast = useCallback(
-    (options: any) => {
-      if (isClient && typeof window !== "undefined") {
-        // Use a simple alert as fallback if toast provider is not available
-        if (options.title) {
-          alert(`${options.title}${options.description ? ": " + options.description : ""}`)
-        }
-      }
-    },
-    [isClient],
-  )
-
-  return {
-    toast: {
-      success: toast,
-      error: toast,
-      default: toast,
-    },
-  }
-}
+import { useToast } from "@/hooks/use-toast"
 
 interface SheetsImport {
   id: string
@@ -171,7 +143,7 @@ function EditableProgramName({
 
 export default function ImportProgramsClient() {
   const router = useRouter()
-  const { toast } = useSafeToast()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const debouncedSearchTerm = useDebounce(searchTerm, 300)
   const [programNameInput, setProgramNameInput] = useState("")
@@ -223,9 +195,10 @@ export default function ImportProgramsClient() {
             setUserId(currentUserId)
           } catch (jsonError) {
             console.error("[ImportPrograms] Failed to parse /api/auth/me JSON:", jsonError, "Raw:", rawResponseText)
-            toast.error({
+            toast({
               title: "Authentication Error",
               description: "Received invalid user data. Please try logging in again.",
+              variant: "destructive",
             })
           }
         } else {
@@ -417,22 +390,38 @@ export default function ImportProgramsClient() {
 
   const handleConvert = async () => {
     if (!programNameInput.trim()) {
-      alert("Please enter a program name.")
+      toast({
+        title: "Program name required",
+        description: "Please enter a program name.",
+        variant: "destructive",
+      })
       return
     }
 
     if (!googleSheetsLink.trim()) {
-      alert("Please enter a Google Sheets link.")
+      toast({
+        title: "Google Sheets link required",
+        description: "Please enter a Google Sheets link.",
+        variant: "destructive",
+      })
       return
     }
 
     if (!isValidGoogleSheetsUrl(googleSheetsLink)) {
-      alert("Please enter a valid Google Sheets URL.")
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid Google Sheets URL.",
+        variant: "destructive",
+      })
       return
     }
 
     if (!userId) {
-      alert("You must be logged in to import programs.")
+      toast({
+        title: "Authentication required",
+        description: "You must be logged in to import programs.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -476,7 +465,11 @@ export default function ImportProgramsClient() {
       console.error("[ImportPrograms] Error creating document:", error)
       setIsProcessing(false)
       setIsModalOpen(false)
-      alert("Failed to start conversion. Please try again.")
+      toast({
+        title: "Import failed",
+        description: "Failed to start conversion. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -494,10 +487,11 @@ export default function ImportProgramsClient() {
         ? `Your Program "${formatProgramName(newlyCompleted[0])}" Is Ready!`
         : `${newlyCompleted.length} Programs Are Ready!`
 
-    toast.success({
+    toast({
       title,
       description:
         "Your workout program is now good to go! Review it, edit if needed, and you're all set to send it out. 💪",
+      className: "bg-green-50 border-green-200 text-green-800",
     })
 
     markProgramsAsDismissed(programIdsToDismiss)
