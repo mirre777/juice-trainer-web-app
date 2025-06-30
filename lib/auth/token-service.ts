@@ -273,6 +273,3 @@ export const verifyToken = async (token: string): Promise<{ uid: string; email: 
     },
   )
 }
-
-// Export verifyAuthToken as an alias for verifyToken for backward compatibility
-export const verifyAuthToken = verifyToken

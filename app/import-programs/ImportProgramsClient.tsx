@@ -1,262 +1,832 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { FileSpreadsheet, Upload, CheckCircle, Clock, AlertCircle, Trash2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useCurrentUser } from "@/hooks/use-current-user"
+import type React from "react"
+import { useRouter } from "next/navigation"
 
-interface ImportedProgram {
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
+import { Search, FileSpreadsheet, ChevronRight, X } from "lucide-react"
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase"
+import { useEffect, useState, useMemo, useCallback } from "react" // Added useCallback
+import { useToast } from "@/components/ui/toast-context"
+import { useDebounce } from "@/hooks/use-debounce"
+
+interface SheetsImport {
   id: string
-  name: string
-  status: "processing" | "completed" | "error"
-  createdAt: string
-  exerciseCount?: number
-  weekCount?: number
-  error?: string
+  createdAt: any
+  sheetsUrl: string
+  spreadsheetId: string
+  status: string
+  updatedAt: any
+  userId: string
+  programName?: string
+  name?: string
+  description?: string
 }
 
-export default function ImportProgramsClient() {
-  const [programs, setPrograms] = useState<ImportedProgram[]>([])
-  const [loading, setLoading] = useState(false)
-  const [sheetUrl, setSheetUrl] = useState("")
-  const [programName, setProgramName] = useState("")
-  const [description, setDescription] = useState("")
-  const { toast } = useToast()
-  const { user } = useCurrentUser()
+// Utility function to format date and get day name
+const formatImportDate = (timestamp: any) => {
+  if (!timestamp) return { date: "", dayName: "" }
 
-  useEffect(() => {
-    loadImportedPrograms()
-  }, [])
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+  const dayName = date.toLocaleDateString("en-US", { weekday: "long" })
+  const formattedDate = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
 
-  const loadImportedPrograms = async () => {
-    // Mock data for now - replace with actual API call
-    const mockPrograms: ImportedProgram[] = [
-      {
-        id: "1",
-        name: "Upper/Lower Split",
-        status: "completed",
-        createdAt: new Date().toISOString(),
-        exerciseCount: 24,
-        weekCount: 4,
-      },
-      {
-        id: "2",
-        name: "Push/Pull/Legs",
-        status: "processing",
-        createdAt: new Date().toISOString(),
-      },
-    ]
-    setPrograms(mockPrograms)
+  return { date: formattedDate, dayName }
+}
+
+// Inline editable name component
+function EditableProgramName({
+  importItem,
+  onNameUpdate,
+}: {
+  importItem: SheetsImport
+  onNameUpdate: (id: string, newName: string) => void
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+
+  const displayName = importItem.programName || importItem.name || "Untitled"
+
+  const handleDoubleClick = () => {
+    console.log("[EditableName] Double click on:", importItem.id)
+    setIsEditing(true)
+    setEditValue(displayName === "Untitled" ? "" : displayName)
   }
 
-  const handleImport = async () => {
-    if (!sheetUrl || !programName) {
-      toast({
-        title: "Missing Information",
-        description: "Please provide both a sheet URL and program name.",
-        variant: "destructive",
-      })
+  const handleSave = async () => {
+    if (isSaving) return
+
+    const trimmedValue = editValue.trim()
+    console.log("[EditableName] Saving name:", { id: importItem.id, oldName: displayName, newName: trimmedValue })
+
+    // If no change, just exit edit mode
+    if (trimmedValue === displayName || (trimmedValue === "" && displayName === "Untitled")) {
+      setIsEditing(false)
       return
     }
 
-    setLoading(true)
+    setIsSaving(true)
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const response = await fetch(`/api/sheets-imports/${importItem.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: trimmedValue || "Untitled",
+        }),
+      })
 
-      const newProgram: ImportedProgram = {
-        id: Date.now().toString(),
-        name: programName,
-        status: "processing",
-        createdAt: new Date().toISOString(),
+      if (!response.ok) {
+        throw new Error("Failed to update name")
       }
 
-      setPrograms((prev) => [newProgram, ...prev])
+      const result = await response.json()
+      console.log("[EditableName] Save successful:", result)
 
-      // Show success toast
-      toast({
-        title: "Import Started",
-        description: `Started importing "${programName}". You'll be notified when it's ready.`,
-        className: "bg-green-50 border-green-200 text-green-800",
-      })
-
-      // Clear form
-      setSheetUrl("")
-      setProgramName("")
-      setDescription("")
-
-      // Simulate completion after 5 seconds
-      setTimeout(() => {
-        setPrograms((prev) =>
-          prev.map((p) =>
-            p.id === newProgram.id ? { ...p, status: "completed" as const, exerciseCount: 18, weekCount: 6 } : p,
-          ),
-        )
-
-        // Show completion toast
-        toast({
-          title: "Program Ready! 🎉",
-          description: `"${programName}" has been successfully imported and is ready to use.`,
-          className: "bg-green-50 border-green-200 text-green-800",
-        })
-      }, 5000)
+      // Update the local state
+      onNameUpdate(importItem.id, result.data.name)
+      setIsEditing(false)
     } catch (error) {
-      toast({
-        title: "Import Failed",
-        description: "There was an error importing your program. Please try again.",
-        variant: "destructive",
-      })
+      console.error("[EditableName] Save failed:", error)
+      alert("Failed to update program name. Please try again.")
     } finally {
-      setLoading(false)
+      setIsSaving(false)
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      case "processing":
-        return <Clock className="h-4 w-4 text-yellow-600" />
-      case "error":
-        return <AlertCircle className="h-4 w-4 text-red-600" />
-      default:
-        return null
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave()
+    } else if (e.key === "Escape") {
+      setIsEditing(false)
+      setEditValue(displayName === "Untitled" ? "" : displayName)
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "processing":
-        return "bg-yellow-100 text-yellow-800"
-      case "error":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+  if (isEditing) {
+    return (
+      <Input
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className="text-[14px] font-medium text-black font-sen h-6 px-1 py-0 border-0 bg-white focus:ring-1 focus:ring-blue-500 rounded"
+        placeholder="Enter program name..."
+        autoFocus
+        disabled={isSaving}
+      />
+    )
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <FileSpreadsheet className="h-8 w-8 text-blue-600" />
-          <h1 className="text-3xl font-bold">Import Programs</h1>
-        </div>
+    <h3
+      className="text-[14px] font-medium text-black font-sen cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors text-left"
+      onClick={handleDoubleClick} // Change from onDoubleClick to onClick
+      title="Click to edit" // Update the title for accessibility
+    >
+      {displayName}
+    </h3>
+  )
+}
 
-        {/* Import Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Import from Google Sheets
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="sheetUrl">Google Sheets URL</Label>
-              <Input
-                id="sheetUrl"
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-                value={sheetUrl}
-                onChange={(e) => setSheetUrl(e.target.value)}
-              />
-            </div>
+export default function ImportProgramsClient() {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [searchTerm, setSearchTerm] = useState("")
+  const debouncedSearchTerm = useDebounce(searchTerm, 300)
+  const [programNameInput, setProgramNameInput] = useState("")
+  const [googleSheetsLink, setGoogleSheetsLink] = useState("")
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [imports, setImports] = useState<SheetsImport[]>([])
+  const [isLoadingImports, setIsLoadingImports] = useState(false)
+  const [completedImports, setCompletedImports] = useState<SheetsImport[]>([])
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("dismissedImportNotifications")
+        return new Set(saved ? JSON.parse(saved) : [])
+      } catch (error) {
+        console.error("Failed to parse dismissed notifications from localStorage", error)
+        return new Set()
+      }
+    }
+    return new Set()
+  })
+  const [activeToastId, setActiveToastId] = useState<string | null>(null)
+  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false) // Moved here
+  const [doNotShowInstructionsAgain, setDoNotShowInstructionsAgain] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("doNotShowInstructionsAgain") === "true"
+    }
+    return false
+  })
 
-            <div className="space-y-2">
-              <Label htmlFor="programName">Program Name</Label>
-              <Input
-                id="programName"
-                placeholder="e.g., Upper/Lower Split"
-                value={programName}
-                onChange={(e) => setProgramName(e.target.value)}
-              />
-            </div>
+  useEffect(() => {
+    const checkAuth = async () => {
+      console.log("[ImportPrograms] Checking authentication...")
+      try {
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        })
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description (Optional)</Label>
-              <Textarea
-                id="description"
-                placeholder="Brief description of the program..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </div>
+        const rawResponseText = await response.text() // Capture raw response text
+        console.log("[ImportPrograms] Raw /api/auth/me response text:", rawResponseText)
 
-            <Button onClick={handleImport} disabled={loading || !sheetUrl || !programName} className="w-full">
-              {loading ? (
-                <>
-                  <Clock className="h-4 w-4 mr-2 animate-spin" />
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Import Program
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+        if (response.ok) {
+          try {
+            const userData = JSON.parse(rawResponseText) // Parse the captured text
+            const currentUserId = userData.uid || userData.id
+            console.log("[ImportPrograms] User authenticated:", currentUserId)
+            setUserId(currentUserId)
+          } catch (jsonError) {
+            console.error("[ImportPrograms] Failed to parse /api/auth/me JSON:", jsonError, "Raw:", rawResponseText)
+            // Handle the case where the response is not valid JSON but status is OK
+            toast({
+              title: "Authentication Error",
+              description: "Received invalid user data. Please try logging in again.",
+              variant: "destructive",
+            })
+          }
+        } else {
+          console.log("[ImportPrograms] User not authenticated. Status:", response.status, "Text:", rawResponseText)
+          // Optionally, parse error message if response is not OK but is JSON
+          try {
+            const errorData = JSON.parse(rawResponseText)
+            console.error("[ImportPrograms] Auth error details:", errorData)
+          } catch (e) {
+            // Not JSON, just log raw text
+          }
+        }
+      } catch (error) {
+        console.error("[ImportPrograms] Error checking auth:", error)
+      } finally {
+        setIsCheckingAuth(false)
+      }
+    }
+    checkAuth()
+  }, [])
 
-        {/* Imported Programs */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Imported Programs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {programs.length === 0 ? (
-              <div className="text-center py-8">
-                <FileSpreadsheet className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No programs imported yet</h3>
-                <p className="text-gray-500">Import your first program from Google Sheets to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {programs.map((program) => (
-                  <div key={program.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium">{program.name}</h3>
-                        <p className="text-sm text-gray-500">
-                          Imported {new Date(program.createdAt).toLocaleDateString()}
-                        </p>
-                        {program.exerciseCount && program.weekCount && (
-                          <p className="text-xs text-gray-400">
-                            {program.exerciseCount} exercises • {program.weekCount} weeks
-                          </p>
-                        )}
-                        {program.error && <p className="text-xs text-red-600">{program.error}</p>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(program.status)}
-                        <Badge className={getStatusColor(program.status)}>{program.status}</Badge>
-                      </div>
-                      <Button variant="ghost" size="sm">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+  // Helper to mark programs as dismissed
+  const markProgramsAsDismissed = useCallback((programIds: string[]) => {
+    setDismissedNotifications((prev) => {
+      const newDismissed = new Set(prev)
+      programIds.forEach((id) => newDismissed.add(id))
+      localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(newDismissed)))
+      return newDismissed
+    })
+    setActiveToastId(null) // Clear active toast ID when dismissed
+  }, [])
+
+  // Fetch user's imports from Firebase
+  useEffect(() => {
+    if (!userId) {
+      console.log("[ImportPrograms] No userId, clearing imports")
+      setImports([])
+      setCompletedImports([])
+      return
+    }
+
+    console.log("[ImportPrograms] Setting up Firebase listener for userId:", userId)
+    setIsLoadingImports(true)
+
+    const q = query(
+      collection(db, "sheets_imports"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc"),
+      limit(50),
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        console.log(`[ImportPrograms] Firebase snapshot received: ${querySnapshot.size} documents for user ${userId}`)
+
+        const importsData: SheetsImport[] = []
+        const newlyCompleted: SheetsImport[] = []
+
+        querySnapshot.forEach((doc) => {
+          const importData = {
+            id: doc.id,
+            ...doc.data(),
+          } as SheetsImport
+
+          console.log(`[ImportPrograms] Processing import:`, {
+            id: importData.id,
+            status: importData.status,
+            userId: importData.userId,
+            spreadsheetId: importData.spreadsheetId,
+            programName: importData.programName,
+            name: importData.name,
+            rawData: doc.data(),
+          })
+
+          importsData.push(importData)
+
+          if (importData.status === "conversion_complete" && !dismissedNotifications.has(importData.id)) {
+            console.log(`[ImportPrograms] Found newly completed import (not dismissed):`, {
+              id: importData.id,
+              programName: importData.programName,
+              name: importData.name,
+              isDismissed: dismissedNotifications.has(importData.id),
+            })
+            newlyCompleted.push(importData)
+          } else if (importData.status === "conversion_complete") {
+            console.log(`[ImportPrograms] Completed import is dismissed:`, {
+              id: importData.id,
+              isDismissed: dismissedNotifications.has(importData.id),
+            })
+          }
+        })
+
+        console.log(`[ImportPrograms] Total imports for user ${userId}:`, importsData.length)
+        console.log(`[ImportPrograms] Newly completed imports:`, newlyCompleted.length)
+
+        const statusCounts = importsData.reduce(
+          (acc, imp) => {
+            acc[imp.status] = (acc[imp.status] || 0) + 1
+            return acc
+          },
+          {} as Record<string, number>,
+        )
+        console.log(`[ImportPrograms] Status breakdown:`, statusCounts)
+
+        setImports(importsData)
+        setCompletedImports(newlyCompleted)
+        setIsLoadingImports(false)
+
+        // Show toast if there are newly completed imports and no active toast
+        if (newlyCompleted.length > 0 && !activeToastId) {
+          showCompletionToast(newlyCompleted)
+        }
+      },
+      (error) => {
+        console.error("[ImportPrograms] Firebase listener error:", error)
+        setIsLoadingImports(false)
+      },
+    )
+
+    return () => {
+      console.log("[ImportPrograms] Cleaning up Firebase listener for userId:", userId)
+      unsubscribe()
+    }
+  }, [userId, dismissedNotifications, activeToastId, markProgramsAsDismissed]) // Added markProgramsAsDismissed to dependencies
+
+  // Persist dismissed notifications to localStorage - now handled by markProgramsAsDismissed
+  // useEffect(() => {
+  //   localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
+  // }, [dismissedNotifications])
+
+  // Memoized search filtering
+  const filteredImports = useMemo(() => {
+    if (imports.length === 0) {
+      return []
+    }
+
+    const lowercaseSearchTerm = debouncedSearchTerm.toLowerCase().trim()
+
+    if (!lowercaseSearchTerm) {
+      return imports
+    }
+
+    const filtered = imports.filter(
+      (importItem) =>
+        importItem.programName?.toLowerCase().includes(lowercaseSearchTerm) ||
+        importItem.name?.toLowerCase().includes(lowercaseSearchTerm) ||
+        importItem.description?.toLowerCase().includes(lowercaseSearchTerm) ||
+        importItem.spreadsheetId.toLowerCase().includes(lowercaseSearchTerm),
+    )
+
+    console.log(
+      `[ImportPrograms] Filtered imports: ${filtered.length} of ${imports.length} match "${debouncedSearchTerm}"`,
+    )
+    return filtered
+  }, [imports, debouncedSearchTerm])
+
+  // Handle name updates from the editable component
+  const handleNameUpdate = (importId: string, newName: string) => {
+    console.log("[ImportPrograms] Updating local name:", { importId, newName })
+    setImports((prev) => prev.map((imp) => (imp.id === importId ? { ...imp, name: newName } : imp)))
+  }
+
+  // Extract spreadsheet ID from Google Sheets URL
+  const extractSpreadsheetId = (url: string): string | null => {
+    const regex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/
+    const match = url.match(regex)
+    return match ? match[1] : null
+  }
+
+  // Validate Google Sheets URL
+  const isValidGoogleSheetsUrl = (url: string): boolean => {
+    return url.includes("docs.google.com/spreadsheets") && extractSpreadsheetId(url) !== null
+  }
+
+  // Get status badge variant and text
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case "ready_for_conversion":
+        return { variant: "secondary" as const, text: "Queued", className: "bg-yellow-50 text-yellow-700" }
+      case "processing":
+        return { variant: "secondary" as const, text: "Processing", className: "bg-blue-50 text-blue-700" }
+      case "conversion_complete":
+        return { variant: "secondary" as const, text: "Ready", className: "bg-green-50 text-green-700" }
+      case "reviewed": // New status
+        return { variant: "secondary" as const, text: "Reviewed", className: "bg-green-50 text-green-700" }
+      case "completed":
+        return { variant: "secondary" as const, text: "Completed", className: "bg-green-50 text-green-700" }
+      case "failed":
+        return { variant: "secondary" as const, text: "Failed", className: "bg-red-50 text-red-700" }
+      default:
+        return { variant: "secondary" as const, text: "Unknown", className: "bg-gray-50 text-gray-700" }
+    }
+  }
+
+  const handleConvert = async () => {
+    if (!programNameInput.trim()) {
+      alert("Please enter a program name.")
+      return
+    }
+
+    if (!googleSheetsLink.trim()) {
+      alert("Please enter a Google Sheets link.")
+      return
+    }
+
+    if (!isValidGoogleSheetsUrl(googleSheetsLink)) {
+      alert("Please enter a valid Google Sheets URL.")
+      return
+    }
+
+    if (!userId) {
+      alert("You must be logged in to import programs.")
+      return
+    }
+
+    console.log("[ImportPrograms] Starting conversion for userId:", userId)
+    setIsProcessing(true)
+    setIsModalOpen(true)
+
+    try {
+      const spreadsheetId = extractSpreadsheetId(googleSheetsLink)
+
+      if (!spreadsheetId) {
+        throw new Error("Could not extract spreadsheet ID from URL")
+      }
+
+      console.log("[ImportPrograms] Creating new import document:", {
+        userId,
+        spreadsheetId,
+        sheetsUrl: googleSheetsLink,
+        name: programNameInput.trim(),
+      })
+
+      const docRef = await addDoc(collection(db, "sheets_imports"), {
+        createdAt: serverTimestamp(),
+        sheetsUrl: googleSheetsLink,
+        spreadsheetId: spreadsheetId,
+        status: "ready_for_conversion",
+        updatedAt: serverTimestamp(),
+        userId: userId,
+        name: programNameInput.trim(),
+      })
+
+      console.log("[ImportPrograms] Document created with ID:", docRef.id)
+
+      setGoogleSheetsLink("")
+      setProgramNameInput("")
+
+      setTimeout(() => {
+        setIsProcessing(false)
+      }, 3000)
+    } catch (error) {
+      console.error("[ImportPrograms] Error creating document:", error)
+      setIsProcessing(false)
+      setIsModalOpen(false)
+      alert("Failed to start conversion. Please try again.")
+    }
+  }
+
+  // Format program names for the toast
+  const formatProgramName = (importItem: SheetsImport) => {
+    return importItem.programName || importItem.name || `Spreadsheet ${importItem.spreadsheetId.slice(0, 12)}...`
+  }
+
+  // Show completion toast
+  const showCompletionToast = (newlyCompleted: SheetsImport[]) => {
+    const programIdsToDismiss = newlyCompleted.map((imp) => imp.id)
+
+    const title =
+      newlyCompleted.length === 1
+        ? `Your Program "${formatProgramName(newlyCompleted[0])}" Is Ready!`
+        : `${newlyCompleted.length} Programs Are Ready!`
+
+    const toastId = toast.success({
+      title,
+      description:
+        "Your workout program is now good to go! Review it, edit if needed, and you're all set to send it out. 💪",
+      duration: null, // Keep toast open until dismissed by user
+      pages: ["/programs", "/import-programs", "/demo/programs", "/demo/import-programs"],
+      ctaButton: {
+        text: "Show Me",
+        onClick: () => {
+          markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when CTA is clicked
+          if (window.location.pathname !== "/import-programs") {
+            router.push("/import-programs")
+            setTimeout(() => {
+              const importsSection = document.querySelector('[data-section="previously-imported"]')
+              if (importsSection) {
+                importsSection.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+              }
+            }, 100)
+          } else {
+            const importsSection = document.querySelector('[data-section="previously-imported"]')
+            if (importsSection) {
+              importsSection.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              })
+            }
+          }
+        },
+      },
+      onDismiss: () => {
+        markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when 'X' or auto-dismiss occurs
+      },
+    })
+
+    setActiveToastId(toastId)
+  }
+
+  // Handle review button click
+  const handleReviewClick = (importItem: SheetsImport) => {
+    console.log("[ImportPrograms] Review clicked for:", importItem.id)
+    router.push(`/import-programs/${importItem.id}`)
+  }
+
+  console.log("[ImportPrograms] Render state:", {
+    userId,
+    isCheckingAuth,
+    isLoadingImports,
+    totalImports: imports.length,
+    completedImports: completedImports.length,
+    filteredImports: filteredImports.length,
+    activeToastId,
+    showInstructionsDialog, // Added for debugging
+  })
+
+  return (
+    <div className="min-h-screen bg-white font-sans">
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        {/* Import Section */}
+        <div className="text-center mb-12">
+          <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <div className="w-8 h-8 bg-green-600 rounded-sm flex items-center justify-center">
+              <div className="grid grid-cols-3 gap-0.5">
+                {[...Array(9)].map((_, i) => (
+                  <div key={i} className="w-1 h-1 bg-white rounded-sm" />
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+
+          <h1 className="text-[32px] font-bold text-gray-900 mb-4 font-sen">Import Your Workout Program</h1>
+          <p className="text-[18px] text-gray-500 mb-8 font-inter">
+            Paste your Google Sheets link. We'll turn it into a structured program for your client.
+          </p>
+
+          <div className="max-w-2xl mx-auto mb-6">
+            <label
+              htmlFor="program-name"
+              className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
+            >
+              Program Name <span className="text-red-500">*</span>
+            </label>
+            <Input
+              id="program-name"
+              type="text"
+              placeholder="e.g., My Client's Strength Program"
+              value={programNameInput}
+              onChange={(e) => setProgramNameInput(e.target.value)}
+              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400 mb-4"
+              required
+            />
+
+            <label
+              htmlFor="google-sheets-link"
+              className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
+            >
+              Google Sheets Link <span className="text-red-500">*</span>
+            </label>
+            <Input
+              id="google-sheets-link"
+              type="url"
+              placeholder="https://docs.google.com/spreadsheets/d/..."
+              value={googleSheetsLink}
+              onChange={(e) => setGoogleSheetsLink(e.target.value)}
+              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
+              required
+              onFocus={() => {
+                if (!doNotShowInstructionsAgain) {
+                  setShowInstructionsDialog(true)
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
+            <p className="text-[14px] font-inter text-right text-gray-500 max-w-[160px]">
+              You can still review and edit it before you send it to your clients in the Juice mobile app.
+            </p>
+            <Button
+              onClick={handleConvert}
+              disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
+              className="w-fit px-8 h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? "Processing..." : "Convert"}
+            </Button>
+          </div>
+
+          {/* Previously Imported Programs */}
+          <Card className="p-8" data-section="previously-imported">
+            <div className="border-t border-gray-100 pt-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-[18px] font-semibold text-gray-900 font-sen">Previously Imported Programs</h2>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search programs..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-72 bg-white border-black text-[14px] font-inter focus:border-primary focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              {isLoadingImports && (
+                <div className="text-center py-8">
+                  <div className="animate-spin h-8 w-8 border-b-2 border-lime-400 rounded-full mx-auto mb-4"></div>
+                  <p className="text-[14px] text-gray-500 font-inter">Loading your imports...</p>
+                </div>
+              )}
+
+              {!isLoadingImports && filteredImports.length === 0 && (
+                <div className="text-center py-12">
+                  <FileSpreadsheet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-[18px] font-medium text-gray-900 mb-2 font-sen">No imports yet</h3>
+                  <p className="text-[14px] text-gray-500 font-inter">
+                    {searchTerm
+                      ? "No imports match your search. Try a different search term."
+                      : "Import your first Google Sheets workout program to get started."}
+                  </p>
+                </div>
+              )}
+
+              {!isLoadingImports && filteredImports.length > 0 && (
+                <div className="space-y-4">
+                  {filteredImports.map((importItem) => {
+                    const statusInfo = getStatusInfo(importItem.status)
+                    const isReady = importItem.status === "conversion_complete"
+                    const isReviewed = importItem.status === "reviewed"
+                    const isEditable = isReady || isReviewed
+                    const { date, dayName } = formatImportDate(importItem.createdAt)
+
+                    return (
+                      <div key={importItem.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
+                        <div className="flex-1 flex items-center space-x-3">
+                          <div className="flex flex-col">
+                            <EditableProgramName importItem={importItem} onNameUpdate={handleNameUpdate} />
+                            {date && (
+                              <div className="flex items-center space-x-2 mt-1">
+                                <span className="text-[12px] text-gray-500 font-inter">{dayName}</span>
+                                <span className="text-[12px] text-gray-400 font-inter">•</span>
+                                <span className="text-[12px] text-gray-500 font-inter">{date}</span>
+                              </div>
+                            )}
+                          </div>
+                          <Badge
+                            variant={statusInfo.variant}
+                            className={`text-[12px] font-normal font-inter ${statusInfo.className}`}
+                          >
+                            {statusInfo.text}
+                          </Badge>
+                        </div>
+
+                        <Button
+                          onClick={() => handleReviewClick(importItem)}
+                          disabled={!isEditable}
+                          className="bg-black hover:bg-gray-800 text-white font-normal text-[14px] font-sen px-4 py-2 h-8 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        >
+                          {isReviewed ? "Edit" : "Review"}
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Processing Modal */}
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogContent className="sm:max-w-md font-sen">
+            <div className="text-center p-6">
+              <div className="w-16 h-16 bg-lime-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+                {isProcessing ? (
+                  <svg
+                    className="animate-spin h-8 w-8 text-lime-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                ) : (
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <h3 className="text-[24px] font-bold mb-4 text-gray-900">
+                {isProcessing ? "Processing Your Workout Program" : "You are using the new version of our Import AI"}
+              </h3>
+
+              <p className="text-[14px] text-gray-500 mb-6 leading-relaxed">
+                {isProcessing ? (
+                  "We're converting your Google Sheet into a structured workout program. This may take a few moments."
+                ) : (
+                  <>
+                    To ensure your Google Sheets data is converted accurately,{" "}
+                    <span className="font-bold text-lime-600">we've added a manual review step.</span> Your structured
+                    workout program will be ready for review within 24 hours.
+                  </>
+                )}
+              </p>
+
+              {isProcessing && (
+                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+                  <div className="bg-lime-400 h-2.5 rounded-full w-3/4 animate-pulse"></div>
+                </div>
+              )}
+
+              {!isProcessing && (
+                <div className="mb-6">
+                  <p className="text-[14px] text-blue-600 font-medium">
+                    Note: You can import other programs while you wait.
+                  </p>
+                </div>
+              )}
+
+              {isProcessing && (
+                <p className="text-[12px] text-gray-400">
+                  Converting rows and columns into exercises, sets, and reps...
+                </p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Instructions Dialog - Moved here */}
+        <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
+          <DialogContent className="sm:max-w-lg font-inter">
+            <DialogClose asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </DialogClose>
+            <div className="p-4">
+              <div className="flex items-center mb-4">
+                <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
+                  <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
+                </div>
+                <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
+              </div>
+              <ol className="space-y-4 text-[14px] text-gray-700">
+                <li className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">1.</span>
+                  <span>Open your workout program in Google Sheets.</span>
+                </li>
+                <li className="flex flex-col items-start">
+                  <div className="flex items-start">
+                    <span className="font-medium text-blue-600 mr-2">2.</span>
+                    <span>Click "Share" → "Anyone with the link can view".</span>
+                  </div>
+                  <img
+                    src="/google-sheets-share-dialog.png"
+                    alt="Google Sheets Share Dialog"
+                    className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
+                  />
+                </li>
+                <li className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">3.</span>
+                  <span>Paste the link into the field above.</span>
+                </li>
+              </ol>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  localStorage.setItem("doNotShowInstructionsAgain", "true")
+                  setDoNotShowInstructionsAgain(true)
+                  setShowInstructionsDialog(false)
+                }}
+                className="text-[14px] font-inter"
+              >
+                Don't show me again
+              </Button>
+              <Button
+                onClick={() => setShowInstructionsDialog(false)}
+                className="bg-black hover:bg-gray-800 text-white text-[14px] font-inter"
+              >
+                Ok Thanks
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
