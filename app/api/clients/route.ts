@@ -56,10 +56,11 @@ export async function GET(request: NextRequest) {
     const trainerId = user.uid
     console.log(`[clients] Fetching clients for trainer: ${trainerId}`)
 
-    // Get trainer's clients
+    // Get trainer's clients using the program conversion service
+    // This will filter to only active clients with linked accounts
     const clients = await programConversionService.getTrainerClients(trainerId)
 
-    console.log(`[clients] Found ${clients.length} clients`)
+    console.log(`[clients] Found ${clients.length} active clients with linked accounts`)
 
     return NextResponse.json({
       success: true,
