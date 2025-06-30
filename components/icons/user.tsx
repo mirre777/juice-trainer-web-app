@@ -1,25 +1,21 @@
-interface UserIconProps {
-  className?: string
-  size?: number
-}
+import type React from "react"
 
-export function User({ className = "", size = 24 }: UserIconProps) {
+export function User({ className = "w-4 h-4", ...props }: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
+      className={className}
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
     >
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+      />
     </svg>
   )
 }
-
-export default User

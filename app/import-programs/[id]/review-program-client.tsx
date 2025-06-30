@@ -11,8 +11,6 @@ import {
   RotateCcw,
   Plus,
   Check,
-  User,
-  MessageSquare,
   Info,
   Save,
   Send,
@@ -34,13 +32,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { User } from "@/components/icons/user"
+import { useToast } from "@/hooks/use-toast"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
-import { useToast } from "@/components/ui/use-toast" // Import useToast
 
 interface Client {
   id: string
   name: string
   email?: string
+  status?: string
+  userId?: string
 }
 
 interface ReviewProgramClientProps {
@@ -49,6 +50,7 @@ interface ReviewProgramClientProps {
 
 export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
   const router = useRouter()
+  const { toast } = useToast()
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
   const [isSaving, setIsSaving] = useState(false)
@@ -62,13 +64,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Client selection state
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const { toast } = useToast() // Declare useToast
-
-  // Placeholder values as client data is not directly available in importData
-  const clientNameForModal = "Emilie Rentinger"
-  const dateForModal = "May 9, 2025" // Or format new Date()
+  const [isLoadingClients, setIsLoadingClients] = useState(false)
+  const [isSendingProgram, setIsSendingProgram] = useState(false)
 
   // Initialize programState from importData on component mount or importData change
   useEffect(() => {
@@ -203,30 +204,37 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  // Fetch clients
-  useEffect(() => {
-    const fetchClients = async () => {
-      setIsLoading(true)
-      try {
-        const response = await fetch("/api/clients")
-        if (response.ok) {
-          const data = await response.json()
-          setClients(data.clients || [])
-        }
-      } catch (error) {
-        console.error("Error fetching clients:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load clients",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
+  // Fetch clients when send dialog opens
+  const fetchClients = async () => {
+    setIsLoadingClients(true)
+    try {
+      console.log("[fetchClients] Fetching trainer's clients...")
+      const response = await fetch("/api/clients")
 
-    fetchClients()
-  }, [])
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("[fetchClients] Response:", data)
+
+      if (data.success) {
+        setClients(data.clients || [])
+        console.log(`[fetchClients] Loaded ${data.clients?.length || 0} clients`)
+      } else {
+        throw new Error(data.error || "Failed to fetch clients")
+      }
+    } catch (error) {
+      console.error("[fetchClients] Error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load clients. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingClients(false)
+    }
+  }
 
   // Derived state for current routines based on current week
   const currentRoutines: WorkoutRoutine[] = useMemo(() => {
@@ -547,18 +555,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     return colors[index % colors.length]
   }
 
-  const handleSendProgram = () => {
-    // In a real application, this would trigger an API call to send the program to the client
-    console.log("Sending program to client:", programState?.program_title, "with message:", messageToClient)
-    setShowSendProgramDialog(false)
-    // Optionally, show a success toast notification
-  }
-
+  // Handle sending program to client
   const handleSendToClient = async () => {
-    if (!selectedClient) return
+    if (!selectedClient || !programState) return
 
-    setIsLoading(true)
+    setIsSendingProgram(true)
     try {
+      console.log("[handleSendToClient] Sending program to client:", selectedClient.name)
+
       const response = await fetch("/api/programs/send-to-client", {
         method: "POST",
         headers: {
@@ -572,11 +576,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       })
 
       const result = await response.json()
+      console.log("[handleSendToClient] Response:", result)
 
-      if (response.ok) {
+      if (response.ok && result.success) {
         toast({
-          title: "Success",
-          description: `Program sent to ${selectedClient.name} successfully!`,
+          title: "Success!",
+          description: `Program "${programState.program_title}" sent to ${selectedClient.name} successfully!`,
         })
         setShowSendProgramDialog(false)
         setSelectedClient(null)
@@ -585,14 +590,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         throw new Error(result.error || "Failed to send program")
       }
     } catch (error) {
-      console.error("Error sending program:", error)
+      console.error("[handleSendToClient] Error:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to send program to client",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsSendingProgram(false)
     }
   }
 
@@ -656,7 +661,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </Button>
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => setShowSendProgramDialog(true)}
+            onClick={() => {
+              setShowSendProgramDialog(true)
+              fetchClients() // Fetch clients when dialog opens
+            }}
             disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
           >
             <Send className="h-4 w-4" />
@@ -946,47 +954,109 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         </div>
       )}
 
-      {/* Send Program Confirmation Dialog */}
+      {/* Send Program Dialog */}
       <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Confirm Sending Program</DialogTitle>
-            <DialogDescription>You are about to send the following program:</DialogDescription>
+            <DialogTitle>Send Program to Client</DialogTitle>
+            <DialogDescription>
+              Choose a client to send "{programState?.program_title}" to their mobile app.
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <Card className="p-4">
-              <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <User className="h-4 w-4 mr-2" /> {clientNameForModal}
-              </div>
-              <div className="flex items-center text-sm text-gray-600 mb-3">
-                <Calendar className="h-4 w-4 mr-2" /> {dateForModal}
-              </div>
-              <div className="flex items-start text-sm text-gray-600">
-                <MessageSquare className="h-4 w-4 mr-2 mt-1" />
+
+          <div className="space-y-4">
+            {/* Client Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Client</label>
+              {isLoadingClients ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                  <span className="ml-2 text-gray-500">Loading clients...</span>
+                </div>
+              ) : clients.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <User className="mx-auto h-8 w-8 mb-2" />
+                  <p>No active clients with linked accounts found.</p>
+                  <p className="text-sm">Make sure your clients have created accounts and are linked to you.</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {clients.map((client) => (
+                    <div
+                      key={client.id}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        selectedClient?.id === client.id
+                          ? "border-lime-500 bg-lime-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                      onClick={() => setSelectedClient(client)}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <User className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <p className="font-medium text-gray-900">{client.name}</p>
+                          {client.email && <p className="text-sm text-gray-500">{client.email}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Message to Client */}
+            {selectedClient && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Message to {selectedClient.name} (Optional)
+                </label>
                 <Textarea
                   value={messageToClient}
                   onChange={(e) => setMessageToClient(e.target.value)}
-                  placeholder="Add a message to your client (optional)"
-                  className="flex-1 border-transparent focus:border-gray-300"
+                  placeholder="Add a personal message about this program..."
+                  className="w-full"
                   rows={3}
                 />
               </div>
-            </Card>
+            )}
 
-            <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
-              <Info className="h-4 w-4" />
-              <span>
-                We will send your client an email and app notification. They can still access their old program.
-              </span>
+            {/* Info Box */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start space-x-2">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium">What happens next:</p>
+                  <ul className="mt-1 space-y-1 text-xs">
+                    <li>• Program will be converted to mobile app format</li>
+                    <li>• Client will receive a notification</li>
+                    <li>• Program will appear in their mobile app</li>
+                    <li>• All exercises will be created if they don't exist</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)}>
+            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isSendingProgram}>
               Cancel
             </Button>
-            <Button className="bg-lime-400 hover:bg-lime-500 text-gray-800" onClick={handleSendProgram}>
-              Send Program
+            <Button
+              onClick={handleSendToClient}
+              disabled={!selectedClient || isSendingProgram}
+              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+            >
+              {isSendingProgram ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-800 mr-2"></div>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Program
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1033,29 +1103,4 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               <Button
                 key={week.week_number}
                 variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
-                onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
-              >
-                Week {week.week_number}
-              </Button>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (selectedWeekForNonPeriodized !== null) {
-                  handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
-                }
-              }}
-              disabled={selectedWeekForNonPeriodized === null}
-            >
-              Confirm Selection
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+                onClick={() => setSelectedWeekForN
