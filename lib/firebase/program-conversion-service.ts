@@ -1,93 +1,97 @@
-import { collection, doc, setDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore"
+import { collection, doc, setDoc, getDocs, getDoc, query, where, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { v4 as uuidv4 } from "uuid"
 import type { WorkoutProgram, WorkoutRoutine, ProgramExercise } from "@/types/workout-program"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
 // Types for mobile app format
-interface MobileAppProgram {
-  id: string
-  name: string
-  notes: string | null
-  startedAt: string
-  duration: number
-  createdAt: string
-  updated_at: string
-  routines: {
-    routineId: string
-    week: number
-    order: number
-  }[]
-}
-
 interface MobileAppRoutine {
   id: string
   name: string
   notes: string
-  createdAt: string
-  updatedAt: string
+  createdAt: any
+  updatedAt: any
   deletedAt: null
   type: "program"
-  exercises: {
-    id: string
-    name: string
-    sets: {
-      id: string
-      type: string
-      weight: string
-      reps: string | number
-      notes?: string
-    }[]
-  }[]
+  exercises: MobileAppExercise[]
 }
 
 interface MobileAppExercise {
   id: string
   name: string
-  muscleGroup: string
-  isCardio: boolean
-  isFullBody: boolean
-  isMobility: boolean
-  createdAt: any
-  updatedAt: any
-  deletedAt: null
+  video_url?: string
+  notes: string
+  sets: MobileAppSet[]
 }
 
-// Check if exercise exists in global or user collection
+interface MobileAppSet {
+  id: string
+  reps: string
+  type: string
+  weight: string
+  notes: string
+}
+
+interface MobileAppProgram {
+  id: string
+  name: string
+  notes: string
+  program_URL?: string
+  createdAt: any
+  updatedAt: any
+  startedAt: any
+  duration: number
+  routines: ProgramRoutineReference[]
+}
+
+interface ProgramRoutineReference {
+  routineId: string
+  week: number
+  order: number
+}
+
+// Check if exercise exists globally or in user's custom exercises
 async function ensureExerciseExists(exerciseName: string, userId: string): Promise<string> {
   try {
+    console.log(`[ensureExerciseExists] Checking exercise: ${exerciseName} for user: ${userId}`)
+
     // First check global exercises collection
     const globalExercisesRef = collection(db, "exercises")
     const globalQuery = query(globalExercisesRef, where("name", "==", exerciseName))
     const [globalSnapshot, globalError] = await tryCatch(() => getDocs(globalQuery), ErrorType.DB_READ_FAILED, {
       function: "ensureExerciseExists",
       exerciseName,
-      collection: "global",
+      userId,
     })
 
     if (!globalError && globalSnapshot && !globalSnapshot.empty) {
-      return globalSnapshot.docs[0].id
+      const exerciseId = globalSnapshot.docs[0].id
+      console.log(`[ensureExerciseExists] Found global exercise: ${exerciseId}`)
+      return exerciseId
     }
 
-    // Check user's custom exercises collection
+    // Check user's custom exercises
     const userExercisesRef = collection(db, "users", userId, "exercises")
     const userQuery = query(userExercisesRef, where("name", "==", exerciseName))
     const [userSnapshot, userError] = await tryCatch(() => getDocs(userQuery), ErrorType.DB_READ_FAILED, {
       function: "ensureExerciseExists",
       exerciseName,
-      collection: "user",
+      userId,
     })
 
     if (!userError && userSnapshot && !userSnapshot.empty) {
-      return userSnapshot.docs[0].id
+      const exerciseId = userSnapshot.docs[0].id
+      console.log(`[ensureExerciseExists] Found user exercise: ${exerciseId}`)
+      return exerciseId
     }
 
-    // Exercise doesn't exist, create it in user's collection
+    // Exercise doesn't exist, create it in user's custom exercises
+    console.log(`[ensureExerciseExists] Creating new exercise: ${exerciseName}`)
     const exerciseId = uuidv4()
-    const exerciseDoc: MobileAppExercise = {
+    const exerciseDoc = {
       id: exerciseId,
       name: exerciseName,
-      muscleGroup: "Other", // Default muscle group
+      muscleGroup: "Other",
       isCardio: false,
       isFullBody: false,
       isMobility: false,
@@ -99,14 +103,19 @@ async function ensureExerciseExists(exerciseName: string, userId: string): Promi
     const [, createError] = await tryCatch(
       () => setDoc(doc(userExercisesRef, exerciseId), exerciseDoc),
       ErrorType.DB_WRITE_FAILED,
-      { function: "ensureExerciseExists", exerciseName, userId },
+      {
+        function: "ensureExerciseExists",
+        exerciseName,
+        userId,
+        exerciseId,
+      },
     )
 
     if (createError) {
       throw createError
     }
 
-    console.log(`✅ Created new exercise: ${exerciseName}`)
+    console.log(`[ensureExerciseExists] Created new exercise: ${exerciseId}`)
     return exerciseId
   } catch (error) {
     const appError = createError(
@@ -123,36 +132,45 @@ async function ensureExerciseExists(exerciseName: string, userId: string): Promi
 // Convert PT program exercise to mobile app format
 async function convertExerciseToMobileFormat(
   exercise: ProgramExercise,
-  weekNumber: number,
   userId: string,
-): Promise<{ id: string; name: string; sets: any[] }> {
+  weekNumber: number,
+): Promise<MobileAppExercise> {
   try {
+    // Ensure the exercise exists and get its ID
     const exerciseId = await ensureExerciseExists(exercise.name, userId)
 
     // Get the sets for the specific week
     const weekData = exercise.weeks.find((w) => w.week_number === weekNumber)
-    const sets = weekData?.sets || []
+    const sets: MobileAppSet[] = []
 
-    const mobileSets = sets.map((set) => ({
-      id: uuidv4(),
-      type: set.warmup ? "warmup" : "normal",
-      weight: set.weight?.toString() || "",
-      reps: set.reps || "",
-      notes: [set.rpe ? `RPE: ${set.rpe}` : "", set.rest ? `Rest: ${set.rest}` : "", set.notes || ""]
-        .filter(Boolean)
-        .join(" | "),
-    }))
+    if (weekData && weekData.sets) {
+      for (const set of weekData.sets) {
+        const rpe = set.rpe ? `RPE: ${set.rpe}` : ""
+        const rest = set.rest ? `Rest: ${set.rest}` : ""
+        const notes = [rpe, rest].filter(Boolean).join(" | ")
+
+        sets.push({
+          id: uuidv4(),
+          reps: set.reps?.toString() || "",
+          type: set.warmup ? "warmup" : "normal",
+          weight: set.weight?.toString() || "",
+          notes: notes || set.notes || "",
+        })
+      }
+    }
 
     return {
       id: exerciseId,
       name: exercise.name,
-      sets: mobileSets,
+      video_url: exercise.exercise_video || undefined,
+      notes: exercise.notes || "",
+      sets,
     }
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "convertExerciseToMobileFormat", exerciseName: exercise.name, weekNumber, userId },
+      { function: "convertExerciseToMobileFormat", exerciseName: exercise.name, userId, weekNumber },
       "Failed to convert exercise to mobile format",
     )
     logError(appError)
@@ -163,36 +181,36 @@ async function convertExerciseToMobileFormat(
 // Convert PT routine to mobile app format
 async function convertRoutineToMobileFormat(
   routine: WorkoutRoutine,
-  weekNumber: number,
   userId: string,
-): Promise<{ routineId: string; routineDoc: MobileAppRoutine }> {
+  weekNumber: number,
+): Promise<MobileAppRoutine> {
   try {
-    const routineId = uuidv4()
-    const timestamp = new Date().toISOString()
+    console.log(`[convertRoutineToMobileFormat] Converting routine: ${routine.routine_name} for week ${weekNumber}`)
 
-    const mobileExercises = []
+    const routineId = uuidv4()
+    const exercises: MobileAppExercise[] = []
+
+    // Convert each exercise
     for (const exercise of routine.exercises) {
-      const mobileExercise = await convertExerciseToMobileFormat(exercise, weekNumber, userId)
-      mobileExercises.push(mobileExercise)
+      const mobileExercise = await convertExerciseToMobileFormat(exercise, userId, weekNumber)
+      exercises.push(mobileExercise)
     }
 
-    const routineDoc: MobileAppRoutine = {
+    return {
       id: routineId,
       name: routine.routine_name,
       notes: "",
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       deletedAt: null,
       type: "program",
-      exercises: mobileExercises,
+      exercises,
     }
-
-    return { routineId, routineDoc }
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "convertRoutineToMobileFormat", routineName: routine.routine_name, weekNumber, userId },
+      { function: "convertRoutineToMobileFormat", routineName: routine.routine_name, userId, weekNumber },
       "Failed to convert routine to mobile format",
     )
     logError(appError)
@@ -207,52 +225,58 @@ export async function convertAndSendProgramToClient(
   message?: string,
 ): Promise<{ success: boolean; programId?: string; error?: any }> {
   try {
-    console.log(`[program-conversion] Converting program "${program.program_title}" for client: ${clientUserId}`)
+    console.log(
+      `[convertAndSendProgramToClient] Converting program: ${program.program_title} for client: ${clientUserId}`,
+    )
 
-    if (!clientUserId) {
+    if (!program || !clientUserId) {
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
         { function: "convertAndSendProgramToClient" },
-        "Client user ID is required",
+        "Program and client user ID are required",
       )
       logError(error)
       return { success: false, error }
     }
 
-    const routineMap: { routineId: string; week: number; order: number }[] = []
+    const routineReferences: ProgramRoutineReference[] = []
     const routinesRef = collection(db, "users", clientUserId, "routines")
 
     // Process each week and routine
     if (program.is_periodized && program.weeks) {
       // Periodized program - process each week
       for (const week of program.weeks) {
-        const weekNumber = week.week_number
-
         if (week.routines) {
           for (let routineIndex = 0; routineIndex < week.routines.length; routineIndex++) {
             const routine = week.routines[routineIndex]
-
-            const { routineId, routineDoc } = await convertRoutineToMobileFormat(routine, weekNumber, clientUserId)
+            const mobileRoutine = await convertRoutineToMobileFormat(routine, clientUserId, week.week_number)
 
             // Save routine to Firestore
             const [, routineError] = await tryCatch(
-              () => setDoc(doc(routinesRef, routineId), routineDoc),
+              () => setDoc(doc(routinesRef, mobileRoutine.id), mobileRoutine),
               ErrorType.DB_WRITE_FAILED,
-              { function: "convertAndSendProgramToClient", routineId, weekNumber },
+              {
+                function: "convertAndSendProgramToClient",
+                routineId: mobileRoutine.id,
+                clientUserId,
+              },
             )
 
             if (routineError) {
               return { success: false, error: routineError }
             }
 
-            routineMap.push({
-              routineId,
-              week: weekNumber,
+            // Add to routine references
+            routineReferences.push({
+              routineId: mobileRoutine.id,
+              week: week.week_number,
               order: routineIndex + 1,
             })
 
-            console.log(`✅ Created routine: ${routine.routine_name} (Week ${weekNumber})`)
+            console.log(
+              `[convertAndSendProgramToClient] Created routine: ${mobileRoutine.name} (Week ${week.week_number})`,
+            )
           }
         }
       }
@@ -260,35 +284,37 @@ export async function convertAndSendProgramToClient(
       // Non-periodized program - single week repeated
       const singleWeek = program.weeks?.[0] || { routines: program.routines || [] }
 
-      for (let week = 1; week <= program.program_weeks; week++) {
-        if (singleWeek.routines) {
-          for (let routineIndex = 0; routineIndex < singleWeek.routines.length; routineIndex++) {
-            const routine = singleWeek.routines[routineIndex]
+      if (singleWeek.routines) {
+        for (let routineIndex = 0; routineIndex < singleWeek.routines.length; routineIndex++) {
+          const routine = singleWeek.routines[routineIndex]
 
-            const { routineId, routineDoc } = await convertRoutineToMobileFormat(
-              routine,
-              1, // Use week 1 data for all weeks in non-periodized
-              clientUserId,
-            )
+          // For non-periodized, repeat the same routines for each week
+          for (let week = 1; week <= program.program_weeks; week++) {
+            const mobileRoutine = await convertRoutineToMobileFormat(routine, clientUserId, 1) // Always use week 1 data
 
             // Save routine to Firestore
             const [, routineError] = await tryCatch(
-              () => setDoc(doc(routinesRef, routineId), routineDoc),
+              () => setDoc(doc(routinesRef, mobileRoutine.id), mobileRoutine),
               ErrorType.DB_WRITE_FAILED,
-              { function: "convertAndSendProgramToClient", routineId, week },
+              {
+                function: "convertAndSendProgramToClient",
+                routineId: mobileRoutine.id,
+                clientUserId,
+              },
             )
 
             if (routineError) {
               return { success: false, error: routineError }
             }
 
-            routineMap.push({
-              routineId,
-              week,
+            // Add to routine references
+            routineReferences.push({
+              routineId: mobileRoutine.id,
+              week: week,
               order: routineIndex + 1,
             })
 
-            console.log(`✅ Created routine: ${routine.routine_name} (Week ${week})`)
+            console.log(`[convertAndSendProgramToClient] Created routine: ${mobileRoutine.name} (Week ${week})`)
           }
         }
       }
@@ -296,40 +322,42 @@ export async function convertAndSendProgramToClient(
 
     // Create the program document
     const programId = uuidv4()
-    const timestamp = new Date().toISOString()
-
-    const programDoc: MobileAppProgram = {
+    const mobileProgram: MobileAppProgram = {
       id: programId,
       name: program.program_title,
-      notes: program.program_notes || null,
-      startedAt: timestamp,
+      notes: program.program_notes || "",
+      program_URL: program.program_URL || "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      startedAt: serverTimestamp(),
       duration: program.program_weeks,
-      createdAt: timestamp,
-      updated_at: timestamp,
-      routines: routineMap,
+      routines: routineReferences,
     }
 
     // Save program to Firestore
     const programsRef = collection(db, "users", clientUserId, "programs")
     const [, programError] = await tryCatch(
-      () => setDoc(doc(programsRef, programId), programDoc),
+      () => setDoc(doc(programsRef, programId), mobileProgram),
       ErrorType.DB_WRITE_FAILED,
-      { function: "convertAndSendProgramToClient", programId },
+      {
+        function: "convertAndSendProgramToClient",
+        programId,
+        clientUserId,
+      },
     )
 
     if (programError) {
       return { success: false, error: programError }
     }
 
-    console.log(`✅ Created program: ${program.program_title}`)
+    console.log(
+      `[convertAndSendProgramToClient] Created program: ${mobileProgram.name} with ${routineReferences.length} routine references`,
+    )
 
-    // TODO: Send notification to client (email/push notification)
-    // This would be implemented based on your notification system
+    // TODO: Send notification to client about new program
+    // This could be implemented later with push notifications or email
 
-    return {
-      success: true,
-      programId,
-    }
+    return { success: true, programId }
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
@@ -342,34 +370,45 @@ export async function convertAndSendProgramToClient(
   }
 }
 
-// Helper function to get client's userId from trainer's client document
+// Get client's user ID from trainer's client document
 export async function getClientUserId(trainerId: string, clientId: string): Promise<string | null> {
   try {
-    const clientRef = doc(db, "users", trainerId, "clients", clientId)
-    const [clientDoc, error] = await tryCatch(
-      () => import("firebase/firestore").then(({ getDoc }) => getDoc(clientRef)),
-      ErrorType.DB_READ_FAILED,
-      {
-        function: "getClientUserId",
-        trainerId,
-        clientId,
-      },
-    )
+    console.log(`[getClientUserId] Getting user ID for client: ${clientId} (trainer: ${trainerId})`)
 
-    if (error || !clientDoc || !clientDoc.exists()) {
+    if (!trainerId || !clientId) {
+      console.error("[getClientUserId] Trainer ID and client ID are required")
+      return null
+    }
+
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    const [clientDoc, error] = await tryCatch(() => getDoc(clientRef), ErrorType.DB_READ_FAILED, {
+      function: "getClientUserId",
+      trainerId,
+      clientId,
+    })
+
+    if (error || !clientDoc) {
+      console.error("[getClientUserId] Error fetching client document:", error)
+      return null
+    }
+
+    if (!clientDoc.exists()) {
+      console.error("[getClientUserId] Client document not found")
       return null
     }
 
     const clientData = clientDoc.data()
-    return clientData?.userId || null
+    const userId = clientData.userId
+
+    if (!userId) {
+      console.error("[getClientUserId] Client document does not contain userId")
+      return null
+    }
+
+    console.log(`[getClientUserId] Found user ID: ${userId}`)
+    return userId
   } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "getClientUserId", trainerId, clientId },
-      "Failed to get client user ID",
-    )
-    logError(appError)
+    console.error("[getClientUserId] Unexpected error:", error)
     return null
   }
 }
