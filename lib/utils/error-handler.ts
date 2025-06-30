@@ -68,33 +68,128 @@ export enum ErrorType {
 }
 
 export interface AppError {
-  type: ErrorType
   message: string
-  originalError?: any
-  metadata?: any
-  timestamp?: Date
-  statusCode?: number
-  stack?: string
+  statusCode: number
+  code?: string
+  details?: any
 }
 
-export function createError(
-  type: ErrorType,
-  originalError: any = null,
-  metadata: any = {},
-  message?: string,
-): AppError {
-  const errorMessage = message || originalError?.message || `An error of type ${type} occurred`
+export class CustomError extends Error implements AppError {
+  statusCode: number
+  code?: string
+  details?: any
 
-  const error: AppError = {
-    type,
-    message: errorMessage,
-    originalError,
-    metadata,
-    timestamp: new Date(),
-    statusCode: getStatusCodeForErrorType(type),
+  constructor(message: string, statusCode = 500, code?: string, details?: any) {
+    super(message)
+    this.name = "CustomError"
+    this.statusCode = statusCode
+    this.code = code
+    this.details = details
+  }
+}
+
+export function createError(message: string, statusCode = 500, code?: string, details?: any): AppError {
+  return {
+    message,
+    statusCode,
+    code,
+    details,
+  }
+}
+
+export function handleError(error: unknown): AppError {
+  if (error instanceof CustomError) {
+    return error
   }
 
-  return error
+  if (error instanceof Error) {
+    return createError(error.message, 500, "INTERNAL_ERROR")
+  }
+
+  return createError("An unknown error occurred", 500, "UNKNOWN_ERROR")
+}
+
+export function isAppError(error: any): error is AppError {
+  return error && typeof error.message === "string" && typeof error.statusCode === "number"
+}
+
+export function logError(error: AppError): void {
+  console.error("APP ERROR:", {
+    message: error.message,
+    statusCode: error.statusCode,
+    code: error.code,
+    details: error.details,
+  })
+}
+
+export function handleClientError(
+  error: any,
+  options: { component: string; operation: string; message: string; errorType: ErrorType },
+): AppError {
+  const appError = createError(options.message, getStatusCodeForErrorType(options.errorType), options.errorType, {
+    component: options.component,
+    operation: options.operation,
+  })
+
+  logError(appError)
+  return appError
+}
+
+export function handleServerError(
+  error: any,
+  options: { service: string; operation: string; message: string; errorType: ErrorType; logOnly?: boolean },
+): AppError {
+  const appError = createError(options.message, getStatusCodeForErrorType(options.errorType), options.errorType, {
+    service: options.service,
+    operation: options.operation,
+  })
+
+  if (!options.logOnly) {
+    logError(appError)
+  }
+
+  return appError
+}
+
+export function handleApiError(
+  error: any,
+  options: { route: string; requestId?: string },
+): { error: AppError; statusCode: number } {
+  const appError = createError("API request failed", 500, ErrorType.API_SERVER_ERROR, {
+    route: options.route,
+    requestId: options.requestId,
+  })
+
+  logError(appError)
+
+  return { error: appError, statusCode: appError.statusCode }
+}
+
+export async function tryCatch<T>(
+  operation: () => Promise<T>,
+  errorType: ErrorType,
+  metadata: any = {},
+): Promise<[T | null, AppError | null]> {
+  try {
+    const result = await operation()
+    return [result, null]
+  } catch (error) {
+    const appError = createError(
+      error instanceof Error ? error.message : "An unknown error occurred",
+      500,
+      errorType,
+      metadata,
+    )
+    logError(appError)
+    return [null, appError]
+  }
+}
+
+export function logAuditEvent(eventData: any): void {
+  // Audit logging disabled - this is a no-op function
+  // Previously would have written to the audit_logs collection
+  console.log("Audit logging disabled:", eventData)
+  return
 }
 
 function getStatusCodeForErrorType(type: ErrorType): number {
@@ -120,96 +215,3 @@ function getStatusCodeForErrorType(type: ErrorType): number {
       return 500
   }
 }
-
-export function logError(error: AppError): void {
-  console.error("APP ERROR:", {
-    type: error.type,
-    message: error.message,
-    metadata: error.metadata,
-    originalError: error.originalError,
-    timestamp: error.timestamp,
-  })
-}
-
-export function handleClientError(
-  error: any,
-  options: { component: string; operation: string; message: string; errorType: ErrorType },
-): AppError {
-  const appError = createError(
-    options.errorType,
-    error,
-    {
-      component: options.component,
-      operation: options.operation,
-    },
-    options.message,
-  )
-
-  logError(appError)
-  return appError
-}
-
-export function handleServerError(
-  error: any,
-  options: { service: string; operation: string; message: string; errorType: ErrorType; logOnly?: boolean },
-): AppError {
-  const appError = createError(
-    options.errorType,
-    error,
-    {
-      service: options.service,
-      operation: options.operation,
-    },
-    options.message,
-  )
-
-  if (!options.logOnly) {
-    logError(appError)
-  }
-
-  return appError
-}
-
-export function handleApiError(
-  error: any,
-  options: { route: string; requestId?: string },
-): { error: AppError; statusCode: number } {
-  const appError = createError(
-    ErrorType.API_SERVER_ERROR,
-    error,
-    {
-      route: options.route,
-      requestId: options.requestId,
-    },
-    "API request failed",
-  )
-
-  logError(appError)
-
-  return { error: appError, statusCode: appError.statusCode || 500 }
-}
-
-export async function tryCatch<T>(
-  operation: () => Promise<T>,
-  errorType: ErrorType,
-  metadata: any = {},
-): Promise<[T | null, AppError | null]> {
-  try {
-    const result = await operation()
-    return [result, null]
-  } catch (error) {
-    const appError = createError(errorType, error, metadata)
-    logError(appError)
-    return [null, appError]
-  }
-}
-
-export function logAuditEvent(eventData: any): void {
-  // Audit logging disabled - this is a no-op function
-  // Previously would have written to the audit_logs collection
-  console.log("Audit logging disabled:", eventData)
-  return
-}
-
-// Export the AppError type
-export type { AppError }

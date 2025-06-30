@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Clock, User, Dumbbell } from "lucide-react"
-import LoadingSpinner from "@/components/shared/loading-spinner"
+import { Progress } from "@/components/ui/progress"
+import { Calendar, CheckCircle, Circle, Trophy, MessageSquare } from "lucide-react"
 
 interface Exercise {
   id: string
@@ -15,6 +15,8 @@ interface Exercise {
   reps: string
   weight?: string
   notes?: string
+  completed?: boolean
+  isPR?: boolean
 }
 
 interface Workout {
@@ -23,22 +25,45 @@ interface Workout {
   date: string
   duration?: number
   exercises: Exercise[]
-  status: "pending" | "completed" | "skipped"
+  status: "pending" | "in-progress" | "completed" | "skipped"
   clientName: string
   clientAvatar?: string
+  clientNote?: string
+  programWeek?: string
+  programTotal?: string
+  daysCompleted?: string
+  daysTotal?: string
 }
 
 interface ClientWorkoutViewProps {
   workoutId?: string
   clientId?: string
+  workout?: Workout
+  onExerciseComplete?: (exerciseId: string) => void
+  onWorkoutComplete?: () => void
+  showInteractionButtons?: boolean
 }
 
-export default function ClientWorkoutView({ workoutId, clientId }: ClientWorkoutViewProps) {
-  const [workout, setWorkout] = useState<Workout | null>(null)
-  const [loading, setLoading] = useState(true)
+export function ClientWorkoutView({
+  workoutId,
+  clientId,
+  workout: propWorkout,
+  onExerciseComplete,
+  onWorkoutComplete,
+  showInteractionButtons = true,
+}: ClientWorkoutViewProps) {
+  const [workout, setWorkout] = useState<Workout | null>(propWorkout || null)
+  const [loading, setLoading] = useState(!propWorkout)
   const [error, setError] = useState<string | null>(null)
+  const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    if (propWorkout) {
+      setWorkout(propWorkout)
+      setLoading(false)
+      return
+    }
+
     // Simulate loading workout data
     const loadWorkout = async () => {
       try {
@@ -53,36 +78,59 @@ export default function ClientWorkoutView({ workoutId, clientId }: ClientWorkout
           title: "Upper Body Strength",
           date: new Date().toISOString().split("T")[0],
           duration: 45,
-          clientName: "John Doe",
+          clientName: "Michael Thompson",
           clientAvatar: "/lemon-avatar.png",
-          status: "pending",
+          status: "in-progress",
+          programWeek: "3",
+          programTotal: "8",
+          daysCompleted: "2",
+          daysTotal: "4",
+          clientNote:
+            "Felt strong today but had some tightness in my right hamstring during Romanian deadlifts. Reduced the weight slightly for the last two sets.",
           exercises: [
             {
               id: "1",
-              name: "Bench Press",
-              sets: 3,
-              reps: "8-10",
-              weight: "185 lbs",
-              notes: "Focus on controlled movement",
+              name: "Back Squat",
+              sets: 5,
+              reps: "5",
+              weight: "120 kg",
+              completed: true,
+              isPR: true,
+              notes: "New personal record!",
             },
             {
               id: "2",
-              name: "Pull-ups",
+              name: "Romanian DL",
               sets: 3,
-              reps: "6-8",
-              notes: "Use assistance if needed",
+              reps: "8",
+              weight: "Not Completed",
+              completed: false,
+              notes: "Hamstring tightness",
             },
             {
               id: "3",
-              name: "Shoulder Press",
+              name: "Leg Press",
               sets: 3,
-              reps: "10-12",
-              weight: "65 lbs",
+              reps: "10",
+              weight: "200 kg",
+              completed: true,
+            },
+            {
+              id: "4",
+              name: "Leg Extension",
+              sets: 3,
+              reps: "12",
+              weight: "70 kg",
+              completed: true,
             },
           ],
         }
 
         setWorkout(mockWorkout)
+
+        // Set initially completed exercises
+        const completed = new Set(mockWorkout.exercises.filter((ex) => ex.completed).map((ex) => ex.id))
+        setCompletedExercises(completed)
       } catch (err) {
         setError("Failed to load workout")
         console.error("Error loading workout:", err)
@@ -92,12 +140,23 @@ export default function ClientWorkoutView({ workoutId, clientId }: ClientWorkout
     }
 
     loadWorkout()
-  }, [workoutId, clientId])
+  }, [workoutId, clientId, propWorkout])
+
+  const handleExerciseToggle = (exerciseId: string) => {
+    const newCompleted = new Set(completedExercises)
+    if (newCompleted.has(exerciseId)) {
+      newCompleted.delete(exerciseId)
+    } else {
+      newCompleted.add(exerciseId)
+    }
+    setCompletedExercises(newCompleted)
+    onExerciseComplete?.(exerciseId)
+  }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingSpinner size="lg" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
     )
   }
@@ -120,6 +179,8 @@ export default function ClientWorkoutView({ workoutId, clientId }: ClientWorkout
     switch (status) {
       case "completed":
         return "bg-green-100 text-green-800"
+      case "in-progress":
+        return "bg-blue-100 text-blue-800"
       case "pending":
         return "bg-yellow-100 text-yellow-800"
       case "skipped":
@@ -129,84 +190,139 @@ export default function ClientWorkoutView({ workoutId, clientId }: ClientWorkout
     }
   }
 
+  const completedCount = completedExercises.size
+  const totalCount = workout.exercises.length
+  const progressPercentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6">
       {/* Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-4">
               <Avatar className="h-12 w-12">
-                <AvatarImage src={workout.clientAvatar || "/placeholder.svg"} alt={workout.clientName} />
+                <AvatarImage src={workout.clientAvatar || "/lemon-avatar.png"} alt={workout.clientName} />
                 <AvatarFallback>
-                  <User className="h-6 w-6" />
+                  {workout.clientName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <CardTitle className="text-xl">{workout.title}</CardTitle>
+                <CardTitle className="text-xl">{workout.clientName}</CardTitle>
                 <p className="text-muted-foreground flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  {workout.clientName}
+                  <Calendar className="h-4 w-4" />
+                  {new Date(workout.date).toLocaleDateString()}
                 </p>
               </div>
             </div>
-            <Badge className={getStatusColor(workout.status)}>
-              {workout.status.charAt(0).toUpperCase() + workout.status.slice(1)}
-            </Badge>
+            <div className="text-right">
+              <Badge className={getStatusColor(workout.status)}>{workout.status.replace("-", " ").toUpperCase()}</Badge>
+              {workout.programWeek && workout.programTotal && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Week {workout.programWeek}/{workout.programTotal}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              {new Date(workout.date).toLocaleDateString()}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{workout.title}</h2>
+              <span className="text-sm text-muted-foreground">
+                {completedCount}/{totalCount} completed
+              </span>
             </div>
-            {workout.duration && (
-              <div className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                {workout.duration} min
-              </div>
-            )}
-            <div className="flex items-center gap-1">
-              <Dumbbell className="h-4 w-4" />
-              {workout.exercises.length} exercises
-            </div>
+            <Progress value={progressPercentage} className="h-2" />
           </div>
+
+          {workout.clientNote && (
+            <Card className="mt-4 border-l-4 border-l-yellow-400">
+              <CardContent className="p-4">
+                <div className="flex items-start space-x-2">
+                  <MessageSquare className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 mb-1">Client Note:</p>
+                    <p className="text-sm text-gray-700">{workout.clientNote}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </CardHeader>
       </Card>
 
       {/* Exercises */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Exercises</h2>
-        {workout.exercises.map((exercise, index) => (
-          <Card key={exercise.id}>
-            <CardContent className="pt-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="font-medium text-lg">
-                    {index + 1}. {exercise.name}
-                  </h3>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                    <span>{exercise.sets} sets</span>
-                    <span>{exercise.reps} reps</span>
-                    {exercise.weight && <span>{exercise.weight}</span>}
+        {workout.exercises.map((exercise, index) => {
+          const isCompleted = completedExercises.has(exercise.id) || exercise.completed
+          return (
+            <Card
+              key={exercise.id}
+              className={`transition-all duration-200 ${isCompleted ? "bg-green-50 border-green-200" : ""}`}
+            >
+              <CardContent className="pt-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <button onClick={() => handleExerciseToggle(exercise.id)} className="flex-shrink-0">
+                        {isCompleted ? (
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        ) : (
+                          <Circle className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                      <h3 className={`font-medium text-lg ${isCompleted ? "line-through text-gray-500" : ""}`}>
+                        {index + 1}. {exercise.name}
+                      </h3>
+                      {exercise.isPR && <Trophy className="h-4 w-4 text-yellow-500" />}
+                    </div>
+
+                    <div className="flex items-center gap-4 ml-8 text-sm text-muted-foreground">
+                      <span>{exercise.sets} sets</span>
+                      <span>{exercise.reps} reps</span>
+                      {exercise.weight && exercise.weight !== "Not Completed" && <span>{exercise.weight}</span>}
+                    </div>
+
+                    {exercise.notes && (
+                      <p className="mt-2 ml-8 text-sm text-muted-foreground italic">Note: {exercise.notes}</p>
+                    )}
                   </div>
-                  {exercise.notes && (
-                    <p className="mt-2 text-sm text-muted-foreground italic">Note: {exercise.notes}</p>
+
+                  {!isCompleted && (
+                    <Button variant="outline" size="sm" onClick={() => handleExerciseToggle(exercise.id)}>
+                      Complete
+                    </Button>
                   )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       {/* Actions */}
-      {workout.status === "pending" && (
+      {showInteractionButtons && (
         <div className="flex gap-2 justify-end">
-          <Button variant="outline">Skip Workout</Button>
-          <Button>Mark Complete</Button>
+          {workout.status === "pending" && (
+            <>
+              <Button variant="outline">Skip Workout</Button>
+              <Button onClick={onWorkoutComplete}>Start Workout</Button>
+            </>
+          )}
+          {workout.status === "in-progress" && completedCount === totalCount && (
+            <Button onClick={onWorkoutComplete} className="bg-green-600 hover:bg-green-700">
+              Complete Workout
+            </Button>
+          )}
         </div>
       )}
     </div>
   )
 }
+
+// Default export
+export default ClientWorkoutView

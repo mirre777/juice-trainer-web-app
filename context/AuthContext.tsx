@@ -6,21 +6,34 @@ interface User {
   id: string
   email: string
   name: string
-  role: "trainer" | "client"
   avatar?: string
+  role: "trainer" | "client" | "admin"
 }
 
 interface AuthContextType {
   user: User | null
-  loading: boolean
   login: (email: string, password: string) => Promise<void>
-  logout: () => Promise<void>
+  logout: () => void
   signup: (email: string, password: string, name: string) => Promise<void>
+  loading: boolean
+  isAuthenticated: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
+}
+
+interface AuthProviderProps {
+  children: ReactNode
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -28,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check for existing session on mount
     const checkAuth = async () => {
       try {
-        // Simulate checking for existing session
+        // In a real app, you would check for a valid token/session
         const savedUser = localStorage.getItem("user")
         if (savedUser) {
           setUser(JSON.parse(savedUser))
@@ -44,16 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
+    setLoading(true)
     try {
-      // Simulate login API call
+      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
+      // Mock user data
       const mockUser: User = {
         id: "1",
         email,
-        name: "John Trainer",
-        role: "trainer",
+        name: "John Doe",
         avatar: "/lemon-avatar.png",
+        role: "trainer",
       }
 
       setUser(mockUser)
@@ -61,30 +76,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Login failed:", error)
       throw error
-    }
-  }
-
-  const logout = async () => {
-    try {
-      setUser(null)
-      localStorage.removeItem("user")
-    } catch (error) {
-      console.error("Logout failed:", error)
-      throw error
+    } finally {
+      setLoading(false)
     }
   }
 
   const signup = async (email: string, password: string, name: string) => {
+    setLoading(true)
     try {
-      // Simulate signup API call
+      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
+      // Mock user data
       const mockUser: User = {
         id: "1",
         email,
         name,
-        role: "trainer",
         avatar: "/lemon-avatar.png",
+        role: "trainer",
       }
 
       setUser(mockUser)
@@ -92,18 +101,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Signup failed:", error)
       throw error
+    } finally {
+      setLoading(false)
     }
   }
 
-  return <AuthContext.Provider value={{ user, loading, login, logout, signup }}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider")
+  const logout = () => {
+    setUser(null)
+    localStorage.removeItem("user")
   }
-  return context
-}
 
-export default AuthProvider
+  const value: AuthContextType = {
+    user,
+    login,
+    logout,
+    signup,
+    loading,
+    isAuthenticated: !!user,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
