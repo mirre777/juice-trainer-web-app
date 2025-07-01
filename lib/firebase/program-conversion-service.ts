@@ -354,6 +354,7 @@ export class ProgramConversionService {
         console.log(`[ProgramConversionService.getTrainerClients] 💡 Requirements for eligibility:`)
         console.log(`[ProgramConversionService.getTrainerClients]   - Must have userId field (linked account)`)
         console.log(`[ProgramConversionService.getTrainerClients]   - Status must be 'Active'`)
+        console.log(`[ProgramConversionService.getTrainerClients]   - User document must exist at`)
         console.log(`[ProgramConversionService.getTrainerClients]   - User document must exist at /users/{userId}`)
         console.log(`[ProgramConversionService.getTrainerClients] 🔍 Check if clients have completed signup process`)
       }
