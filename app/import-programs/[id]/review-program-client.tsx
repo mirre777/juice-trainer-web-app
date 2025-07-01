@@ -69,6 +69,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [loadingClients, setLoadingClients] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [isAssigning, setIsAssigning] = useState(false)
+  const [clientsFetchError, setClientsFetchError] = useState<string>("")
 
   const clientNameForModal = selectedClientId
     ? clients.find((c) => c.id === selectedClientId)?.name || "Selected Client"
@@ -186,6 +187,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setLoadingClients(true)
     setClients([])
     setSelectedClientId("")
+    setClientsFetchError("")
     console.log("[SEND_PROGRAM] Starting client fetch for trainerId:", trainerId)
 
     try {
@@ -201,6 +203,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (!response.ok) {
         const errorText = await response.text()
         console.error("[SEND_PROGRAM] API response not OK. Status:", response.status, "Text:", errorText)
+        setClientsFetchError(`Failed to load clients: ${response.statusText}`)
         toast({
           title: "Error",
           description: `Failed to load clients: ${response.statusText}`,
@@ -213,16 +216,22 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       const data = await response.json()
       console.log("[SEND_PROGRAM] API response data:", data)
 
-      if (data.success && data.clients) {
-        console.log("[SEND_PROGRAM] Clients fetched successfully:", data.clients.length, "clients")
-        setClients(data.clients)
-        if (data.clients.length > 0) {
-          setSelectedClientId(data.clients[0].id)
-          console.log("[SEND_PROGRAM] First client selected:", data.clients[0].id)
+      if (data.success) {
+        const fetchedClients = data.clients || []
+        console.log("[SEND_PROGRAM] Clients fetched successfully:", fetchedClients.length, "clients")
+        setClients(fetchedClients)
+
+        if (fetchedClients.length > 0) {
+          setSelectedClientId(fetchedClients[0].id)
+          console.log("[SEND_PROGRAM] First client selected:", fetchedClients[0].id)
+        } else {
+          console.log("[SEND_PROGRAM] No clients available")
+          setClientsFetchError("No active clients found. Make sure your clients have created accounts.")
         }
       } else {
-        console.error("[SEND_PROGRAM] API returned success=false or no clients:", data)
+        console.error("[SEND_PROGRAM] API returned success=false:", data)
         setClients([])
+        setClientsFetchError(data.error || "Failed to load clients")
         toast({
           title: "Error",
           description: data.error || "Failed to load clients",
@@ -231,6 +240,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       }
     } catch (error) {
       console.error("[SEND_PROGRAM] Error fetching clients:", error)
+      setClientsFetchError("An unexpected error occurred while fetching clients.")
       toast({
         title: "Error",
         description: "An unexpected error occurred while fetching clients.",
@@ -926,8 +936,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
         <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Confirm Sending Program</DialogTitle>
-            <DialogDescription>You are about to send the following program:</DialogDescription>
+            <DialogTitle>Send Program to Client</DialogTitle>
+            <DialogDescription>
+              Choose a client to send "{programState.program_title}" to their mobile app.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
             <Card className="p-4">
@@ -957,8 +969,20 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                   <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
                   <span className="ml-2 text-gray-600">Loading clients...</span>
                 </div>
+              ) : clientsFetchError ? (
+                <div className="text-center py-4">
+                  <div className="text-gray-500 mb-2">{clientsFetchError}</div>
+                  <Button variant="outline" size="sm" onClick={() => trainer?.uid && fetchClients(trainer.uid)}>
+                    Retry
+                  </Button>
+                </div>
               ) : clients.length === 0 ? (
-                <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
+                <div className="text-center py-4">
+                  <div className="text-gray-500 mb-2">No active clients found.</div>
+                  <div className="text-sm text-gray-400">
+                    Make sure your clients have created accounts and are linked to you.
+                  </div>
+                </div>
               ) : (
                 <RadioGroup
                   value={selectedClientId}
@@ -979,6 +1003,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                           {client.name}
                         </Label>
                         {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+                        <p className="text-xs text-gray-400">Status: {client.status}</p>
                       </div>
                     </div>
                   ))}
