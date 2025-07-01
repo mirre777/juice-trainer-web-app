@@ -1,12 +1,13 @@
 export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
 
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase"
 
 export async function POST() {
   try {
-    console.log("🧪 [TEST] Creating test client...")
+    console.log("🧪 [DEBUG] Creating test client")
 
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
@@ -15,45 +16,35 @@ export async function POST() {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Import Firebase functions
-    const { db } = await import("@/lib/firebase/firebase")
-    const { collection, addDoc, serverTimestamp } = await import("firebase/firestore")
-
-    // Create test client data
     const testClientData = {
       name: "Test Client " + Date.now(),
       email: "test@example.com",
       status: "Active",
       progress: 50,
-      sessions: { completed: 2, total: 5 },
-      completion: 40,
+      sessions: { completed: 5, total: 10 },
+      completion: 50,
+      notes: "This is a test client",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      isTemporary: false,
-      notes: "Test client created for debugging",
     }
 
-    console.log("🧪 [TEST] Test client data:", testClientData)
-
-    // Try creating in the user's clients subcollection
     const clientsCollectionRef = collection(db, "users", userId, "clients")
-    console.log(`🧪 [TEST] Creating in: users/${userId}/clients`)
+    const docRef = await addDoc(clientsCollectionRef, testClientData)
 
-    const newClientRef = await addDoc(clientsCollectionRef, testClientData)
-    console.log("✅ [TEST] Test client created with ID:", newClientRef.id)
+    console.log("✅ [DEBUG] Test client created with ID:", docRef.id)
 
     return NextResponse.json({
       success: true,
-      message: "Test client created successfully",
-      clientId: newClientRef.id,
-      path: `users/${userId}/clients/${newClientRef.id}`,
+      clientId: docRef.id,
+      path: `users/${userId}/clients/${docRef.id}`,
+      data: testClientData,
     })
   } catch (error: any) {
-    console.error("💥 [TEST] Error creating test client:", error)
+    console.error("💥 [DEBUG] Error creating test client:", error)
     return NextResponse.json(
       {
-        error: "Test client creation failed",
-        details: error?.message || "Unknown error",
+        success: false,
+        error: error.message,
       },
       { status: 500 },
     )
