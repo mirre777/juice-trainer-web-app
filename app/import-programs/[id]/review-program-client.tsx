@@ -178,7 +178,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
   const fetchClients = async (trainerId: string) => {
     if (!trainerId) {
-      console.error("[ReviewProgramClient] No trainer ID provided to fetchClients")
+      console.error("[SEND_PROGRAM] No trainer ID provided to fetchClients")
       setLoadingClients(false)
       return
     }
@@ -186,10 +186,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     setLoadingClients(true)
     setClients([])
     setSelectedClientId("")
-    console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
+    console.log("[SEND_PROGRAM] Starting client fetch for trainerId:", trainerId)
 
     try {
-      // Use the correct API endpoint that matches the working clients page
       const response = await fetch(`/api/clients?trainerId=${trainerId}`, {
         method: "GET",
         headers: {
@@ -197,12 +196,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         },
       })
 
-      console.log("[ReviewProgramClient] API response status:", response.status)
-      console.log("[ReviewProgramClient] API response headers:", Object.fromEntries(response.headers.entries()))
+      console.log("[SEND_PROGRAM] API response status:", response.status)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", errorText)
+        console.error("[SEND_PROGRAM] API response not OK. Status:", response.status, "Text:", errorText)
         toast({
           title: "Error",
           description: `Failed to load clients: ${response.statusText}`,
@@ -213,20 +211,17 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       }
 
       const data = await response.json()
-      console.log("[ReviewProgramClient] API response data:", data)
+      console.log("[SEND_PROGRAM] API response data:", data)
 
       if (data.success && data.clients) {
-        console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients.length, "clients")
+        console.log("[SEND_PROGRAM] Clients fetched successfully:", data.clients.length, "clients")
         setClients(data.clients)
         if (data.clients.length > 0) {
           setSelectedClientId(data.clients[0].id)
-          console.log("[ReviewProgramClient] First client selected:", data.clients[0].id)
-        } else {
-          setSelectedClientId("")
-          console.log("[ReviewProgramClient] No clients found, selectedClientId cleared.")
+          console.log("[SEND_PROGRAM] First client selected:", data.clients[0].id)
         }
       } else {
-        console.error("[ReviewProgramClient] API returned success=false or no clients:", data)
+        console.error("[SEND_PROGRAM] API returned success=false or no clients:", data)
         setClients([])
         toast({
           title: "Error",
@@ -235,7 +230,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         })
       }
     } catch (error) {
-      console.error("[ReviewProgramClient] Error fetching clients (network/unexpected):", error)
+      console.error("[SEND_PROGRAM] Error fetching clients:", error)
       toast({
         title: "Error",
         description: "An unexpected error occurred while fetching clients.",
@@ -244,7 +239,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setClients([])
     } finally {
       setLoadingClients(false)
-      console.log("[ReviewProgramClient] Finished fetching clients.")
+      console.log("[SEND_PROGRAM] Finished fetching clients.")
     }
   }
 
@@ -629,11 +624,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
-              console.log("[ReviewProgramClient] 'Send to Client' button clicked")
-              console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid)
+              console.log("[SEND_PROGRAM] Send to Client button clicked")
+              console.log("[SEND_PROGRAM] Trainer UID at click:", trainer?.uid)
 
               if (!trainer?.uid) {
-                console.error("[ReviewProgramClient] No trainer UID available")
+                console.error("[SEND_PROGRAM] No trainer UID available")
                 toast({
                   title: "Authentication Error",
                   description: "Could not retrieve trainer information. Please log in again.",
