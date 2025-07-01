@@ -1,11 +1,6 @@
 "use client"
-
-import type React from "react"
-
-import { useState, useRef, useEffect } from "react"
-import { Search, Filter, ChevronDown, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { useState, useEffect, useRef } from "react"
+import { Search, Filter, ChevronDown, PlusCircle, Share } from "lucide-react"
 import { ClientsList } from "@/components/clients/clients-list"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { ClientInvitationDialog } from "@/components/clients/client-invitation-dialog"
@@ -13,36 +8,26 @@ import { useToast } from "@/hooks/use-toast"
 import { subscribeToClients, linkPendingClientsWithUsers } from "@/lib/firebase/client-service"
 import { getCookie } from "cookies-next"
 import type { Client } from "@/types/client"
+import { useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
 import { handleClientDeleted } from "@/lib/client-utils"
 
 interface ClientsPageLayoutProps {
-  children: React.ReactNode
-  searchQuery: string
-  onSearchChange: (query: string) => void
-  statusFilter: string
-  onStatusFilterChange: (status: string) => void
-  onAddClient: () => void
   isDemo?: boolean
 }
 
-const statusOptions = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "pending", label: "Pending" },
-  { value: "on_hold", label: "On Hold" },
-  { value: "inactive", label: "Inactive" },
-  { value: "deleted", label: "Deleted" },
-]
-
-export default function ClientsPageLayout({
-  children,
-  searchQuery,
-  onSearchChange,
-  statusFilter,
-  onStatusFilterChange,
-  onAddClient,
-  isDemo = false,
-}: ClientsPageLayoutProps) {
+export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
+  const searchParams = useSearchParams()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState(() => {
+    if (typeof window !== "undefined") {
+      const storedFilter = localStorage.getItem("clientsStatusFilter")
+      console.log("[ClientsPageLayout] Initializing statusFilter. Stored:", storedFilter)
+      return storedFilter || "All"
+    }
+    return "All"
+  })
+  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(searchParams?.get("addClient") === "true")
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
   const [prefillData, setPrefillData] = useState<{ name?: string } | null>(null)
   const [clients, setClients] = useState<Client[]>([])
@@ -53,7 +38,7 @@ export default function ClientsPageLayout({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
-  // Close dropdown when clicking outside
+  // Handle clicking outside dropdown to close it
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -90,6 +75,22 @@ export default function ClientsPageLayout({
 
   // Check if we should open the add client modal from URL parameters
   useEffect(() => {
+    if (!searchParams) return
+
+    const addClient = searchParams.get("addClient")
+    if (addClient === "true") {
+      // Get prefill data from URL parameters
+      const name = searchParams.get("name")
+      if (name) {
+        setPrefillData({ name })
+      }
+    }
+  }, [searchParams])
+
+  // Set up real-time listener for clients
+  useEffect(() => {
+    setLoading(true)
+
     const trainerId = getCookie("user_id") as string
     // For demo mode, use a fixed ID
     const effectiveTrainerId = isDemo ? "demo-trainer-id" : trainerId
@@ -200,14 +201,26 @@ export default function ClientsPageLayout({
     }
 
     // Apply status filter
-    if (statusFilter !== "all") {
+    if (statusFilter !== "All") {
       result = result.filter((client) => client.status === statusFilter)
     }
 
     setFilteredClients(result)
   }, [searchQuery, statusFilter, clients])
 
-  const selectedStatus = statusOptions.find((option) => option.value === statusFilter)
+  // Effect to save statusFilter to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      console.log("[ClientsPageLayout] Saving statusFilter to localStorage:", statusFilter)
+      localStorage.setItem("clientsStatusFilter", statusFilter)
+    }
+  }, [statusFilter])
+
+  const handleStatusChange = (status: string) => {
+    console.log("[ClientsPageLayout] handleStatusChange called. New status:", status)
+    setStatusFilter(status)
+    setIsDropdownOpen(false)
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -218,59 +231,69 @@ export default function ClientsPageLayout({
             {/* Search Input */}
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
+              <input
                 type="text"
                 placeholder="Search clients..."
                 value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 focus:ring-lime-500 focus:border-lime-500"
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-2 w-full sm:w-[300px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
               />
             </div>
 
             {/* Status Filter Dropdown */}
             <div className="relative" ref={dropdownRef}>
-              <Button
-                variant="outline"
+              <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-2 min-w-[140px] justify-between"
+                className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  <span>Status: {selectedStatus?.label}</span>
-                </div>
-                <ChevronDown className={`h-4 w-4 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
-              </Button>
+                <Filter className="h-4 w-4 text-gray-500" />
+                <span className="text-sm">Status:</span>
+                <span className="text-sm font-medium">{statusFilter}</span>
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-500 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`}
+                />
+              </button>
 
               {isDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg z-50">
-                  {statusOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        onStatusFilterChange(option.value)
-                        setIsDropdownOpen(false)
-                      }}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 first:rounded-t-md last:rounded-b-md ${
-                        statusFilter === option.value ? "bg-lime-50 text-lime-700 font-medium" : "text-gray-700"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                  <div className="py-1">
+                    {["All", "Active", "On Hold", "Inactive", "Pending", "Accepted Invitation"].map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusChange(status)}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                          statusFilter === status ? "bg-primary/10 text-primary font-medium" : "text-gray-700"
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
           {/* Add Client Button */}
-          <Button onClick={onAddClient} className="bg-lime-500 hover:bg-lime-600 text-white">
-            <Plus className="mr-2 h-4 w-4" />
+          <Button
+            onClick={() => setIsAddClientModalOpen(true)}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            data-add-client-button="true"
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
             Add Client
           </Button>
-        </div>
 
-        {/* Content */}
-        {children}
+          {/* Show Code Button */}
+          <Button
+            onClick={() => setIsInviteDialogOpen(true)}
+            variant="outline"
+            className="border-gray-200 text-gray-700 hover:bg-gray-50"
+          >
+            <Share className="mr-2 h-4 w-4" />
+            Show Code
+          </Button>
+        </div>
 
         {/* Clients List */}
         <ClientsList
@@ -283,7 +306,12 @@ export default function ClientsPageLayout({
         />
 
         {/* Add Client Modal */}
-        <AddClientModal isOpen={false} onClose={() => {}} isDemo={isDemo} prefillData={prefillData} />
+        <AddClientModal
+          isOpen={isAddClientModalOpen}
+          onClose={() => setIsAddClientModalOpen(false)}
+          isDemo={isDemo}
+          prefillData={prefillData}
+        />
 
         {/* Universal Invite Dialog */}
         {trainerCode && (

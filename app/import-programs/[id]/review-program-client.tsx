@@ -1,97 +1,78 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Users, Send, CheckCircle, AlertCircle, User } from "lucide-react"
-import { toast } from "sonner"
+import { Separator } from "@/components/ui/separator"
+import { ArrowLeft, Send, Users, AlertCircle, CheckCircle2, User } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import LoadingSpinner from "@/components/shared/loading-spinner"
+import type { Client } from "@/types/client"
 
-interface Client {
-  id: string
-  name: string
-  email: string
-  status: string
-  avatar?: string
-  createdAt: string
+interface ReviewProgramClientProps {
+  programId: string
+  programData: any
 }
 
-interface ProgramData {
-  id: string
-  name: string
-  description?: string
-  weeks: any[]
-  createdAt: string
-}
-
-export default function ReviewProgramClient() {
-  const params = useParams()
+export default function ReviewProgramClient({ programId, programData }: ReviewProgramClientProps) {
   const router = useRouter()
-  const [program, setProgram] = useState<ProgramData | null>(null)
-  const [clients, setClients] = useState<Client[]>([])
-  const [selectedClient, setSelectedClient] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingClients, setIsLoadingClients] = useState(false)
+  const { toast } = useToast()
   const [showClientSelection, setShowClientSelection] = useState(false)
-  const [isAssigning, setIsAssigning] = useState(false)
+  const [clients, setClients] = useState<Client[]>([])
+  const [loadingClients, setLoadingClients] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [assigning, setAssigning] = useState(false)
 
-  useEffect(() => {
-    loadProgram()
-  }, [params.id])
-
-  const loadProgram = async () => {
+  const fetchClients = async () => {
+    setLoadingClients(true)
     try {
-      const response = await fetch(`/api/sheets-imports/${params.id}`)
-      if (!response.ok) throw new Error("Failed to load program")
-
-      const data = await response.json()
-      setProgram(data.program)
-    } catch (error) {
-      console.error("Error loading program:", error)
-      toast.error("Failed to load program")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const loadClients = async () => {
-    setIsLoadingClients(true)
-    try {
-      console.log("[loadClients] Fetching clients...")
+      console.log("[fetchClients] Fetching trainer's clients...")
       const response = await fetch("/api/clients")
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
       const data = await response.json()
-      console.log("[loadClients] Response:", data)
+
+      console.log("[fetchClients] Response:", data)
 
       if (data.success) {
         setClients(data.clients || [])
-        console.log("[loadClients] Loaded clients:", data.clients?.length || 0)
+        console.log("[fetchClients] Loaded", data.clients?.length || 0, "clients")
       } else {
-        throw new Error(data.error || "Failed to load clients")
+        console.error("[fetchClients] Failed to fetch clients:", data.error)
+        toast({
+          title: "Error",
+          description: data.error || "Failed to load clients",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error("[loadClients] Error:", error)
-      toast.error("Failed to load clients")
-      setClients([])
+      console.error("[fetchClients] Error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load clients. Please try again.",
+        variant: "destructive",
+      })
     } finally {
-      setIsLoadingClients(false)
+      setLoadingClients(false)
     }
   }
 
   const handleSendToClient = () => {
     setShowClientSelection(true)
-    loadClients()
+    fetchClients()
   }
 
   const handleAssignProgram = async () => {
-    if (!selectedClient || !program) return
+    if (!selectedClientId) {
+      toast({
+        title: "No client selected",
+        description: "Please select a client to assign the program to.",
+        variant: "destructive",
+      })
+      return
+    }
 
-    setIsAssigning(true)
+    setAssigning(true)
     try {
       const response = await fetch("/api/programs/assign", {
         method: "POST",
@@ -99,129 +80,127 @@ export default function ReviewProgramClient() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          programId: program.id,
-          clientId: selectedClient,
-          programData: program,
+          programId,
+          clientId: selectedClientId,
+          programData,
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to assign program")
-
       const data = await response.json()
+
       if (data.success) {
-        toast.success("Program assigned successfully!")
+        toast({
+          title: "Program assigned!",
+          description: "The program has been successfully assigned to your client.",
+        })
         router.push("/programs")
       } else {
-        throw new Error(data.error || "Failed to assign program")
+        toast({
+          title: "Assignment failed",
+          description: data.error || "Failed to assign program to client.",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error assigning program:", error)
-      toast.error("Failed to assign program")
+      toast({
+        title: "Error",
+        description: "Failed to assign program. Please try again.",
+        variant: "destructive",
+      })
     } finally {
-      setIsAssigning(false)
+      setAssigning(false)
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading program...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!program) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Program Not Found</h2>
-          <p className="text-gray-600 mb-4">The program you're looking for doesn't exist.</p>
-          <Button onClick={() => router.push("/import-programs")} variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Import Programs
-          </Button>
-        </div>
-      </div>
-    )
-  }
+  const selectedClient = clients.find((client) => client.id === selectedClientId)
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-4xl px-4 py-8">
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => router.push("/import-programs")} className="flex items-center gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
-              <p className="text-gray-600">Review and assign your imported program</p>
-            </div>
+        <div className="mb-8 flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => router.back()} className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
+            <p className="text-gray-600">Review and assign your imported program</p>
           </div>
         </div>
 
-        {/* Program Details */}
+        {/* Program Preview */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
-              {program.name}
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Program Ready
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {program.description && <p className="text-gray-600 mb-4">{program.description}</p>}
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>{program.weeks?.length || 0} weeks</span>
-              <span>•</span>
-              <span>Created {new Date(program.createdAt).toLocaleDateString()}</span>
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-lg">{programData?.name || "Imported Program"}</h3>
+                <p className="text-gray-600">{programData?.description || "No description available"}</p>
+              </div>
+
+              {programData?.weeks && (
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span>{programData.weeks.length} weeks</span>
+                  <span>•</span>
+                  <span>
+                    {programData.weeks.reduce((total: number, week: any) => total + (week.routines?.length || 0), 0)}{" "}
+                    total workouts
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Badge variant="secondary">Ready to assign</Badge>
+                <Badge variant="outline">Imported from Google Sheets</Badge>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Action Buttons */}
         <div className="flex gap-4 mb-6">
-          <Button onClick={handleSendToClient} className="bg-lime-500 hover:bg-lime-600 text-white">
+          <Button onClick={handleSendToClient} className="bg-primary hover:bg-primary/90" disabled={loadingClients}>
             <Send className="mr-2 h-4 w-4" />
             Send to Client
           </Button>
-          <Button variant="outline">Preview Program</Button>
+          <Button variant="outline" onClick={() => router.push("/programs")}>
+            Save for Later
+          </Button>
         </div>
 
-        {/* Client Selection */}
+        {/* Client Selection Section */}
         {showClientSelection && (
-          <Card className="border-lime-200 bg-lime-50">
+          <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-lime-600" />
+                <Users className="h-5 w-5" />
                 Select Client
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoadingClients ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-lime-500 mx-auto mb-2"></div>
-                  <p className="text-gray-600">Loading clients...</p>
+              {loadingClients ? (
+                <div className="py-8">
+                  <LoadingSpinner />
                 </div>
               ) : clients.length === 0 ? (
                 <div className="text-center py-8">
-                  <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Clients Found</h3>
-                  <p className="text-gray-600 mb-4">
-                    You don't have any clients yet. Create a client first to assign this program.
-                  </p>
-                  <Button onClick={() => router.push("/clients")} variant="outline">
-                    Go to Clients
+                  <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No clients found</h3>
+                  <p className="text-gray-600 mb-4">You need to have clients to assign programs to them.</p>
+                  <Button onClick={() => router.push("/clients?addClient=true")} variant="outline">
+                    Add Your First Client
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-600 mb-4">
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
                     Found {clients.length} client{clients.length !== 1 ? "s" : ""}. Select one to assign this program:
                   </p>
 
@@ -230,59 +209,55 @@ export default function ReviewProgramClient() {
                       <div
                         key={client.id}
                         className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                          selectedClient === client.id
-                            ? "border-lime-500 bg-lime-100"
-                            : "border-gray-200 hover:border-gray-300 bg-white"
+                          selectedClientId === client.id
+                            ? "border-primary bg-primary/10"
+                            : "border-gray-200 hover:border-gray-300"
                         }`}
-                        onClick={() => setSelectedClient(client.id)}
+                        onClick={() => setSelectedClientId(client.id)}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-medium text-gray-600">
-                                {client.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-gray-900">{client.name}</h4>
-                              <p className="text-sm text-gray-600">{client.email}</p>
-                            </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                            <User className="h-5 w-5 text-gray-600" />
                           </div>
-                          <Badge
-                            variant={client.status === "active" ? "default" : "secondary"}
-                            className={client.status === "active" ? "bg-green-100 text-green-800" : ""}
-                          >
-                            {client.status}
-                          </Badge>
+                          <div className="flex-1">
+                            <h4 className="font-medium">{client.name}</h4>
+                            <p className="text-sm text-gray-600">{client.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={client.status === "Active" ? "default" : "secondary"} className="text-xs">
+                              {client.status}
+                            </Badge>
+                            {selectedClientId === client.id && <CheckCircle2 className="h-5 w-5 text-primary" />}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
 
                   {selectedClient && (
-                    <div className="pt-4 border-t">
-                      <Button
-                        onClick={handleAssignProgram}
-                        disabled={isAssigning}
-                        className="w-full bg-lime-500 hover:bg-lime-600 text-white"
-                      >
-                        {isAssigning ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Assigning Program...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="mr-2 h-4 w-4" />
-                            Assign Program to Client
-                          </>
-                        )}
-                      </Button>
-                    </div>
+                    <>
+                      <Separator />
+                      <div className="bg-white p-4 rounded-lg border">
+                        <h4 className="font-medium mb-2">Assignment Summary</h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          You're about to assign "<strong>{programData?.name || "Imported Program"}</strong>" to{" "}
+                          <strong>{selectedClient.name}</strong>.
+                        </p>
+                        <Button onClick={handleAssignProgram} disabled={assigning} className="w-full">
+                          {assigning ? (
+                            <>
+                              <LoadingSpinner size="sm" className="mr-2" />
+                              Assigning Program...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="mr-2 h-4 w-4" />
+                              Assign Program to {selectedClient.name}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
