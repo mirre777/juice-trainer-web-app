@@ -13,86 +13,101 @@ export async function GET() {
     console.log("🆔 [DEBUG] User ID from cookie:", userId)
 
     if (!userId) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Not authenticated",
+          debug: { userId: null },
+        },
+        { status: 401 },
+      )
     }
 
-    // Import Firebase directly
+    // Import Firebase functions
     const { db } = await import("@/lib/firebase/firebase")
     const { collection, getDocs } = await import("firebase/firestore")
-    const { fetchClients, isValidClientData, mapClientData } = await import("@/lib/firebase/client-service")
 
-    console.log("📊 [DEBUG] Querying Firestore directly...")
+    console.log("📊 [DEBUG] Analyzing collection for trainer:", userId)
 
-    // Get raw documents from Firestore
+    const collectionPath = `users/${userId}/clients`
+    console.log("📍 [DEBUG] Collection path:", collectionPath)
+
+    // Query clients collection
     const clientsRef = collection(db, "users", userId, "clients")
     const snapshot = await getDocs(clientsRef)
 
-    console.log(`📄 [DEBUG] Found ${snapshot.size} raw documents`)
+    console.log(`📈 [DEBUG] Raw documents found: ${snapshot.size}`)
 
-    // Analyze each document
     const rawDocuments: any[] = []
     const validationResults: any[] = []
+    let validCount = 0
+    let invalidCount = 0
 
     snapshot.forEach((doc) => {
       const data = doc.data()
       const docInfo = {
         id: doc.id,
-        data: data,
-      }
-      rawDocuments.push(docInfo)
-
-      // Test validation
-      const isValid = isValidClientData(data)
-      const validationResult = {
-        documentId: doc.id,
-        isValid: isValid,
-        rawData: data,
-        validationDetails: {
-          hasData: !!data,
-          isObject: typeof data === "object",
-          hasName: !!data.name,
-          nameType: typeof data.name,
-          nameValue: data.name,
-          hasEmail: !!data.email,
-          emailType: typeof data.email,
-          emailValue: data.email,
-          status: data.status,
-          isTemporary: data.isTemporary,
-          userId: data.userId,
-        },
-      }
-      validationResults.push(validationResult)
-
-      console.log(`📋 [DEBUG] Document ${doc.id}:`, {
         name: data.name,
         email: data.email,
         status: data.status,
-        isValid: isValid,
+        createdAt: data.createdAt,
+        hasName: !!data.name,
+        nameType: typeof data.name,
+        nameLength: data.name?.length || 0,
+        hasEmail: !!data.email,
+        emailType: typeof data.email,
+      }
+
+      rawDocuments.push(docInfo)
+
+      // Test validation logic
+      const isValid = data.name && typeof data.name === "string" && data.name.trim() !== ""
+
+      validationResults.push({
+        documentId: doc.id,
+        isValid,
+        rawData: docInfo,
+        validationDetails: {
+          hasName: !!data.name,
+          nameIsString: typeof data.name === "string",
+          nameNotEmpty: data.name?.trim() !== "",
+          finalResult: isValid,
+        },
       })
+
+      if (isValid) {
+        validCount++
+      } else {
+        invalidCount++
+      }
+
+      console.log(`[DEBUG] Document ${doc.id}: ${isValid ? "VALID" : "INVALID"}`, docInfo)
     })
 
-    // Test the service function
-    console.log("🔧 [DEBUG] Testing fetchClients service...")
-    const serviceResult = await fetchClients(userId)
-    console.log("📤 [DEBUG] Service result:", serviceResult)
-
-    // Count valid vs invalid
-    const validDocuments = validationResults.filter((r) => r.isValid).length
-    const invalidDocuments = validationResults.filter((r) => !r.isValid).length
-
-    const debugInfo = {
-      userId: userId,
-      collectionPath: `users/${userId}/clients`,
-      rawDocumentCount: snapshot.size,
-      serviceClientCount: serviceResult.success ? serviceResult.clients.length : 0,
-      validDocuments: validDocuments,
-      invalidDocuments: invalidDocuments,
-      rawDocuments: rawDocuments,
-      validationResults: validationResults,
-      serviceResult: serviceResult,
+    // Test the actual client service
+    let serviceClientCount = 0
+    try {
+      const { fetchClients } = await import("@/lib/firebase/client-service")
+      const serviceResult = await fetchClients(userId)
+      serviceClientCount = Array.isArray(serviceResult) ? serviceResult.length : serviceResult.clients?.length || 0
+      console.log(`[DEBUG] Service returned: ${serviceClientCount} clients`)
+    } catch (serviceError) {
+      console.error("[DEBUG] Service error:", serviceError)
     }
 
-    console.log("📊 [DEBUG] Final analysis:", debugInfo)
+    const debugInfo = {
+      userId,
+      collectionPath,
+      rawDocumentCount: snapshot.size,
+      validDocuments: validCount,
+      invalidDocuments: invalidCount,
+      serviceClientCount,
+      rawDocuments: rawDocuments.slice(0, 5), // First 5 for brevity
+      validationResults,
+      timestamp: new Date().toISOString(),
+    }
+
+    console.log("🎯 [DEBUG] Analysis complete:", debugInfo)
 
     return NextResponse.json({
       success: true,
@@ -104,7 +119,7 @@ export async function GET() {
       {
         success: false,
         error: error.message,
-        stack: error.stack,
+        debug: { error: error.stack },
       },
       { status: 500 },
     )
