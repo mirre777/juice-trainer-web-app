@@ -1005,3 +1005,6 @@ export async function processLoginInvitation(
     }
   }
 }
+
+// Export alias for compatibility
+export const getClientsForTrainer = fetchClients
