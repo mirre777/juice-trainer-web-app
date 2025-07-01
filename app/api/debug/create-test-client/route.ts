@@ -10,44 +10,44 @@ export async function POST() {
 
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
+    console.log("🆔 [DEBUG] User ID from cookie:", userId)
 
     if (!userId) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Import Firebase functions
-    const { db } = await import("@/lib/firebase/firebase")
-    const { collection, addDoc, serverTimestamp } = await import("firebase/firestore")
+    // Import Firebase and service
+    const { createClient } = await import("@/lib/firebase/client-service")
 
-    const testClient = {
+    // Create a test client with all required fields
+    const testClientData = {
       name: "Test Client " + Date.now(),
       email: "test" + Date.now() + "@example.com",
       phone: "+1234567890",
-      status: "pending",
-      notes: "Created by debug endpoint",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      status: "Active",
+      notes: "Test client created by debug endpoint",
+      goals: ["Test goal"],
     }
 
-    const clientsRef = collection(db, "users", userId, "clients")
-    const docRef = await addDoc(clientsRef, testClient)
+    console.log("📝 [DEBUG] Creating client with data:", testClientData)
 
-    console.log("✅ [DEBUG] Test client created with ID:", docRef.id)
+    const result = await createClient(userId, testClientData)
+
+    console.log("✅ [DEBUG] Create result:", result)
 
     return NextResponse.json({
-      success: true,
-      clientId: docRef.id,
-      testClient: {
-        ...testClient,
-        id: docRef.id,
-      },
+      success: result.success,
+      clientId: result.clientId,
+      error: result.error,
+      testData: testClientData,
     })
   } catch (error: any) {
-    console.error("💥 [DEBUG] Error creating test client:", error)
+    console.error("💥 [DEBUG] Create test client error:", error)
     return NextResponse.json(
       {
         success: false,
         error: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )

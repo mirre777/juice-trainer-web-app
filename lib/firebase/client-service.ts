@@ -31,52 +31,224 @@ function getInitials(name: string): string {
     .substring(0, 2)
 }
 
-// Helper function to validate client data
+// FIXED: More lenient validation function
 export function isValidClientData(data: any): boolean {
+  console.log("[isValidClientData] Validating data:", data)
+
   if (!data || typeof data !== "object") {
-    console.log("[isValidClientData] Invalid: not an object")
+    console.log("[isValidClientData] ❌ Invalid: not an object")
     return false
   }
 
+  // Check if it has a name (most basic requirement)
   if (!data.name || typeof data.name !== "string" || data.name.trim() === "") {
-    console.log("[isValidClientData] Invalid: missing or invalid name")
+    console.log("[isValidClientData] ❌ Invalid: missing or invalid name:", data.name)
     return false
   }
 
-  if (!data.email || typeof data.email !== "string" || data.email.trim() === "") {
-    console.log("[isValidClientData] Invalid: missing or invalid email")
+  // Skip deleted clients
+  if (data.status === "Deleted") {
+    console.log("[isValidClientData] ❌ Invalid: deleted client")
     return false
   }
 
-  console.log("[isValidClientData] Valid client data")
+  // Skip corrupted data (channel names)
+  if (data.name.includes("channel?VER=")) {
+    console.log("[isValidClientData] ❌ Invalid: corrupted channel data")
+    return false
+  }
+
+  console.log("[isValidClientData] ✅ Valid client data")
   return true
 }
 
-// Ensure the client data mapping includes the status field for subscription updates
-export function mapClientData(id: string, data: any): Client {
-  return {
-    id,
-    name: data.name || "Unknown",
-    email: data.email || "",
-    phone: data.phone || "",
-    status: data.status || "pending",
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-    notes: data.notes || "",
-    goals: data.goals || [],
-    progress: data.progress || 0,
-    sessions: data.sessions || { completed: 0, total: 0 },
-    completion: data.completion || 0,
-    bgColor: data.bgColor || "#f3f4f6",
-    textColor: data.textColor || "#111827",
-    lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
-    metrics: data.metrics || [],
-    goal: data.goal || "",
-    program: data.program || "",
-    inviteCode: data.inviteCode || "",
-    userId: data.userId || "",
-    initials: getInitials(data.name || "UC"),
-    _lastUpdated: Date.now(),
+// FIXED: More robust mapping function
+export function mapClientData(id: string, data: any): Client | null {
+  console.log("[mapClientData] Mapping client:", { id, data })
+
+  // Check for corrupted data first
+  if (!isValidClientData(data)) {
+    console.error("[mapClientData] ❌ Invalid client data detected:", data)
+    return null
+  }
+
+  try {
+    // Map with fallbacks for all fields
+    const mappedClient = {
+      id: id,
+      name: data.name || "Unnamed Client",
+      initials: getInitials(data.name || "UC"),
+      status: data.status || "Pending",
+      progress: data.progress || 0,
+      sessions: data.sessions || { completed: 0, total: 0 },
+      completion: data.completion || 0,
+      notes: data.notes || "",
+      bgColor: data.bgColor || "#f3f4f6",
+      textColor: data.textColor || "#111827",
+      lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
+      metrics: data.metrics || [],
+      email: data.email || "",
+      goal: data.goal || "",
+      program: data.program || "",
+      createdAt: data.createdAt,
+      inviteCode: data.inviteCode || "",
+      userId: data.userId || "",
+      phone: data.phone || "",
+      _lastUpdated: Date.now(),
+    } as Client
+
+    console.log("[mapClientData] ✅ Successfully mapped client:", mappedClient.name)
+    return mappedClient
+  } catch (error) {
+    console.error("[mapClientData] ❌ Error mapping client:", error)
+    return null
+  }
+}
+
+// FIXED: Simplified subscription function
+export function subscribeToClients(trainerUid: string, callback: (clients: Client[], error?: any) => void) {
+  console.log("[subscribeToClients] 🔄 Setting up subscription for trainer:", trainerUid)
+
+  if (!trainerUid) {
+    const error = new Error("No trainer UID provided for subscription")
+    console.error("[subscribeToClients] ❌", error.message)
+    callback([], error)
+    return () => {}
+  }
+
+  try {
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+    console.log("[subscribeToClients] 📍 Collection path:", `users/${trainerUid}/clients`)
+
+    // Remove orderBy to avoid index issues
+    const unsubscribe = onSnapshot(
+      clientsCollectionRef,
+      (snapshot) => {
+        console.log(`[subscribeToClients] 📨 Received update: ${snapshot.size} documents`)
+
+        const clients: Client[] = []
+        let processedCount = 0
+        let validCount = 0
+        let invalidCount = 0
+
+        snapshot.forEach((doc) => {
+          processedCount++
+          const data = doc.data()
+          console.log(`[subscribeToClients] 📄 Processing document ${processedCount}: ${doc.id}`, {
+            name: data.name,
+            email: data.email,
+            status: data.status,
+          })
+
+          const client = mapClientData(doc.id, data)
+          if (client) {
+            validCount++
+            clients.push(client)
+            console.log(`[subscribeToClients] ✅ Added client ${validCount}: ${client.name}`)
+          } else {
+            invalidCount++
+            console.log(`[subscribeToClients] ❌ Skipped invalid client ${invalidCount}: ${doc.id}`)
+          }
+        })
+
+        console.log(`[subscribeToClients] 📊 Final result:`, {
+          totalDocuments: snapshot.size,
+          processedCount,
+          validCount,
+          invalidCount,
+          finalClientCount: clients.length,
+        })
+
+        console.log(
+          `[subscribeToClients] 👥 Valid clients:`,
+          clients.map((c) => ({ id: c.id, name: c.name, status: c.status })),
+        )
+
+        callback(clients)
+      },
+      (error) => {
+        console.error("[subscribeToClients] ❌ Subscription error:", error)
+        callback([], error)
+      },
+    )
+
+    return unsubscribe
+  } catch (error) {
+    console.error("[subscribeToClients] ❌ Setup error:", error)
+    callback([], error)
+    return () => {}
+  }
+}
+
+// FIXED: Simplified fetch function
+export async function fetchClients(
+  trainerUid: string,
+): Promise<{ success: boolean; clients: Client[]; error?: string }> {
+  try {
+    console.log("[fetchClients] 🔍 Starting fetch for trainer:", trainerUid)
+
+    if (!trainerUid) {
+      console.error("[fetchClients] ❌ No trainer UID provided")
+      return { success: false, clients: [], error: "No trainer UID provided" }
+    }
+
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+    console.log("[fetchClients] 📍 Collection path:", `users/${trainerUid}/clients`)
+
+    // Remove orderBy to avoid index issues
+    const clientsSnapshot = await getDocs(clientsCollectionRef)
+
+    console.log(`[fetchClients] 📊 Query successful! Found ${clientsSnapshot.size} documents`)
+
+    const clients: Client[] = []
+    let processedCount = 0
+    let validCount = 0
+    let invalidCount = 0
+
+    clientsSnapshot.forEach((doc) => {
+      processedCount++
+      const data = doc.data()
+      console.log(`[fetchClients] 📄 Processing document ${processedCount}: ${doc.id}`, {
+        name: data.name,
+        email: data.email,
+        status: data.status,
+        hasName: !!data.name,
+        nameType: typeof data.name,
+      })
+
+      const client = mapClientData(doc.id, data)
+      if (client) {
+        validCount++
+        clients.push(client)
+        console.log(`[fetchClients] ✅ Added client ${validCount}: ${client.name}`)
+      } else {
+        invalidCount++
+        console.log(`[fetchClients] ❌ Skipped invalid client ${invalidCount}: ${doc.id}`)
+      }
+    })
+
+    console.log(`[fetchClients] 📊 Processing complete:`, {
+      totalDocuments: clientsSnapshot.size,
+      processedCount,
+      validCount,
+      invalidCount,
+      finalClientCount: clients.length,
+    })
+
+    console.log(
+      "[fetchClients] 👥 Final clients array:",
+      clients.map((c) => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        email: c.email,
+      })),
+    )
+
+    return { success: true, clients }
+  } catch (error: any) {
+    console.error("[fetchClients] ❌ Unexpected error:", error)
+    return { success: false, clients: [], error: error.message }
   }
 }
 
@@ -124,91 +296,6 @@ export async function checkDuplicateEmail(
     )
     logError(appError)
     return { exists: false, error: appError }
-  }
-}
-
-// Improved subscribeToClients function with better logging and error handling
-export function subscribeToClients(trainerUid: string, callback: (clients: Client[], error?: any) => void) {
-  console.log("[subscribeToClients] Setting up subscription for:", trainerUid)
-
-  if (!trainerUid) {
-    callback([], new Error("No trainer ID provided"))
-    return () => {}
-  }
-
-  try {
-    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
-
-    const unsubscribe = onSnapshot(
-      clientsCollectionRef,
-      (snapshot) => {
-        console.log(`[subscribeToClients] Received ${snapshot.size} documents`)
-
-        const clients: Client[] = []
-
-        snapshot.forEach((doc) => {
-          const data = doc.data()
-          console.log(`[subscribeToClients] Processing: ${doc.id}`)
-
-          if (isValidClientData(data)) {
-            const client = mapClientData(doc.id, data)
-            clients.push(client)
-          }
-        })
-
-        console.log(`[subscribeToClients] Calling callback with ${clients.length} clients`)
-        callback(clients)
-      },
-      (error) => {
-        console.error("[subscribeToClients] Error:", error)
-        callback([], error)
-      },
-    )
-
-    return unsubscribe
-  } catch (error) {
-    console.error("[subscribeToClients] Setup error:", error)
-    callback([], error)
-    return () => {}
-  }
-}
-
-// Get all clients for a specific trainer
-export async function fetchClients(
-  trainerId: string,
-): Promise<{ success: boolean; clients: Client[]; error?: string }> {
-  try {
-    console.log("[fetchClients] Fetching clients for trainer:", trainerId)
-
-    if (!trainerId) {
-      return { success: false, clients: [], error: "No trainer ID provided" }
-    }
-
-    const clientsRef = collection(db, "users", trainerId, "clients")
-    const snapshot = await getDocs(clientsRef)
-
-    console.log(`[fetchClients] Found ${snapshot.size} documents`)
-
-    const clients: Client[] = []
-
-    snapshot.forEach((doc) => {
-      const data = doc.data()
-      console.log(`[fetchClients] Processing document ${doc.id}:`, data)
-
-      if (isValidClientData(data)) {
-        const client = mapClientData(doc.id, data)
-        clients.push(client)
-        console.log(`[fetchClients] Added client: ${client.name}`)
-      } else {
-        console.log(`[fetchClients] Skipped invalid client: ${doc.id}`)
-      }
-    })
-
-    console.log(`[fetchClients] Returning ${clients.length} clients`)
-    return { success: true, clients }
-  } catch (error: any) {
-    console.error("[fetchClients] Error:", error)
-    return { success: false, clients: [], error: error.message }
   }
 }
 
@@ -334,30 +421,94 @@ export async function deleteClient(trainerId: string, clientId: string): Promise
 // Create a new client - NO individual invite codes generated
 export async function createClient(
   trainerId: string,
-  clientData: Partial<Client>,
-): Promise<{ success: boolean; clientId?: string; error?: string }> {
+  clientData: {
+    name: string
+    email?: string
+    phone?: string
+    goal?: string
+    notes?: string
+    program?: string
+    status?: string
+    goals?: string[]
+  },
+): Promise<{ success: boolean; clientId?: string; error?: any }> {
   try {
-    console.log("[createClient] Creating client for trainer:", trainerId)
+    console.log("createClient called with:", { trainerId, clientData })
 
-    const newClient = {
-      name: clientData.name || "",
-      email: clientData.email || "",
-      phone: clientData.phone || "",
-      status: clientData.status || "pending",
-      notes: clientData.notes || "",
-      goals: clientData.goals || [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    if (!trainerId) {
+      console.error("Missing trainer ID")
+      return {
+        success: false,
+        error: new Error("Trainer ID is required"),
+      }
     }
 
-    const clientsRef = collection(db, "users", trainerId, "clients")
-    const docRef = await addDoc(clientsRef, newClient)
+    if (!clientData || !clientData.name) {
+      console.error("Missing client name")
+      return {
+        success: false,
+        error: new Error("Client name is required"),
+      }
+    }
 
-    console.log("[createClient] Client created with ID:", docRef.id)
-    return { success: true, clientId: docRef.id }
-  } catch (error: any) {
-    console.error("[createClient] Error:", error)
-    return { success: false, error: error.message }
+    // Ensure no undefined values
+    const sanitizedClientData = {
+      name: clientData.name,
+      email: clientData.email || "",
+      phone: clientData.phone || "",
+      goal: clientData.goal || "",
+      notes: clientData.notes || "",
+      program: clientData.program || "",
+      status: clientData.status || "Pending",
+      goals: clientData.goals || [],
+    }
+
+    // Create the client document data object - NO individual invite code
+    const clientDocData = {
+      ...sanitizedClientData,
+      progress: 0,
+      sessions: { completed: 0, total: 0 },
+      completion: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      isTemporary: true,
+    }
+
+    // Create a new client document
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    try {
+      const newClientRef = await addDoc(clientsCollectionRef, clientDocData)
+      console.log("Client document created with ID:", newClientRef.id)
+
+      // Update the document with its own ID
+      await updateDoc(newClientRef, {
+        id: newClientRef.id,
+      })
+
+      // Add client to trainer's clients array
+      const trainerRef = doc(db, "users", trainerId)
+      await updateDoc(trainerRef, {
+        clients: arrayUnion(newClientRef.id),
+        updatedAt: serverTimestamp(),
+      })
+
+      return {
+        success: true,
+        clientId: newClientRef.id,
+      }
+    } catch (err) {
+      console.error("Firebase operation failed:", err)
+      return {
+        success: false,
+        error: err,
+      }
+    }
+  } catch (error) {
+    console.error("Unexpected error in createClient:", error)
+    return {
+      success: false,
+      error: error,
+    }
   }
 }
 
@@ -646,7 +797,7 @@ export async function checkExistingClientProfile(
     })
 
     if (queryError || !querySnapshot) {
-      return { success: false, error: queryError }
+      return { exists: false, error: queryError }
     }
 
     if (!querySnapshot.empty) {
