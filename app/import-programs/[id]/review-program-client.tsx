@@ -12,12 +12,12 @@ import {
   Plus,
   Check,
   User,
-  MessageSquare,
   Info,
   Save,
   Send,
   Loader2,
   ChevronUp,
+  X,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -59,26 +59,18 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
-  const [showSendProgramDialog, setShowSendProgramDialog] = useState(false)
-  const [messageToClient, setMessageToClient] = useState("")
   const [showSelectWeekDialog, setShowSelectWeekDialog] = useState(false)
   const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
 
+  // Client selection state
+  const [showClientSelection, setShowClientSelection] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [isAssigning, setIsAssigning] = useState(false)
   const [clientsFetchError, setClientsFetchError] = useState<string>("")
-
-  const clientNameForModal = selectedClientId
-    ? clients.find((c) => c.id === selectedClientId)?.name || "Selected Client"
-    : "Select a Client"
-  const dateForModal = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
+  const [messageToClient, setMessageToClient] = useState("")
 
   console.log("[ReviewProgramClient] Current trainer state from useCurrentUser:", { trainer, isTrainerLoading })
 
@@ -226,7 +218,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           console.log("[SEND_PROGRAM] First client selected:", fetchedClients[0].id)
         } else {
           console.log("[SEND_PROGRAM] No clients available")
-          setClientsFetchError("No active clients found. Make sure your clients have created accounts.")
+          setClientsFetchError("No active clients with linked accounts found.")
         }
       } else {
         console.error("[SEND_PROGRAM] API returned success=false:", data)
@@ -505,15 +497,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     return colors[index % colors.length]
   }
 
-  const getWeekPhase = (week: number) => {
-    if (week <= 3) return { name: "Volume", color: "bg-blue-100 text-blue-800" }
-    if (week === 4) return { name: "Deload", color: "bg-yellow-100 text-yellow-800" }
-    if (week <= 7) return { name: "Intensity", color: "bg-red-100 text-red-800" }
-    if (week === 8) return { name: "Deload", color: "bg-yellow-100 text-yellow-800" }
-    if (week <= 11) return { name: "Peak", color: "bg-purple-100 text-purple-800" }
-    return { name: "Taper", color: "bg-green-100 text-green-800" }
-  }
-
   const handleSendProgram = async () => {
     if (!programState || !selectedClientId) {
       toast({
@@ -532,9 +515,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           title: "Success",
           description: result.message,
         })
-        setShowSendProgramDialog(false)
+        setShowClientSelection(false)
         setMessageToClient("")
         setSelectedClientId("")
+        setClients([])
       } else {
         toast({
           title: "Error",
@@ -563,6 +547,24 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       .substring(0, 2)
   }
 
+  const handleSendToClientClick = () => {
+    console.log("[SEND_PROGRAM] Send to Client button clicked")
+    console.log("[SEND_PROGRAM] Trainer UID at click:", trainer?.uid)
+
+    if (!trainer?.uid) {
+      console.error("[SEND_PROGRAM] No trainer UID available")
+      toast({
+        title: "Authentication Error",
+        description: "Could not retrieve trainer information. Please log in again.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setShowClientSelection(true)
+    fetchClients(trainer.uid)
+  }
+
   if (!programState) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -570,8 +572,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       </div>
     )
   }
-
-  console.log("[ReviewProgramClient] showSendProgramDialog state at render:", showSendProgramDialog)
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -633,24 +633,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </Button>
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => {
-              console.log("[SEND_PROGRAM] Send to Client button clicked")
-              console.log("[SEND_PROGRAM] Trainer UID at click:", trainer?.uid)
-
-              if (!trainer?.uid) {
-                console.error("[SEND_PROGRAM] No trainer UID available")
-                toast({
-                  title: "Authentication Error",
-                  description: "Could not retrieve trainer information. Please log in again.",
-                  variant: "destructive",
-                })
-                return
-              }
-
-              // Fetch clients immediately when button is clicked
-              fetchClients(trainer.uid)
-              setShowSendProgramDialog(true)
-            }}
+            onClick={handleSendToClientClick}
             disabled={hasChanges || isSaving || isTrainerLoading}
           >
             <Send className="h-4 w-4" />
@@ -658,6 +641,131 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </Button>
         </div>
       </div>
+
+      {/* Client Selection Section */}
+      {showClientSelection && (
+        <Card className="p-6 mb-6 border-2 border-lime-200 bg-lime-50">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Send Program to Client</h3>
+              <p className="text-sm text-gray-600">Choose a client to send "{programState.program_title}" to</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowClientSelection(false)
+                setClients([])
+                setSelectedClientId("")
+                setMessageToClient("")
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {loadingClients ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+              <span className="ml-3 text-gray-600">Loading your clients...</span>
+            </div>
+          ) : clientsFetchError ? (
+            <div className="text-center py-8">
+              <div className="text-red-600 mb-2">{clientsFetchError}</div>
+              <div className="text-sm text-gray-500">
+                Make sure your clients have created accounts and are properly linked to you.
+              </div>
+            </div>
+          ) : clients.length === 0 ? (
+            <div className="text-center py-8">
+              <User className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+              <div className="text-gray-600 mb-2">No clients with linked accounts found</div>
+              <div className="text-sm text-gray-500">
+                Your clients need to create accounts and link them to you before you can send programs.
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-gray-800 mb-3">Select Client ({clients.length} available):</h4>
+                <RadioGroup value={selectedClientId} onValueChange={setSelectedClientId} className="space-y-2">
+                  {clients.map((client) => (
+                    <div
+                      key={client.id}
+                      className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-white cursor-pointer"
+                    >
+                      <RadioGroupItem value={client.id} id={`client-${client.id}`} />
+                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-medium text-gray-700">{getInitials(client.name)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block">
+                          {client.name}
+                        </Label>
+                        {client.email && <p className="text-sm text-gray-500">{client.email}</p>}
+                        <p className="text-xs text-gray-400">Status: {client.status}</p>
+                      </div>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              <div>
+                <Label htmlFor="client-message" className="block text-sm font-medium text-gray-700 mb-2">
+                  Message to Client (Optional)
+                </Label>
+                <Textarea
+                  id="client-message"
+                  value={messageToClient}
+                  onChange={(e) => setMessageToClient(e.target.value)}
+                  placeholder="Add a personal message for your client..."
+                  className="w-full"
+                  rows={3}
+                />
+              </div>
+
+              <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
+                <Info className="h-4 w-4" />
+                <span>
+                  Your client will receive an email and app notification. They can still access their previous program.
+                </span>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowClientSelection(false)
+                    setClients([])
+                    setSelectedClientId("")
+                    setMessageToClient("")
+                  }}
+                  disabled={isAssigning}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+                  onClick={handleSendProgram}
+                  disabled={isAssigning || !selectedClientId}
+                >
+                  {isAssigning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Program
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Program Settings */}
       <Card className="p-6 mb-6">
@@ -931,109 +1039,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button variant="outline">+ Add Routine</Button>
         </div>
       )}
-
-      {/* Send Program Confirmation Dialog */}
-      <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
-        <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Send Program to Client</DialogTitle>
-            <DialogDescription>
-              Choose a client to send "{programState.program_title}" to their mobile app.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
-            <Card className="p-4">
-              <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <User className="h-4 w-4 mr-2" /> {clientNameForModal}
-              </div>
-              <div className="flex items-center text-sm text-gray-600 mb-3">
-                <Calendar className="h-4 w-4 mr-2" /> {dateForModal}
-              </div>
-              <div className="flex items-start text-sm text-gray-600">
-                <MessageSquare className="h-4 w-4 mr-2 mt-1" />
-                <Textarea
-                  value={messageToClient}
-                  onChange={(e) => setMessageToClient(e.target.value)}
-                  placeholder="Add a message to your client (optional)"
-                  className="flex-1 border-transparent focus:border-gray-300"
-                  rows={3}
-                />
-              </div>
-            </Card>
-
-            <div className="space-y-2">
-              <h4 className="font-semibold text-gray-800">Select Client:</h4>
-              {loadingClients ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
-                  <span className="ml-2 text-gray-600">Loading clients...</span>
-                </div>
-              ) : clientsFetchError ? (
-                <div className="text-center py-4 text-gray-500">{clientsFetchError}</div>
-              ) : clients.length === 0 ? (
-                <div className="text-center py-4">
-                  <div className="text-gray-500 mb-2">No active clients with linked accounts found.</div>
-                  <div className="text-sm text-gray-400">
-                    Make sure your clients have created accounts and are linked to you.
-                  </div>
-                </div>
-              ) : (
-                <RadioGroup
-                  value={selectedClientId}
-                  onValueChange={setSelectedClientId}
-                  className="max-h-48 overflow-y-auto"
-                >
-                  {clients.map((client) => (
-                    <div
-                      key={client.id}
-                      className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                    >
-                      <RadioGroupItem value={client.id} id={`client-${client.id}`} />
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
-                          {client.name}
-                        </Label>
-                        {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
-                        <p className="text-xs text-gray-400">Status: {client.status}</p>
-                      </div>
-                    </div>
-                  ))}
-                </RadioGroup>
-              )}
-            </div>
-
-            <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
-              <Info className="h-4 w-4" />
-              <span>
-                We will send your client an email and app notification. They can still access their old program.
-              </span>
-            </div>
-          </div>
-          <DialogFooter className="flex-shrink-0">
-            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isAssigning}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
-              onClick={handleSendProgram}
-              disabled={isAssigning || !selectedClientId || !programState}
-            >
-              {isAssigning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Sending...
-                </>
-              ) : (
-                "Send Program"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Confirmation Dialog for Unsaved Changes */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
