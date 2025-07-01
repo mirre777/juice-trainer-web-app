@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { collection, getDocs } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
+import { fetchClients } from "@/lib/firebase/client-service-fixed"
 
 export async function GET() {
   try {
-    console.log("🔍 [DEBUG] Starting debug clients request")
+    console.log("🔍 [DEBUG] Starting debug clients endpoint")
 
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
@@ -17,34 +17,26 @@ export async function GET() {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    // Check if the user document exists
-    const userDocRef = collection(db, "users")
-    const userSnapshot = await getDocs(userDocRef)
+    // Import Firestore functions
+    const { db } = await import("@/lib/firebase/firebase")
+    const { collection, getDocs, doc, getDoc } = await import("firebase/firestore")
 
-    console.log("👥 [DEBUG] Total users in collection:", userSnapshot.size)
+    // Check if user document exists
+    console.log("👤 [DEBUG] Checking user document...")
+    const userRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userRef)
 
-    let userExists = false
-    userSnapshot.forEach((doc) => {
-      if (doc.id === userId) {
-        userExists = true
-        console.log("✅ [DEBUG] Found user document:", doc.id, doc.data())
-      }
-    })
-
-    if (!userExists) {
-      console.log("❌ [DEBUG] User document not found")
-      return NextResponse.json({
-        error: "User document not found",
-        userId,
-        totalUsers: userSnapshot.size,
-      })
+    console.log("👤 [DEBUG] User document exists:", userDoc.exists())
+    if (userDoc.exists()) {
+      console.log("👤 [DEBUG] User data:", userDoc.data())
     }
 
-    // Check the clients subcollection
+    // Check clients collection
+    console.log("📁 [DEBUG] Checking clients collection...")
     const clientsCollectionRef = collection(db, "users", userId, "clients")
     const clientsSnapshot = await getDocs(clientsCollectionRef)
 
-    console.log(`📊 [DEBUG] Clients collection size: ${clientsSnapshot.size}`)
+    console.log("📁 [DEBUG] Clients collection size:", clientsSnapshot.size)
 
     const rawClients: any[] = []
     clientsSnapshot.forEach((doc) => {
@@ -52,25 +44,36 @@ export async function GET() {
       rawClients.push({
         id: doc.id,
         data: data,
+        exists: doc.exists(),
       })
-      console.log(`📄 [DEBUG] Client document:`, doc.id, data)
+      console.log("📄 [DEBUG] Raw client document:", { id: doc.id, data })
     })
+
+    // Also try the service function
+    console.log("🔧 [DEBUG] Testing fetchClients service...")
+    const serviceClients = await fetchClients(userId)
+    console.log("🔧 [DEBUG] Service returned:", serviceClients.length, "clients")
 
     return NextResponse.json({
       success: true,
-      userId,
-      userExists,
-      clientsCollectionPath: `users/${userId}/clients`,
-      clientsCount: clientsSnapshot.size,
-      rawClients,
+      debug: {
+        userId: userId,
+        userExists: userDoc.exists(),
+        userData: userDoc.exists() ? userDoc.data() : null,
+        collectionPath: `users/${userId}/clients`,
+        rawDocumentCount: clientsSnapshot.size,
+        rawDocuments: rawClients,
+        serviceClientCount: serviceClients.length,
+        serviceClients: serviceClients,
+      },
     })
   } catch (error: any) {
     console.error("💥 [DEBUG] Error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
-        stack: error.stack,
+        error: error?.message || "Unknown error",
+        stack: error?.stack,
       },
       { status: 500 },
     )

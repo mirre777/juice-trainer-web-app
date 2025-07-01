@@ -1,4 +1,4 @@
-import { collection, getDocs, onSnapshot } from "firebase/firestore"
+import { collection, getDocs, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import type { Client } from "@/types/client"
 
@@ -24,18 +24,19 @@ export function isValidClientData(data: any): boolean {
     hasName: !!data?.name,
     nameIsString: typeof data?.name === "string",
     nameNotEmpty: data?.name?.trim() !== "",
-    result: isValid,
+    finalResult: isValid,
+    rawData: data,
   })
 
   return isValid
 }
 
-// Simplified mapping with defaults for missing fields
+// Map client data with extensive logging
 export function mapClientData(id: string, data: any): Client | null {
-  console.log("[mapClientData] Mapping client:", { id, data })
+  console.log("[mapClientData] Starting mapping for:", { id, data })
 
   if (!isValidClientData(data)) {
-    console.error("[mapClientData] Invalid client data:", data)
+    console.error("[mapClientData] Invalid client data, skipping:", { id, data })
     return null
   }
 
@@ -66,101 +67,76 @@ export function mapClientData(id: string, data: any): Client | null {
   return mappedClient
 }
 
-// Simplified fetch function with extensive logging
-export async function fetchClients(trainerUid: string): Promise<Client[]> {
-  try {
-    console.log("[fetchClients] Starting fetch for trainer:", trainerUid)
-
-    if (!trainerUid) {
-      console.error("[fetchClients] No trainer UID provided")
-      return []
-    }
-
-    console.log("[fetchClients] Building Firestore query...")
-    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
-    console.log("[fetchClients] Collection path:", `users/${trainerUid}/clients`)
-
-    // Try without orderBy first to avoid index issues
-    console.log("[fetchClients] Executing query without orderBy...")
-    const clientsSnapshot = await getDocs(clientsCollectionRef)
-
-    console.log(`[fetchClients] Query successful! Found ${clientsSnapshot.size} documents`)
-
-    if (clientsSnapshot.empty) {
-      console.log("[fetchClients] No documents found in collection")
-      return []
-    }
-
-    // Log all raw documents
-    console.log("[fetchClients] Raw documents:")
-    clientsSnapshot.forEach((doc, index) => {
-      const data = doc.data()
-      console.log(`[fetchClients] Document ${index + 1}:`, {
-        id: doc.id,
-        data: data,
-      })
-    })
-
-    const clients: Client[] = []
-    let processedCount = 0
-
-    clientsSnapshot.forEach((doc) => {
-      processedCount++
-      const data = doc.data()
-      console.log(`[fetchClients] Processing document ${processedCount}: ${doc.id}`)
-
-      const client = mapClientData(doc.id, data)
-      if (client) {
-        clients.push(client)
-        console.log(`[fetchClients] ✅ Added client: ${client.name}`)
-      } else {
-        console.log(`[fetchClients] ❌ Skipped invalid client:`, { id: doc.id, data })
-      }
-    })
-
-    console.log(`[fetchClients] Final result: ${clients.length} clients`)
-    return clients
-  } catch (error) {
-    console.error("[fetchClients] Error:", error)
-    return []
-  }
-}
-
-// Simplified subscription function
+// Simplified subscription function without orderBy to avoid index issues
 export function subscribeToClients(trainerUid: string, callback: (clients: Client[], error?: any) => void) {
+  console.log(`[subscribeToClients] Starting subscription for trainer: ${trainerUid}`)
+
   if (!trainerUid) {
     console.error("[subscribeToClients] No trainer UID provided")
     callback([], new Error("No trainer UID provided"))
     return () => {}
   }
 
-  console.log(`[subscribeToClients] Setting up subscription for trainer: ${trainerUid}`)
-
   try {
     const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
     console.log(`[subscribeToClients] Collection path: users/${trainerUid}/clients`)
 
+    // Remove orderBy to avoid index issues
     const unsubscribe = onSnapshot(
       clientsCollectionRef,
       (snapshot) => {
-        console.log(`[subscribeToClients] Received update: ${snapshot.size} documents`)
+        console.log(`[subscribeToClients] Received snapshot with ${snapshot.size} documents`)
+        console.log(`[subscribeToClients] Snapshot metadata:`, {
+          hasPendingWrites: snapshot.metadata.hasPendingWrites,
+          isFromCache: snapshot.metadata.fromCache,
+          size: snapshot.size,
+          empty: snapshot.empty,
+        })
 
-        const clients: Client[] = []
-
+        // Log all raw documents
+        const allDocs: any[] = []
         snapshot.forEach((doc) => {
           const data = doc.data()
-          console.log(`[subscribeToClients] Processing document: ${doc.id}`, data)
+          allDocs.push({ id: doc.id, data })
+          console.log(`[subscribeToClients] Raw document:`, {
+            id: doc.id,
+            exists: doc.exists(),
+            data: data,
+          })
+        })
+
+        console.log(`[subscribeToClients] All raw documents:`, allDocs)
+
+        const clients: Client[] = []
+        let processedCount = 0
+        let validCount = 0
+        let invalidCount = 0
+
+        snapshot.forEach((doc) => {
+          processedCount++
+          const data = doc.data()
+          console.log(`[subscribeToClients] Processing document ${processedCount}:`, { id: doc.id, data })
 
           const client = mapClientData(doc.id, data)
           if (client) {
+            validCount++
             clients.push(client)
-            console.log(`[subscribeToClients] ✅ Added client: ${client.name}`)
+            console.log(`[subscribeToClients] ✅ Added valid client ${validCount}:`, client.name)
           } else {
-            console.log(`[subscribeToClients] ❌ Skipped invalid client:`, { id: doc.id, data })
+            invalidCount++
+            console.log(`[subscribeToClients] ❌ Skipped invalid client ${invalidCount}:`, { id: doc.id, data })
           }
         })
 
-        console.log(`[subscribeToClients] Final result: ${clients.length} clients`)
+        console.log(`[subscribeToClients] Processing summary:`, {
+          totalDocuments: snapshot.size,
+          processedCount,
+          validCount,
+          invalidCount,
+          finalClientCount: clients.length,
+        })
+
+        console.log(`[subscribeToClients] Final clients array:`, clients)
         callback(clients)
       },
       (error) => {
@@ -171,8 +147,123 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
 
     return unsubscribe
   } catch (error) {
-    console.error("[subscribeToClients] Setup error:", error)
+    console.error("[subscribeToClients] Error setting up subscription:", error)
     callback([], error)
     return () => {}
+  }
+}
+
+// Simplified fetch function without orderBy
+export async function fetchClients(trainerUid: string): Promise<Client[]> {
+  console.log("[fetchClients] Starting fetch for trainer:", trainerUid)
+
+  if (!trainerUid) {
+    console.error("[fetchClients] No trainer UID provided")
+    return []
+  }
+
+  try {
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+    console.log("[fetchClients] Collection path:", `users/${trainerUid}/clients`)
+
+    // Remove orderBy to avoid index issues
+    const querySnapshot = await getDocs(clientsCollectionRef)
+
+    console.log(`[fetchClients] Query successful! Found ${querySnapshot.size} documents`)
+    console.log(`[fetchClients] Snapshot metadata:`, {
+      hasPendingWrites: querySnapshot.metadata.hasPendingWrites,
+      isFromCache: querySnapshot.metadata.fromCache,
+      size: querySnapshot.size,
+      empty: querySnapshot.empty,
+    })
+
+    // Log all raw documents
+    const allDocs: any[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      allDocs.push({ id: doc.id, data })
+      console.log(`[fetchClients] Raw document:`, {
+        id: doc.id,
+        exists: doc.exists(),
+        data: data,
+      })
+    })
+
+    console.log(`[fetchClients] All raw documents:`, allDocs)
+
+    const clients: Client[] = []
+    let processedCount = 0
+    let validCount = 0
+    let invalidCount = 0
+
+    querySnapshot.forEach((doc) => {
+      processedCount++
+      const data = doc.data()
+      console.log(`[fetchClients] Processing document ${processedCount}:`, { id: doc.id, data })
+
+      const client = mapClientData(doc.id, data)
+      if (client) {
+        validCount++
+        clients.push(client)
+        console.log(`[fetchClients] ✅ Added valid client ${validCount}:`, client.name)
+      } else {
+        invalidCount++
+        console.log(`[fetchClients] ❌ Skipped invalid client ${invalidCount}:`, { id: doc.id, data })
+      }
+    })
+
+    console.log(`[fetchClients] Processing summary:`, {
+      totalDocuments: querySnapshot.size,
+      processedCount,
+      validCount,
+      invalidCount,
+      finalClientCount: clients.length,
+    })
+
+    console.log(`[fetchClients] Final clients array:`, clients)
+    return clients
+  } catch (error) {
+    console.error("[fetchClients] Error:", error)
+    return []
+  }
+}
+
+// Create a test client
+export async function createTestClient(
+  trainerId: string,
+): Promise<{ success: boolean; clientId?: string; error?: any }> {
+  try {
+    console.log("[createTestClient] Creating test client for trainer:", trainerId)
+
+    const clientData = {
+      name: "Test Client " + Date.now(),
+      email: "test@example.com",
+      phone: "123-456-7890",
+      status: "Active",
+      progress: 50,
+      sessions: { completed: 5, total: 10 },
+      completion: 50,
+      notes: "This is a test client",
+      goal: "Test goal",
+      program: "Test program",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const newClientRef = await addDoc(clientsCollectionRef, clientData)
+
+    console.log("[createTestClient] Test client created with ID:", newClientRef.id)
+
+    return {
+      success: true,
+      clientId: newClientRef.id,
+    }
+  } catch (error) {
+    console.error("[createTestClient] Error:", error)
+    return {
+      success: false,
+      error: error,
+    }
   }
 }
