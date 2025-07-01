@@ -1,43 +1,59 @@
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { createTestClient } from "@/lib/firebase/client-service-fixed"
+import { db } from "@/lib/firebase/firebase"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    console.log("🧪 [DEBUG] Creating test client")
-
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
-    console.log("🆔 [DEBUG] User ID from cookie:", userId)
 
     if (!userId) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
-
-    const result = await createTestClient(userId)
-
-    if (result.success) {
-      console.log("✅ [DEBUG] Test client created successfully:", result.clientId)
-      return NextResponse.json({
-        success: true,
-        message: "Test client created successfully",
-        clientId: result.clientId,
-      })
-    } else {
-      console.error("❌ [DEBUG] Failed to create test client:", result.error)
       return NextResponse.json(
         {
           success: false,
-          error: result.error?.message || "Failed to create test client",
+          error: "No user ID found in cookies",
         },
-        { status: 500 },
+        { status: 401 },
       )
     }
+
+    console.log("[CREATE-TEST-CLIENT] Creating test client for user:", userId)
+
+    // Create a test client with all required fields
+    const testClient = {
+      name: "Test Client",
+      email: "test.client@example.com",
+      status: "active",
+      phone: "+1234567890",
+      notes: "This is a test client created by the debug endpoint",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      isTestClient: true, // Flag to identify test clients
+    }
+
+    // Add to Firestore
+    const clientsRef = collection(db, `users/${userId}/clients`)
+    const docRef = await addDoc(clientsRef, testClient)
+
+    console.log("[CREATE-TEST-CLIENT] Test client created with ID:", docRef.id)
+
+    return NextResponse.json({
+      success: true,
+      clientId: docRef.id,
+      message: "Test client created successfully",
+      clientData: {
+        id: docRef.id,
+        ...testClient,
+        createdAt: "serverTimestamp()", // Can't serialize serverTimestamp
+        updatedAt: "serverTimestamp()",
+      },
+    })
   } catch (error: any) {
-    console.error("💥 [DEBUG] Error:", error)
+    console.error("[CREATE-TEST-CLIENT] Error:", error)
     return NextResponse.json(
       {
         success: false,

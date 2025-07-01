@@ -1,117 +1,104 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { collection, getDocs } from "firebase/firestore"
+import { type NextRequest, NextResponse } from "next/server"
+import { fetchClients } from "@/lib/firebase/client-service"
 import { db } from "@/lib/firebase/firebase"
-import { fetchClients, isValidClientData, mapClientData } from "@/lib/firebase/client-service-fixed"
+import { collection, getDocs, doc, getDoc } from "firebase/firestore"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [DEBUG] Starting client debug analysis")
-
-    const cookieStore = cookies()
-    const userId = cookieStore.get("user_id")?.value
-    console.log("🆔 [DEBUG] User ID from cookie:", userId)
+    const userId = request.cookies.get("user_id")?.value
 
     if (!userId) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No user ID found in cookies",
+        },
+        { status: 401 },
+      )
     }
 
-    // Step 1: Check if user document exists
-    console.log("📋 [DEBUG] Step 1: Checking user document")
-    const userDocPath = `users/${userId}`
-    console.log("📍 [DEBUG] User document path:", userDocPath)
+    console.log("[DEBUG] Starting debug analysis for user:", userId)
 
-    // Step 2: Get raw documents from Firestore
-    console.log("📋 [DEBUG] Step 2: Getting raw documents from Firestore")
-    const clientsCollectionRef = collection(db, "users", userId, "clients")
-    const rawSnapshot = await getDocs(clientsCollectionRef)
+    // Get raw documents from Firestore
+    const collectionPath = `users/${userId}/clients`
+    const clientsRef = collection(db, collectionPath)
+    const snapshot = await getDocs(clientsRef)
 
-    console.log(`📊 [DEBUG] Raw Firestore query results:`)
-    console.log(`  - Collection path: users/${userId}/clients`)
-    console.log(`  - Document count: ${rawSnapshot.size}`)
-    console.log(`  - Is empty: ${rawSnapshot.empty}`)
-    console.log(`  - From cache: ${rawSnapshot.metadata.fromCache}`)
+    const rawDocuments = []
+    const validationResults = []
 
-    // Collect all raw documents
-    const rawDocuments: any[] = []
-    rawSnapshot.forEach((doc) => {
+    snapshot.forEach((doc) => {
       const data = doc.data()
       rawDocuments.push({
         id: doc.id,
-        data: data,
-        exists: doc.exists(),
+        ...data,
       })
-      console.log(`📄 [DEBUG] Raw document ${doc.id}:`, data)
-    })
 
-    // Step 3: Test service function
-    console.log("📋 [DEBUG] Step 3: Testing service function")
-    const serviceClients = await fetchClients(userId)
-    console.log(`🔧 [DEBUG] Service returned ${serviceClients.length} clients`)
-
-    // Step 4: Test validation on each raw document
-    console.log("📋 [DEBUG] Step 4: Testing validation on each document")
-    const validationResults: any[] = []
-
-    rawDocuments.forEach((doc, index) => {
-      console.log(`🧪 [DEBUG] Testing validation for document ${index + 1}: ${doc.id}`)
-
-      const isValid = isValidClientData(doc.data)
-      const mappedClient = isValid ? mapClientData(doc.id, doc.data) : null
-
-      const result = {
+      // Test validation on each document
+      const isValid = isValidClientData(data)
+      validationResults.push({
         documentId: doc.id,
-        rawData: doc.data,
-        isValid: isValid,
-        mappedClient: mappedClient,
+        isValid,
+        rawData: data,
         validationDetails: {
-          hasData: !!doc.data,
-          isObject: typeof doc.data === "object",
-          hasName: !!doc.data?.name,
-          nameIsString: typeof doc.data?.name === "string",
-          nameNotEmpty: doc.data?.name?.trim() !== "",
+          hasName: !!data.name,
+          hasEmail: !!data.email,
+          hasStatus: !!data.status,
+          hasCreatedAt: !!data.createdAt,
+          nameType: typeof data.name,
+          emailType: typeof data.email,
+          statusType: typeof data.status,
+          createdAtType: typeof data.createdAt,
         },
-      }
-
-      validationResults.push(result)
-      console.log(`📊 [DEBUG] Validation result for ${doc.id}:`, result)
+      })
     })
 
-    // Summary
-    const summary = {
-      userId: userId,
-      userDocumentPath: userDocPath,
-      collectionPath: `users/${userId}/clients`,
-      rawDocumentCount: rawSnapshot.size,
+    // Get clients using the service
+    const serviceClients = await fetchClients(userId)
+
+    // Check if user document exists
+    const userRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userRef)
+
+    const debugInfo = {
+      userId,
+      collectionPath,
+      userExists: userDoc.exists(),
+      rawDocumentCount: rawDocuments.length,
       serviceClientCount: serviceClients.length,
       validDocuments: validationResults.filter((r) => r.isValid).length,
       invalidDocuments: validationResults.filter((r) => !r.isValid).length,
+      rawDocuments: rawDocuments.slice(0, 3), // First 3 for debugging
+      validationResults,
+      serviceClients: serviceClients.slice(0, 3), // First 3 for debugging
     }
 
-    console.log("📊 [DEBUG] Final summary:", summary)
+    console.log("[DEBUG] Analysis complete:", debugInfo)
 
     return NextResponse.json({
       success: true,
-      debug: {
-        ...summary,
-        rawDocuments: rawDocuments,
-        serviceClients: serviceClients,
-        validationResults: validationResults,
-        timestamp: new Date().toISOString(),
-      },
+      debug: debugInfo,
     })
-  } catch (error: any) {
-    console.error("💥 [DEBUG] Error:", error)
+  } catch (error) {
+    console.error("[DEBUG] Error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error?.message || "Unknown error",
-        stack: error?.stack,
+        error: error.message,
       },
       { status: 500 },
     )
   }
+}
+
+// Simple validation function for debugging
+function isValidClientData(data: any): boolean {
+  return !!(
+    data &&
+    typeof data === "object" &&
+    data.name &&
+    typeof data.name === "string" &&
+    data.email &&
+    typeof data.email === "string"
+  )
 }
