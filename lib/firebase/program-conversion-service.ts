@@ -285,11 +285,28 @@ export class ProgramConversionService {
    */
   async getTrainerClients(trainerId: string): Promise<Array<{ id: string; name: string; email?: string }>> {
     try {
-      console.log(`[ProgramConversionService.getTrainerClients] 🔍 Fetching clients for trainer: ${trainerId}`)
+      console.log(`[ProgramConversionService.getTrainerClients] 🔍 Starting fetch for trainer: ${trainerId}`)
+      console.log(
+        `[ProgramConversionService.getTrainerClients] 📍 Will query Firestore path: /users/${trainerId}/clients`,
+      )
 
       // Use the proper fetchClients function from client-service.ts
       const allClients = await fetchClients(trainerId)
-      console.log(`[ProgramConversionService.getTrainerClients] 📊 Found ${allClients.length} total clients`)
+      console.log(
+        `[ProgramConversionService.getTrainerClients] 📊 fetchClients returned ${allClients.length} total clients`,
+      )
+
+      if (allClients.length === 0) {
+        console.log(`[ProgramConversionService.getTrainerClients] ⚠️ NO CLIENTS FOUND AT ALL`)
+        console.log(`[ProgramConversionService.getTrainerClients] 🔍 This means either:`)
+        console.log(
+          `[ProgramConversionService.getTrainerClients]   1. The collection /users/${trainerId}/clients is empty`,
+        )
+        console.log(`[ProgramConversionService.getTrainerClients]   2. The trainer document doesn't exist`)
+        console.log(`[ProgramConversionService.getTrainerClients]   3. There's a permissions issue`)
+        console.log(`[ProgramConversionService.getTrainerClients]   4. The Firebase connection is failing`)
+        return []
+      }
 
       // Log all clients for debugging
       allClients.forEach((client, index) => {
@@ -299,6 +316,7 @@ export class ProgramConversionService {
           status: client.status,
           userId: client.userId || "NO_USER_ID",
           email: client.email || "NO_EMAIL",
+          isTemporary: client.isTemporary || false,
         })
       })
 
@@ -307,7 +325,7 @@ export class ProgramConversionService {
         const hasUserId = client.userId && client.userId.trim() !== ""
         const isActive = client.status === "Active"
 
-        console.log(`[ProgramConversionService.getTrainerClients] Client ${client.name}:`, {
+        console.log(`[ProgramConversionService.getTrainerClients] 🔍 Filtering client ${client.name}:`, {
           hasUserId,
           isActive,
           status: client.status,
@@ -319,8 +337,16 @@ export class ProgramConversionService {
       })
 
       console.log(
-        `[ProgramConversionService.getTrainerClients] ✅ Filtered to ${activeClientsWithAccounts.length} active clients with linked accounts`,
+        `[ProgramConversionService.getTrainerClients] ✅ After filtering: ${activeClientsWithAccounts.length} active clients with linked accounts`,
       )
+
+      if (activeClientsWithAccounts.length === 0) {
+        console.log(`[ProgramConversionService.getTrainerClients] ⚠️ NO ACTIVE CLIENTS WITH LINKED ACCOUNTS`)
+        console.log(`[ProgramConversionService.getTrainerClients] 💡 This means:`)
+        console.log(`[ProgramConversionService.getTrainerClients]   - Clients exist but don't have userId field`)
+        console.log(`[ProgramConversionService.getTrainerClients]   - Clients exist but status is not 'Active'`)
+        console.log(`[ProgramConversionService.getTrainerClients]   - Clients need to accept invitations first`)
+      }
 
       // Return in the format expected by the dialog
       const result = activeClientsWithAccounts.map((client) => ({
@@ -329,10 +355,15 @@ export class ProgramConversionService {
         email: client.email,
       }))
 
-      console.log(`[ProgramConversionService.getTrainerClients] 🎯 Returning clients:`, result)
+      console.log(`[ProgramConversionService.getTrainerClients] 🎯 Final result for dialog:`, result)
       return result
     } catch (error) {
       console.error("[ProgramConversionService.getTrainerClients] ❌ Error fetching clients:", error)
+      console.error("[ProgramConversionService.getTrainerClients] ❌ Error details:", {
+        message: error.message,
+        code: error.code,
+        trainerId,
+      })
       return []
     }
   }
