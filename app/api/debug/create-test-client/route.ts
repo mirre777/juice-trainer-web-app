@@ -28,28 +28,30 @@ export async function POST() {
 
     console.log("📊 [CREATE-TEST] Creating test client...")
 
-    const testClient = {
-      name: "Test Client " + Date.now(),
-      email: "test" + Date.now() + "@example.com",
-      phone: "+1234567890",
-      status: "active",
-      notes: "Created by debug endpoint",
-      goals: ["Test goal"],
+    const testClientData = {
+      name: `Test Client ${Date.now()}`,
+      email: `test${Date.now()}@example.com`,
+      phone: "123-456-7890",
+      status: "Active",
+      progress: 50,
+      sessions: { completed: 5, total: 10 },
+      completion: 50,
+      notes: "This is a test client created by debug endpoint",
+      goal: "Test goal",
+      program: "Test program",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
 
-    console.log("📝 [CREATE-TEST] Test client data:", testClient)
-
     const clientsRef = collection(db, "users", userId, "clients")
-    const docRef = await addDoc(clientsRef, testClient)
+    const docRef = await addDoc(clientsRef, testClientData)
 
     console.log("✅ [CREATE-TEST] Test client created with ID:", docRef.id)
 
     return NextResponse.json({
       success: true,
       clientId: docRef.id,
-      testClient,
+      clientData: testClientData,
     })
   } catch (error: any) {
     console.error("💥 [CREATE-TEST] Error:", error)
