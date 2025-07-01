@@ -31,20 +31,16 @@ function getInitials(name: string): string {
     .substring(0, 2)
 }
 
-// Helper function to validate client data
+// Simplified validation - more lenient like before version 31
 export function isValidClientData(data: any): boolean {
   if (!data || typeof data !== "object") {
     console.log("[isValidClientData] Invalid: not an object")
     return false
   }
 
-  if (!data.name || typeof data.name !== "string" || data.name.trim() === "") {
+  // More lenient - just check if name exists, don't require it to be non-empty after trim
+  if (!data.name || typeof data.name !== "string") {
     console.log("[isValidClientData] Invalid: missing or invalid name")
-    return false
-  }
-
-  if (!data.email || typeof data.email !== "string" || data.email.trim() === "") {
-    console.log("[isValidClientData] Invalid: missing or invalid email")
     return false
   }
 
@@ -52,7 +48,7 @@ export function isValidClientData(data: any): boolean {
   return true
 }
 
-// Ensure the client data mapping includes the status field for subscription updates
+// Simplified client data mapping
 export function mapClientData(id: string, data: any): Client {
   return {
     id,
@@ -80,7 +76,7 @@ export function mapClientData(id: string, data: any): Client {
   }
 }
 
-// NEW: Check for duplicate email in trainer's clients
+// Check for duplicate email in trainer's clients
 export async function checkDuplicateEmail(
   trainerId: string,
   email: string,
@@ -127,7 +123,7 @@ export async function checkDuplicateEmail(
   }
 }
 
-// Improved subscribeToClients function with better logging and error handling
+// Simplified subscription function
 export function subscribeToClients(trainerUid: string, callback: (clients: Client[], error?: any) => void) {
   console.log("[subscribeToClients] Setting up subscription for:", trainerUid)
 
@@ -148,11 +144,15 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
 
         snapshot.forEach((doc) => {
           const data = doc.data()
-          console.log(`[subscribeToClients] Processing: ${doc.id}`)
+          console.log(`[subscribeToClients] Processing: ${doc.id}`, data)
 
-          if (isValidClientData(data)) {
+          // Use more lenient validation
+          if (data && typeof data === "object" && data.name) {
             const client = mapClientData(doc.id, data)
             clients.push(client)
+            console.log(`[subscribeToClients] Added client: ${client.name}`)
+          } else {
+            console.log(`[subscribeToClients] Skipped invalid client: ${doc.id}`)
           }
         })
 
@@ -173,7 +173,7 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
   }
 }
 
-// Get all clients for a specific trainer
+// Simplified fetchClients function
 export async function fetchClients(
   trainerId: string,
 ): Promise<{ success: boolean; clients: Client[]; error?: string }> {
@@ -195,12 +195,13 @@ export async function fetchClients(
       const data = doc.data()
       console.log(`[fetchClients] Processing document ${doc.id}:`, data)
 
-      if (isValidClientData(data)) {
+      // More lenient validation - just check if it's an object with a name
+      if (data && typeof data === "object" && data.name) {
         const client = mapClientData(doc.id, data)
         clients.push(client)
         console.log(`[fetchClients] Added client: ${client.name}`)
       } else {
-        console.log(`[fetchClients] Skipped invalid client: ${doc.id}`)
+        console.log(`[fetchClients] Skipped document ${doc.id} - missing name or invalid data`)
       }
     })
 
