@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/firebase/firebase"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     console.log("[DEBUG] Creating test client...")
 
@@ -25,30 +25,32 @@ export async function POST() {
 
     // Create test client data
     const testClientData = {
-      name: `Test Client ${Date.now()}`,
-      email: `test${Date.now()}@example.com`,
-      phone: "123-456-7890",
-      status: "Active",
-      progress: 50,
-      sessions: { completed: 5, total: 10 },
-      completion: 50,
-      notes: "This is a test client created by the debug endpoint",
-      goal: "Test fitness goal",
-      program: "Test program",
+      name: "Test Client",
+      email: "test@example.com",
+      phone: "+1234567890",
+      status: "active",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      notes: "This is a test client created by the debug endpoint",
+      goals: ["Test goal 1", "Test goal 2"],
+      isTestClient: true, // Flag to identify test clients
     }
 
     // Add to Firestore
-    const clientsRef = collection(db, "users", userId, "clients")
+    const collectionPath = `users/${userId}/clients`
+    const clientsRef = collection(db, collectionPath)
     const docRef = await addDoc(clientsRef, testClientData)
 
     console.log("[DEBUG] Test client created with ID:", docRef.id)
 
     return NextResponse.json({
       success: true,
-      clientId: docRef.id,
       message: "Test client created successfully",
+      clientId: docRef.id,
+      clientData: {
+        ...testClientData,
+        id: docRef.id,
+      },
     })
   } catch (error) {
     console.error("[DEBUG] Error creating test client:", error)
