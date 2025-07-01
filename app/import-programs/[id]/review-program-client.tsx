@@ -51,7 +51,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
   const { toast } = useToast()
-  const { user: trainer, loading: isTrainerLoading } = useCurrentUser() // Get loading state
+  const { user: trainer, loading: isTrainerLoading } = useCurrentUser()
 
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
   const [currentWeek, setCurrentWeek] = useState(1)
@@ -79,7 +79,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     day: "numeric",
   })
 
-  // Log trainer and loading state on every render
   console.log("[ReviewProgramClient] Current trainer state from useCurrentUser:", { trainer, isTrainerLoading })
 
   useEffect(() => {
@@ -177,112 +176,63 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  // This useEffect will now only trigger when showSendProgramDialog or trainer changes.
-  // The direct call in the button onClick will ensure fetchClients runs when the button is pressed.
-  useEffect(() => {
-    console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
-    console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
-    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
-
-    // This useEffect is primarily for reacting to changes in showSendProgramDialog
-    // and ensuring clients are fetched if the dialog is opened and trainer data is ready.
-    // The direct call in the button handler is the primary trigger.
-    if (showSendProgramDialog && trainer?.uid && clients.length === 0 && !loadingClients) {
-      console.log(
-        `[ReviewProgramClient] Condition met: Dialog opened, trainer UID (${trainer.uid}) available, no clients loaded. Calling fetchClients...`,
-      )
-      fetchClients(trainer.uid)
-    } else if (showSendProgramDialog && !trainer?.uid && !isTrainerLoading) {
-      setLoadingClients(false)
-      console.error(
-        "[ReviewProgramClient] Dialog opened but trainer UID is missing and not loading. Cannot fetch clients.",
-      )
-      toast({
-        title: "Authentication Error",
-        description: "Could not retrieve trainer information. Please log in again.",
-        variant: "destructive",
-      })
-    }
-  }, [showSendProgramDialog, trainer, toast, clients.length, loadingClients, isTrainerLoading])
-
   const fetchClients = async (trainerId: string) => {
+    if (!trainerId) {
+      console.error("[ReviewProgramClient] No trainer ID provided to fetchClients")
+      setLoadingClients(false)
+      return
+    }
+
     setLoadingClients(true)
-    setClients([]) // Clear previous clients
-    setSelectedClientId("") // Clear previous selection
+    setClients([])
+    setSelectedClientId("")
     console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
+
     try {
-      const response = await fetch(`/api/clients?trainerId=${trainerId}`)
+      // Use the correct API endpoint that matches the working clients page
+      const response = await fetch(`/api/clients?trainerId=${trainerId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
 
-      // Always get raw text first for debugging, regardless of status
-      const rawResponseText = await response.text()
-      console.log("[ReviewProgramClient] Raw API response text:", rawResponseText)
-
-      // NEW: Check if rawResponseText is empty or undefined before parsing
-      if (!rawResponseText) {
-        console.error("[ReviewProgramClient] API response text is empty or undefined. Cannot parse JSON.")
-        toast({
-          title: "Error",
-          description: "Received empty or invalid response from client API. Please try again.",
-          variant: "destructive",
-        })
-        setClients([])
-        return // Exit early
-      }
+      console.log("[ReviewProgramClient] API response status:", response.status)
+      console.log("[ReviewProgramClient] API response headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
-        console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", rawResponseText)
+        const errorText = await response.text()
+        console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", errorText)
         toast({
           title: "Error",
-          description: `Failed to load clients: ${response.statusText || "Server error"}. Details: ${rawResponseText.substring(0, 100)}`,
+          description: `Failed to load clients: ${response.statusText}`,
           variant: "destructive",
         })
         setClients([])
-        return // Exit early if response is not OK
+        return
       }
 
-      // Check content type before parsing as JSON
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        console.error(
-          "[ReviewProgramClient] API response is not JSON. Content-Type:",
-          contentType,
-          "Raw response:",
-          rawResponseText,
-        )
-        toast({
-          title: "Error",
-          description: "Received unexpected response from client API. Please try again.",
-          variant: "destructive",
-        })
-        setClients([])
-        return // Exit early if not JSON
-      }
+      const data = await response.json()
+      console.log("[ReviewProgramClient] API response data:", data)
 
-      let data: { clients?: Client[]; error?: string }
-      try {
-        data = JSON.parse(rawResponseText) // Parse the raw text we already got
-        console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients)
-        setClients(data.clients || [])
-        if (data.clients && data.clients.length > 0) {
+      if (data.success && data.clients) {
+        console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients.length, "clients")
+        setClients(data.clients)
+        if (data.clients.length > 0) {
           setSelectedClientId(data.clients[0].id)
           console.log("[ReviewProgramClient] First client selected:", data.clients[0].id)
         } else {
           setSelectedClientId("")
           console.log("[ReviewProgramClient] No clients found, selectedClientId cleared.")
         }
-      } catch (jsonError) {
-        console.error(
-          "[ReviewProgramClient] Failed to parse JSON response:",
-          jsonError,
-          "Raw response that failed parsing:",
-          rawResponseText,
-        )
+      } else {
+        console.error("[ReviewProgramClient] API returned success=false or no clients:", data)
+        setClients([])
         toast({
           title: "Error",
-          description: "Failed to parse client data. Please try again.",
+          description: data.error || "Failed to load clients",
           variant: "destructive",
         })
-        setClients([])
       }
     } catch (error) {
       console.error("[ReviewProgramClient] Error fetching clients (network/unexpected):", error)
@@ -616,7 +566,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     )
   }
 
-  // THIS LOG SHOULD APPEAR EVERY TIME THE COMPONENT RENDERS, showing the current state of the dialog
   console.log("[ReviewProgramClient] showSendProgramDialog state at render:", showSendProgramDialog)
 
   return (
@@ -645,9 +594,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
         <div className="flex gap-2">
-          {console.log(
-            `[ReviewProgramClient] Button disabled state check: hasChanges=${hasChanges}, isSaving=${isSaving}, isTrainerLoading=${isTrainerLoading}`,
-          )}
           <Button
             variant="ghost"
             onClick={revertChanges}
@@ -683,19 +629,24 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
-              console.log("Send to Client button clicked! (Directly from onClick)") // NEW LOG
-              console.log(
-                "[ReviewProgramClient] 'Send to Client' button clicked. showSendProgramDialog will be set to true.",
-              )
-              console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid) // Log trainer UID at click
+              console.log("[ReviewProgramClient] 'Send to Client' button clicked")
+              console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid)
 
-              // Ensure fetchClients is called directly without the conditional block
-              fetchClients(trainer?.uid || "DEBUG_MISSING_UID") // Pass UID or a debug string
+              if (!trainer?.uid) {
+                console.error("[ReviewProgramClient] No trainer UID available")
+                toast({
+                  title: "Authentication Error",
+                  description: "Could not retrieve trainer information. Please log in again.",
+                  variant: "destructive",
+                })
+                return
+              }
 
+              // Fetch clients immediately when button is clicked
+              fetchClients(trainer.uid)
               setShowSendProgramDialog(true)
-              console.log("[ReviewProgramClient] showSendProgramDialog set to true.") // NEW LOG
             }}
-            disabled={hasChanges || isSaving || isTrainerLoading} // Keep disabled if trainer is loading or has unsaved changes
+            disabled={hasChanges || isSaving || isTrainerLoading}
           >
             <Send className="h-4 w-4" />
             Send to Client
@@ -733,7 +684,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </div>
         </div>
 
-        {/* Program Notes */}
         <div className="mb-8">
           <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
             Program Notes
@@ -747,7 +697,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           />
         </div>
 
-        {/* Periodization Toggle */}
         <div className="mb-6">
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div>
@@ -792,7 +741,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             </Button>
           </div>
 
-          {/* Week selector dots */}
           <div className="flex justify-center mt-4 gap-1">
             {Array.from({ length: programState.program_weeks }, (_, i) => i + 1).map((week) => (
               <button
@@ -843,7 +791,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 <div className="p-4">
                   {routine.exercises && routine.exercises.length > 0 ? (
                     <div>
-                      {/* Header */}
                       <div className="grid grid-cols-9 gap-4 py-2 px-4 bg-gray-100 rounded-t-lg text-sm font-medium text-gray-600">
                         <div className="col-span-2">Exercise</div>
                         <div className="col-span-1 text-center">Set</div>
@@ -856,13 +803,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
                       {routine.exercises.map((exercise, exerciseIndex) => (
                         <div key={exerciseIndex} className="border-b border-gray-200">
-                          {/* Exercise Name and Notes - displayed once per exercise, outside the set loop */}
                           <div className="py-3 px-4">
                             <div className="font-medium text-gray-900">{exercise.name}</div>
                             {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
                           </div>
 
-                          {/* Exercise sets */}
                           {programState.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[
                             exerciseIndex
                           ]?.sets?.map((set, setIndex) => (
@@ -870,7 +815,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                               key={setIndex}
                               className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
                             >
-                              {/* Empty div to maintain col-span-2 alignment for the first column */}
                               <div className="col-span-2"></div>
 
                               <div className="col-span-1 flex justify-center">
@@ -944,7 +888,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                             </div>
                           ))}
 
-                          {/* Add set button */}
                           <div className="grid grid-cols-9 gap-4 py-2 px-4">
                             <div className="col-span-7"></div>
                             <div className="col-span-2 flex justify-end">
@@ -1012,7 +955,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               </div>
             </Card>
 
-            {/* Client Selection Section */}
             <div className="space-y-2">
               <h4 className="font-semibold text-gray-800">Select Client:</h4>
               {loadingClients ? (
@@ -1023,37 +965,29 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               ) : clients.length === 0 ? (
                 <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
               ) : (
-                <>
-                  {console.log(
-                    "[ReviewProgramClient] Rendering RadioGroup. Clients:",
-                    clients,
-                    "Selected ID:",
-                    selectedClientId,
-                  )}
-                  <RadioGroup
-                    value={selectedClientId}
-                    onValueChange={setSelectedClientId}
-                    className="max-h-48 overflow-y-auto"
-                  >
-                    {clients.map((client) => (
-                      <div
-                        key={client.id}
-                        className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                      >
-                        <RadioGroupItem value={client.id} id={`client-${client.id}`} />
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
-                            {client.name}
-                          </Label>
-                          {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
-                        </div>
+                <RadioGroup
+                  value={selectedClientId}
+                  onValueChange={setSelectedClientId}
+                  className="max-h-48 overflow-y-auto"
+                >
+                  {clients.map((client) => (
+                    <div
+                      key={client.id}
+                      className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    >
+                      <RadioGroupItem value={client.id} id={`client-${client.id}`} />
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
                       </div>
-                    ))}
-                  </RadioGroup>
-                </>
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
+                          {client.name}
+                        </Label>
+                        {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </RadioGroup>
               )}
             </div>
 
