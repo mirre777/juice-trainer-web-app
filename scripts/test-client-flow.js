@@ -1,58 +1,66 @@
+#!/usr/bin/env node
+
 const https = require("https")
+const http = require("http")
 
-const REAL_USER_ID = process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1"
+const BASE_URL = "https://v0-coachingplatform-git-revert-back-t-75a0c2-mirre777s-projects.vercel.app"
+const USER_ID = process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1"
 
-console.log("🚀 Running Client Flow Test")
-console.log("👤 Using User ID:", REAL_USER_ID)
+console.log("🧪 Testing Client Flow")
+console.log("👤 User ID:", USER_ID)
 
-async function makeRequest(path, method = "GET", data = null) {
+function makeRequest(url, options = {}) {
   return new Promise((resolve, reject) => {
-    const options = {
-      hostname: "v0-coachingplatform-git-revert-back-t-75a0c2-mirre777s-projects.vercel.app",
-      path: path,
-      method: method,
+    const protocol = url.startsWith("https") ? https : http
+    const requestOptions = {
+      method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Cookie: `user_id=${REAL_USER_ID}`,
+        "User-Agent": "Node.js Test Script",
+        ...options.headers,
       },
+      ...options,
     }
 
-    if (data) {
-      const jsonData = JSON.stringify(data)
-      options.headers["Content-Length"] = Buffer.byteLength(jsonData)
-    }
+    console.log(`📡 Making ${requestOptions.method} request to: ${url}`)
 
-    const req = https.request(options, (res) => {
-      let responseData = ""
+    const req = protocol.request(url, requestOptions, (res) => {
+      let data = ""
 
       res.on("data", (chunk) => {
-        responseData += chunk
+        data += chunk
       })
 
       res.on("end", () => {
+        console.log(`📊 Response status: ${res.statusCode}`)
+        console.log(`📊 Response headers:`, res.headers)
+
         try {
-          const parsed = JSON.parse(responseData)
+          const jsonData = JSON.parse(data)
           resolve({
             status: res.statusCode,
-            data: parsed,
             headers: res.headers,
+            data: jsonData,
           })
-        } catch (e) {
+        } catch (parseError) {
+          // If it's not JSON, return the raw data
           resolve({
             status: res.statusCode,
-            data: responseData,
             headers: res.headers,
+            data: data,
+            raw: true,
           })
         }
       })
     })
 
     req.on("error", (error) => {
+      console.error(`❌ Request error:`, error.message)
       reject(error)
     })
 
-    if (data) {
-      req.write(JSON.stringify(data))
+    if (options.body) {
+      req.write(JSON.stringify(options.body))
     }
 
     req.end()
@@ -61,47 +69,73 @@ async function makeRequest(path, method = "GET", data = null) {
 
 async function runTests() {
   try {
-    console.log("\n🧪 Testing Client Flow")
-    console.log("👤 User ID:", REAL_USER_ID)
+    console.log("🔍 Step 1: Running comprehensive debug analysis...")
 
-    console.log("\n📡 Testing API fetch...")
-    const apiResponse = await makeRequest("/api/clients")
+    try {
+      const debugResponse = await makeRequest(`${BASE_URL}/api/debug/clients`)
 
-    if (apiResponse.status === 200) {
-      console.log("✅ API fetch successful")
-      console.log(`📊 Clients returned: ${apiResponse.data.clients.length}`)
+      if (debugResponse.status === 200 && !debugResponse.raw) {
+        console.log("✅ Debug analysis successful!")
+        console.log("📊 Debug summary:", debugResponse.data.debug?.summary)
 
-      if (apiResponse.data.clients.length > 0) {
-        console.log("👥 Client List:")
-        apiResponse.data.clients.forEach((client, index) => {
-          console.log(`  ${index + 1}. ${client.name} (${client.email}) - ${client.status}`)
-        })
+        if (debugResponse.data.debug?.documents) {
+          console.log("📄 First few documents:")
+          debugResponse.data.debug.documents.slice(0, 3).forEach((doc, index) => {
+            console.log(
+              `  ${index + 1}. ${doc.documentId}: ${doc.validation.nameValue} (valid: ${doc.validation.isValidName})`,
+            )
+          })
+        }
       } else {
-        console.log("⚠️  No clients returned from API")
+        console.log(`❌ Debug endpoint failed: ${debugResponse.status}`, debugResponse.data?.substring(0, 200))
       }
-
-      if (apiResponse.data.debug) {
-        console.log("\n🔧 API Debug Info:")
-        console.log(`  - Total documents: ${apiResponse.data.debug.totalDocuments}`)
-        console.log(`  - Valid count: ${apiResponse.data.debug.validCount}`)
-        console.log(`  - Invalid count: ${apiResponse.data.debug.invalidCount}`)
-      }
-    } else if (apiResponse.status === 401) {
-      console.log("❌ API fetch failed: 401 Unauthorized")
-      console.log("🔒 This is expected when running from external script")
-      console.log("✅ The API routes are working in the browser though!")
-      return
-    } else {
-      console.log("❌ API fetch failed:", apiResponse.status)
-      console.log("Error details:", apiResponse.data)
-      process.exit(1)
+    } catch (debugError) {
+      console.log("❌ Debug endpoint error:", debugError.message)
     }
 
-    console.log("\n🎉 Test completed!")
+    console.log("\n🧪 Step 2: Creating test client...")
+
+    try {
+      const createResponse = await makeRequest(`${BASE_URL}/api/debug/create-test-client`, {
+        method: "POST",
+      })
+
+      if (createResponse.status === 200 && !createResponse.raw) {
+        console.log("✅ Test client created successfully!")
+        console.log("🆔 Client ID:", createResponse.data.clientId)
+      } else {
+        console.log(`❌ Failed to create test client: ${createResponse.status}`, createResponse.data?.substring(0, 200))
+      }
+    } catch (createError) {
+      console.log("❌ Create test client error:", createError.message)
+    }
+
+    console.log("\n📡 Step 3: Testing API fetch...")
+
+    try {
+      const apiResponse = await makeRequest(`${BASE_URL}/api/clients`)
+
+      if (apiResponse.status === 200 && !apiResponse.raw) {
+        console.log("✅ API fetch successful!")
+        console.log("📊 Client count:", apiResponse.data.clients?.length || 0)
+        console.log("📊 API response:", apiResponse.data)
+      } else {
+        console.log(`❌ API fetch failed: ${apiResponse.status}`)
+        console.log("Error details:", apiResponse.data?.substring(0, 500))
+      }
+    } catch (apiError) {
+      console.log("❌ API fetch error:", apiError.message)
+    }
+
+    console.log("\n✅ Test completed!")
   } catch (error) {
     console.error("💥 Test failed:", error.message)
     process.exit(1)
   }
 }
 
-runTests()
+// Run the tests
+runTests().catch((error) => {
+  console.error("💥 Unexpected error:", error)
+  process.exit(1)
+})

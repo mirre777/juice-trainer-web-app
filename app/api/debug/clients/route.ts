@@ -123,16 +123,7 @@ export async function GET() {
       }
     }
 
-    // Test 5: Check if there are any collections under the user document
-    const userCollections: string[] = []
-    try {
-      // This would require admin SDK, so we'll skip for now
-      console.log("📁 [DEBUG] Skipping subcollection enumeration (requires admin SDK)")
-    } catch (error) {
-      console.log("📁 [DEBUG] Could not enumerate subcollections:", error)
-    }
-
-    // Test 6: Test the client service directly
+    // Test 5: Test the client service directly
     let serviceResult: any = null
     let serviceError: any = null
     try {

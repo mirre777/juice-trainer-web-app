@@ -6,35 +6,40 @@ import { cookies } from "next/headers"
 
 export async function POST() {
   try {
-    console.log("🧪 [CREATE-TEST] Creating test client")
+    console.log("🧪 [CREATE-TEST] Starting test client creation")
 
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
+    console.log("🆔 [CREATE-TEST] User ID from cookie:", userId)
 
     if (!userId) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Not authenticated",
+        },
+        { status: 401 },
+      )
     }
 
     // Import Firebase functions
     const { db } = await import("@/lib/firebase/firebase")
     const { collection, addDoc, serverTimestamp } = await import("firebase/firestore")
 
-    console.log("🧪 [CREATE-TEST] Creating test client for user:", userId)
+    console.log("📊 [CREATE-TEST] Creating test client...")
 
     const testClient = {
       name: "Test Client " + Date.now(),
       email: "test" + Date.now() + "@example.com",
       phone: "+1234567890",
-      status: "Active",
+      status: "active",
       notes: "Created by debug endpoint",
-      goals: ["Test Goal"],
+      goals: ["Test goal"],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      progress: 0,
-      completion: 0,
-      bgColor: "#f3f4f6",
-      textColor: "#111827",
     }
+
+    console.log("📝 [CREATE-TEST] Test client data:", testClient)
 
     const clientsRef = collection(db, "users", userId, "clients")
     const docRef = await addDoc(clientsRef, testClient)
@@ -44,10 +49,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       clientId: docRef.id,
-      testClient: {
-        ...testClient,
-        id: docRef.id,
-      },
+      testClient,
     })
   } catch (error: any) {
     console.error("💥 [CREATE-TEST] Error:", error)
