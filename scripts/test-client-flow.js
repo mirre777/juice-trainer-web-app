@@ -1,11 +1,9 @@
 // End-to-end test for client flow using real user data
-// Run with: node scripts/test-client-flow.js
-
 const https = require("https")
 const http = require("http")
 
-// Get the actual user ID from environment or use the one from your browser
-const REAL_USER_ID = process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1" // Replace with your actual user ID
+// Get the actual user ID from environment
+const REAL_USER_ID = process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1"
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 
 console.log("🚀 Starting REAL end-to-end client flow test...")
@@ -74,6 +72,7 @@ async function runRealTest() {
 
   let testsPassed = 0
   let testsTotal = 0
+  let hasError = false
 
   try {
     // Test 1: Debug existing data
@@ -83,6 +82,7 @@ async function runRealTest() {
 
     const debugResponse = await makeRequest(`${BASE_URL}/api/debug/clients`)
     console.log("🔍 Debug response status:", debugResponse.status)
+    console.log("🔍 Debug response data:", JSON.stringify(debugResponse.data, null, 2))
 
     if (debugResponse.status === 200 && debugResponse.data?.success) {
       const debug = debugResponse.data.debug
@@ -95,55 +95,32 @@ async function runRealTest() {
       console.log(`  - Valid documents: ${debug.validDocuments}`)
       console.log(`  - Invalid documents: ${debug.invalidDocuments}`)
 
-      // Show sample raw document if exists
-      if (debug.rawDocuments && debug.rawDocuments.length > 0) {
-        console.log("📄 Sample raw document:")
-        console.log(JSON.stringify(debug.rawDocuments[0], null, 2))
-      }
-
       // Show validation details for invalid documents
       if (debug.validationResults) {
         debug.validationResults.forEach((result, index) => {
           if (!result.isValid) {
             console.log(`❌ Invalid document ${index + 1} (${result.documentId}):`)
             console.log(`   Validation details:`, result.validationDetails)
-            console.log(`   Raw data:`, result.rawData)
+            console.log(`   Raw data keys:`, Object.keys(result.rawData || {}))
           }
         })
       }
 
       testsPassed++
     } else {
-      console.log("❌ Debug endpoint failed:", debugResponse.data)
+      console.log("❌ Debug endpoint failed")
+      console.log("Response:", debugResponse.data)
+      hasError = true
     }
 
-    // Test 2: Create a test client to ensure the flow works
+    // Test 2: Fetch clients via API
     testsTotal++
-    console.log("\n📋 TEST 2: Create test client")
-    console.log("-".repeat(40))
-
-    const createResponse = await makeRequest(`${BASE_URL}/api/debug/create-test-client`, {
-      method: "POST",
-    })
-    console.log("🧪 Create response status:", createResponse.status)
-
-    let testClientId = null
-    if (createResponse.status === 200 && createResponse.data?.success) {
-      testClientId = createResponse.data.clientId
-      console.log("✅ Test client created successfully")
-      console.log("🆔 Test client ID:", testClientId)
-      testsPassed++
-    } else {
-      console.log("❌ Failed to create test client:", createResponse.data)
-    }
-
-    // Test 3: Fetch clients via API
-    testsTotal++
-    console.log("\n📋 TEST 3: Fetch clients via API")
+    console.log("\n📋 TEST 2: Fetch clients via API")
     console.log("-".repeat(40))
 
     const fetchResponse = await makeRequest(`${BASE_URL}/api/clients`)
     console.log("📥 Fetch response status:", fetchResponse.status)
+    console.log("📥 Fetch response data:", JSON.stringify(fetchResponse.data, null, 2))
 
     if (fetchResponse.status === 200 && fetchResponse.data?.success) {
       const clients = fetchResponse.data.clients || []
@@ -155,35 +132,36 @@ async function runRealTest() {
         clients.forEach((client, index) => {
           console.log(`  ${index + 1}. ${client.name} (${client.status}) - ID: ${client.id}`)
         })
-
-        // Check if our test client is in the list
-        if (testClientId && clients.some((c) => c.id === testClientId)) {
-          console.log("✅ Test client found in API response")
-        } else if (testClientId) {
-          console.log("⚠️  Test client NOT found in API response")
-        }
       }
 
       testsPassed++
     } else {
-      console.log("❌ API fetch failed:", fetchResponse.data)
+      console.log("❌ API fetch failed")
+      console.log("Response:", fetchResponse.data)
+      hasError = true
     }
 
-    // Test 4: Debug again to see the changes
+    // Test 3: Create a test client
     testsTotal++
-    console.log("\n📋 TEST 4: Verify changes")
+    console.log("\n📋 TEST 3: Create test client")
     console.log("-".repeat(40))
 
-    const debugResponse2 = await makeRequest(`${BASE_URL}/api/debug/clients`)
-    if (debugResponse2.status === 200 && debugResponse2.data?.success) {
-      const debug2 = debugResponse2.data.debug
-      console.log("✅ Second debug check working")
-      console.log(
-        `📊 Updated counts: ${debug2.rawDocumentCount} raw docs, ${debug2.serviceClientCount} service clients`,
-      )
+    const createResponse = await makeRequest(`${BASE_URL}/api/debug/create-test-client`, {
+      method: "POST",
+    })
+    console.log("🧪 Create response status:", createResponse.status)
+    console.log("🧪 Create response data:", JSON.stringify(createResponse.data, null, 2))
+
+    let testClientId = null
+    if (createResponse.status === 200 && createResponse.data?.success) {
+      testClientId = createResponse.data.clientId
+      console.log("✅ Test client created successfully")
+      console.log("🆔 Test client ID:", testClientId)
       testsPassed++
     } else {
-      console.log("❌ Second debug check failed")
+      console.log("❌ Failed to create test client")
+      console.log("Response:", createResponse.data)
+      hasError = true
     }
 
     // Final Analysis
@@ -204,6 +182,7 @@ async function runRealTest() {
         console.log("   1. Check the validation logic in isValidClientData()")
         console.log("   2. Verify the data structure matches expectations")
         console.log("   3. Check for missing required fields")
+        hasError = true
       } else if (debug.rawDocumentCount === 0) {
         console.log("\n🚨 PROBLEM IDENTIFIED:")
         console.log("   No documents found in the collection")
@@ -212,6 +191,7 @@ async function runRealTest() {
         console.log("   1. Verify the collection path: users/{userId}/clients")
         console.log("   2. Check if the user ID is correct")
         console.log("   3. Verify Firestore permissions")
+        hasError = true
       } else if (debug.rawDocumentCount > 0 && debug.serviceClientCount > 0) {
         console.log("\n✅ FLOW WORKING:")
         console.log("   Documents exist and service is returning clients")
@@ -219,11 +199,11 @@ async function runRealTest() {
       }
     }
 
-    if (testsPassed === testsTotal) {
+    if (testsPassed === testsTotal && !hasError) {
       console.log("\n🎉 ALL TESTS PASSED!")
       process.exit(0)
     } else {
-      console.log("\n❌ SOME TESTS FAILED")
+      console.log("\n❌ SOME TESTS FAILED OR ISSUES FOUND")
       process.exit(1)
     }
   } catch (error) {

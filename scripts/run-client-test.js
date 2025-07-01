@@ -3,7 +3,7 @@ const path = require("path")
 
 console.log("🚀 Running client flow test...")
 
-// Get the real user ID from environment or prompt
+// Get the real user ID from environment or use default
 const realUserId = process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1"
 
 console.log(`👤 Using User ID: ${realUserId}`)
