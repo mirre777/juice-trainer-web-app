@@ -1,5 +1,11 @@
 "use client"
 
+import { CardContent } from "@/components/ui/card"
+
+import { CardTitle } from "@/components/ui/card"
+
+import { CardHeader } from "@/components/ui/card"
+
 import type React from "react"
 import {
   ChevronLeft,
@@ -10,14 +16,13 @@ import {
   Calendar,
   RotateCcw,
   Plus,
-  Check,
   User,
   Info,
-  Save,
   Send,
   Loader2,
   ChevronUp,
   X,
+  CheckCircle,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -41,13 +46,16 @@ import { useToast } from "@/hooks/use-toast"
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { sendProgramToClient } from "@/app/actions/program-assignment-actions"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import type { Client } from "@/types/client"
 
 interface ReviewProgramClientProps {
-  importData: any
+  importId: string
+  programData: any
 }
 
-export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
+export default function ReviewProgramClient({ importId, programData }: ReviewProgramClientProps) {
   console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
   const { toast } = useToast()
@@ -75,15 +83,15 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   console.log("[ReviewProgramClient] Current trainer state from useCurrentUser:", { trainer, isTrainerLoading })
 
   useEffect(() => {
-    if (importData?.program) {
-      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
+    if (programData?.program) {
+      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(programData.program))
 
       initialProgram.program_weeks =
         Number.isInteger(initialProgram.program_weeks) && initialProgram.program_weeks > 0
           ? initialProgram.program_weeks
           : 4
 
-      initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
+      initialProgram.program_title = programData.name || initialProgram.program_title || "Untitled Program"
 
       let normalizedWeeks: ExerciseWeek[] = []
 
@@ -167,7 +175,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setHasChanges(false)
       setJustSaved(false)
     }
-  }, [importData])
+  }, [programData])
 
   const fetchClients = async (trainerId: string) => {
     if (!trainerId) {
@@ -369,7 +377,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
     setIsSaving(true)
     try {
-      await updateDoc(doc(db, "sheets_imports", importData.id), {
+      await updateDoc(doc(db, "sheets_imports", importId), {
         name: programState.program_title,
         program: programState,
         status: "reviewed",
@@ -377,7 +385,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       })
       setHasChanges(false)
       setJustSaved(true)
-      importData.program = JSON.parse(JSON.stringify(programState))
+      programData.program = JSON.parse(JSON.stringify(programState))
     } catch (error) {
       console.error("Error saving program:", error)
       toast({
@@ -391,8 +399,8 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   }
 
   const revertChanges = () => {
-    if (importData?.program) {
-      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
+    if (programData?.program) {
+      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(programData.program))
       setProgramState(initialProgram)
       setCurrentWeek(1)
       setHasChanges(false)
@@ -574,73 +582,61 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={() => {
-            if (hasChanges) {
-              setShowConfirmDialog(true)
-            } else {
-              router.push("/import-programs")
-            }
-          }}
-        >
-          <ChevronLeft className="w-4 h-4 mr-1" />
-          Back
-        </Button>
-      </div>
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      {/* Program Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            Program Ready for Review
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-semibold mb-2">Program Overview</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Weeks:</span>
+                  <p className="font-medium">{programState?.weeks?.length || 0}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Total Workouts:</span>
+                  <p className="font-medium">
+                    {programState?.weeks?.reduce(
+                      (total: number, week: any) => total + (week.routines?.length || 0),
+                      0,
+                    ) || 0}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Program Type:</span>
+                  <p className="font-medium">{programState?.type || "Custom"}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Status:</span>
+                  <Badge variant="secondary">Ready</Badge>
+                </div>
+              </div>
+            </div>
 
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
-          <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={revertChanges}
-            disabled={!hasChanges || isSaving}
-            className="flex items-center gap-2 text-gray-700 hover:bg-gray-100"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Revert
-          </Button>
-          <Button
-            className={
-              justSaved && !hasChanges
-                ? "bg-lime-400 text-gray-800 cursor-not-allowed opacity-75 flex items-center gap-2"
-                : "bg-lime-400 hover:bg-lime-500 text-gray-800 flex items-center gap-2"
-            }
-            onClick={handleSaveChanges}
-            disabled={isSaving || (justSaved && !hasChanges)}
-          >
-            {isSaving ? (
-              "Saving..."
-            ) : justSaved && !hasChanges ? (
-              <>
-                <Check className="h-4 w-4" />
-                Saved
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
-          <Button
-            className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={handleSendToClientClick}
-            disabled={hasChanges || isSaving || isTrainerLoading}
-          >
-            <Send className="h-4 w-4" />
-            Send to Client
-          </Button>
-        </div>
-      </div>
+            <Separator />
+
+            <div className="flex gap-3">
+              <Button
+                onClick={handleSendToClientClick}
+                className="flex items-center gap-2"
+                disabled={showClientSelection}
+              >
+                <User className="h-4 w-4" />
+                Send to Client
+              </Button>
+              <Button variant="outline">Edit Program</Button>
+              <Button variant="outline">Preview Program</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Client Selection Section */}
       {showClientSelection && (
