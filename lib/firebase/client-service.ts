@@ -69,6 +69,140 @@ export function mapClientData(id: string, data: any): Client | null {
   } as Client
 }
 
+// Get all clients for a specific trainer - ENHANCED WITH DETAILED DEBUGGING
+export async function fetchClients(trainerUid: string): Promise<Client[]> {
+  try {
+    console.log(`[fetchClients] 🔍 Starting fetch for trainer: ${trainerUid}`)
+
+    if (!trainerUid) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "fetchClients" },
+        "No trainer UID provided",
+      )
+      logError(error)
+      console.log(`[fetchClients] ❌ No trainer UID provided`)
+      return []
+    }
+
+    console.log(`[fetchClients] 📡 Creating Firestore reference to: /users/${trainerUid}/clients`)
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+
+    console.log(`[fetchClients] 📋 Creating query with orderBy createdAt desc`)
+    const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
+
+    console.log(`[fetchClients] 🚀 Executing Firestore query...`)
+    const [clientsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+      trainerUid,
+      function: "fetchClients",
+    })
+
+    if (error) {
+      console.log(`[fetchClients] ❌ Query failed with error:`, error)
+      return []
+    }
+
+    if (!clientsSnapshot) {
+      console.log(`[fetchClients] ❌ Query returned null snapshot`)
+      return []
+    }
+
+    console.log(`[fetchClients] 📊 Raw Firestore query returned ${clientsSnapshot.size} documents`)
+
+    if (clientsSnapshot.empty) {
+      console.log(`[fetchClients] ⚠️ Collection is empty - no documents found`)
+      console.log(`[fetchClients] 🔍 Double-checking collection exists...`)
+
+      // Try a simple query without orderBy to see if there are any documents at all
+      const simpleQuery = query(clientsCollectionRef)
+      const simpleSnapshot = await getDocs(simpleQuery)
+      console.log(`[fetchClients] 📊 Simple query (no orderBy) returned ${simpleSnapshot.size} documents`)
+
+      if (simpleSnapshot.size > 0) {
+        console.log(`[fetchClients] ⚠️ Documents exist but orderBy query failed - trying without orderBy`)
+        // Use the simple snapshot instead
+        const clients: Client[] = []
+        simpleSnapshot.forEach((doc) => {
+          const data = doc.data()
+          console.log(`[fetchClients] 🔍 Processing document ${doc.id}:`, {
+            name: data.name,
+            status: data.status,
+            userId: data.userId || "NO_USER_ID",
+            createdAt: data.createdAt,
+          })
+
+          const client = mapClientData(doc.id, data)
+          if (client) {
+            clients.push(client)
+            console.log(`[fetchClients] ✅ Added client: ${client.name} (${client.status})`)
+          }
+        })
+
+        console.log(`[fetchClients] 🎯 Returning ${clients.length} clients from simple query`)
+        return clients
+      }
+
+      return []
+    }
+
+    const clients: Client[] = []
+    let validCount = 0
+    let invalidCount = 0
+
+    clientsSnapshot.forEach((doc) => {
+      const data = doc.data()
+      console.log(`[fetchClients] 🔍 Processing document ${doc.id}:`, {
+        name: data.name,
+        status: data.status,
+        userId: data.userId || "NO_USER_ID",
+        isTemporary: data.isTemporary,
+        email: data.email || "NO_EMAIL",
+        createdAt: data.createdAt,
+      })
+
+      const client = mapClientData(doc.id, data)
+      if (client) {
+        clients.push(client)
+        validCount++
+        console.log(`[fetchClients] ✅ Added client: ${client.name} (${client.status})`)
+      } else {
+        invalidCount++
+        console.log(`[fetchClients] ❌ Skipped invalid client data for document ${doc.id}`)
+      }
+    })
+
+    console.log(`[fetchClients] 📈 Summary:`)
+    console.log(`[fetchClients]   - Total documents: ${clientsSnapshot.size}`)
+    console.log(`[fetchClients]   - Valid clients: ${validCount}`)
+    console.log(`[fetchClients]   - Invalid clients: ${invalidCount}`)
+    console.log(`[fetchClients]   - Returning: ${clients.length} clients`)
+
+    // Log each client being returned
+    clients.forEach((client, index) => {
+      console.log(`[fetchClients] Client ${index + 1}:`, {
+        id: client.id,
+        name: client.name,
+        status: client.status,
+        userId: client.userId || "NO_USER_ID",
+        email: client.email || "NO_EMAIL",
+      })
+    })
+
+    return clients
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "fetchClients", trainerUid },
+      "Unexpected error fetching trainer clients",
+    )
+    logError(appError)
+    console.log(`[fetchClients] ❌ Unexpected error:`, error)
+    return []
+  }
+}
+
 // NEW: Check for duplicate email in trainer's clients
 export async function checkDuplicateEmail(
   trainerId: string,
@@ -194,95 +328,6 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
     logError(appError)
     callback([], appError)
     return () => {}
-  }
-}
-
-// Get all clients for a specific trainer - ENHANCED WITH DETAILED DEBUGGING
-export async function fetchClients(trainerUid: string): Promise<Client[]> {
-  try {
-    console.log(`[fetchClients] 🔍 Starting fetch for trainer: ${trainerUid}`)
-
-    if (!trainerUid) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "fetchClients" },
-        "No trainer UID provided",
-      )
-      logError(error)
-      console.log(`[fetchClients] ❌ No trainer UID provided`)
-      return []
-    }
-
-    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
-    const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
-
-    console.log(`[fetchClients] 📡 Executing Firestore query on path: /users/${trainerUid}/clients`)
-    const [clientsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      trainerUid,
-      function: "fetchClients",
-    })
-
-    if (error || !clientsSnapshot) {
-      console.log(`[fetchClients] ❌ Query failed:`, error)
-      return []
-    }
-
-    console.log(`[fetchClients] 📊 Raw Firestore query returned ${clientsSnapshot.size} documents`)
-
-    const clients: Client[] = []
-    let validCount = 0
-    let invalidCount = 0
-
-    clientsSnapshot.forEach((doc) => {
-      const data = doc.data()
-      console.log(`[fetchClients] 🔍 Processing document ${doc.id}:`, {
-        name: data.name,
-        status: data.status,
-        userId: data.userId || "NO_USER_ID",
-        isTemporary: data.isTemporary,
-        email: data.email || "NO_EMAIL",
-      })
-
-      const client = mapClientData(doc.id, data)
-      if (client) {
-        clients.push(client)
-        validCount++
-        console.log(`[fetchClients] ✅ Added client: ${client.name} (${client.status})`)
-      } else {
-        invalidCount++
-        console.log(`[fetchClients] ❌ Skipped invalid client data for document ${doc.id}`)
-      }
-    })
-
-    console.log(`[fetchClients] 📈 Summary:`)
-    console.log(`[fetchClients]   - Total documents: ${clientsSnapshot.size}`)
-    console.log(`[fetchClients]   - Valid clients: ${validCount}`)
-    console.log(`[fetchClients]   - Invalid clients: ${invalidCount}`)
-    console.log(`[fetchClients]   - Returning: ${clients.length} clients`)
-
-    // Log each client being returned
-    clients.forEach((client, index) => {
-      console.log(`[fetchClients] Client ${index + 1}:`, {
-        id: client.id,
-        name: client.name,
-        status: client.status,
-        userId: client.userId || "NO_USER_ID",
-        email: client.email || "NO_EMAIL",
-      })
-    })
-
-    return clients
-  } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "fetchClients", trainerUid },
-      "Unexpected error fetching trainer clients",
-    )
-    logError(appError)
-    console.log(`[fetchClients] ❌ Unexpected error:`, error)
-    return []
   }
 }
 
