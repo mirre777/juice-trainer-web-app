@@ -1,37 +1,38 @@
-#!/usr/bin/env node
-
-// Simple test runner for client flow
 const { spawn } = require("child_process")
 const path = require("path")
 
-console.log("🧪 Running Client Flow End-to-End Test")
-console.log("=".repeat(50))
+console.log("🚀 Running client flow test...")
 
-// Get the test user ID from environment or use default
-const testUserId = process.env.TEST_USER_ID || "StVdK6LXCifZgjXD7ml3nEOXmh1"
+// Get the real user ID from environment or prompt
+const realUserId = process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1"
 
-console.log("👤 Test User ID:", testUserId)
-console.log("🌐 App URL:", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+console.log(`👤 Using User ID: ${realUserId}`)
+console.log("💡 To use a different user ID, set REAL_USER_ID environment variable")
 
-// Set environment variable for the test
-process.env.TEST_USER_ID = testUserId
+// Set environment variables
+const env = {
+  ...process.env,
+  REAL_USER_ID: realUserId,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+}
 
 // Run the test script
 const testScript = path.join(__dirname, "test-client-flow.js")
 const child = spawn("node", [testScript], {
+  env: env,
   stdio: "inherit",
-  env: { ...process.env, TEST_USER_ID: testUserId },
 })
 
 child.on("close", (code) => {
-  console.log(`\n🏁 Test completed with exit code: ${code}`)
   if (code === 0) {
-    console.log("✅ All tests passed!")
+    console.log("\n✅ Test completed successfully!")
   } else {
-    console.log("❌ Some tests failed")
+    console.log(`\n❌ Test failed with exit code: ${code}`)
   }
+  process.exit(code)
 })
 
 child.on("error", (error) => {
   console.error("💥 Failed to run test:", error)
+  process.exit(1)
 })
