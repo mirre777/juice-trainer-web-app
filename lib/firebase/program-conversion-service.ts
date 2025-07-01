@@ -324,7 +324,9 @@ export class ProgramConversionService {
       })
 
       // Filter to only active clients with linked accounts
-      console.log(`[ProgramConversionService.getTrainerClients] 🔍 Filtering for active clients with linked accounts...`)
+      console.log(
+        `[ProgramConversionService.getTrainerClients] 🔍 Filtering for active clients with linked accounts...`,
+      )
       const activeClientsWithAccounts = allClients.filter((client) => {
         const hasUserId = client.userId && client.userId.trim() !== ""
         const isActive = client.status === "Active"
@@ -352,4 +354,42 @@ export class ProgramConversionService {
         console.log(`[ProgramConversionService.getTrainerClients] 💡 Requirements for eligibility:`)
         console.log(`[ProgramConversionService.getTrainerClients]   - Must have userId field (linked account)`)
         console.log(`[ProgramConversionService.getTrainerClients]   - Status must be 'Active'`)
-        console.log(`[ProgramConversionService.getTrainerClients]   - User document must exist at\
+        console.log(`[ProgramConversionService.getTrainerClients]   - User document must exist at /users/{userId}`)
+        console.log(`[ProgramConversionService.getTrainerClients] 🔍 Check if clients have completed signup process`)
+      }
+
+      // Map to the format expected by the selection dialog
+      const clientsForDialog = activeClientsWithAccounts.map((client) => ({
+        id: client.id,
+        name: client.name,
+        email: client.email || "",
+        userId: client.userId, // Include userId for program sending
+      }))
+
+      console.log(`[ProgramConversionService.getTrainerClients] 🎯 Final client list for dialog:`)
+      clientsForDialog.forEach((client, index) => {
+        console.log(`[ProgramConversionService.getTrainerClients] Dialog Client ${index + 1}:`, {
+          id: client.id,
+          name: client.name,
+          email: client.email || "NO_EMAIL",
+          userId: client.userId,
+        })
+      })
+
+      console.log(`[ProgramConversionService.getTrainerClients] 🏁 === CLIENT SELECTION PROCESS COMPLETE ===`)
+      return clientsForDialog
+    } catch (error) {
+      console.error("[ProgramConversionService.getTrainerClients] ❌ UNEXPECTED ERROR:", error)
+      console.error("[ProgramConversionService.getTrainerClients] Error details:", {
+        message: error.message,
+        code: error.code,
+        stack: error.stack?.substring(0, 500),
+        trainerId,
+      })
+      return []
+    }
+  }
+}
+
+// Export singleton instance
+export const programConversionService = new ProgramConversionService()
