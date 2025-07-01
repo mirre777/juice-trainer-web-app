@@ -970,15 +970,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                   <span className="ml-2 text-gray-600">Loading clients...</span>
                 </div>
               ) : clientsFetchError ? (
-                <div className="text-center py-4">
-                  <div className="text-gray-500 mb-2">{clientsFetchError}</div>
-                  <Button variant="outline" size="sm" onClick={() => trainer?.uid && fetchClients(trainer.uid)}>
-                    Retry
-                  </Button>
-                </div>
+                <div className="text-center py-4 text-gray-500">{clientsFetchError}</div>
               ) : clients.length === 0 ? (
                 <div className="text-center py-4">
-                  <div className="text-gray-500 mb-2">No active clients found.</div>
+                  <div className="text-gray-500 mb-2">No active clients with linked accounts found.</div>
                   <div className="text-sm text-gray-400">
                     Make sure your clients have created accounts and are linked to you.
                   </div>
