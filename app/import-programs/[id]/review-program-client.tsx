@@ -1,11 +1,8 @@
 "use client"
 
 import { CardContent } from "@/components/ui/card"
-
 import { CardTitle } from "@/components/ui/card"
-
 import { CardHeader } from "@/components/ui/card"
-
 import type React from "react"
 import {
   ChevronLeft,
@@ -15,7 +12,6 @@ import {
   Trash2,
   Calendar,
   RotateCcw,
-  Plus,
   User,
   Info,
   Send,
@@ -53,9 +49,18 @@ import type { Client } from "@/types/client"
 interface ReviewProgramClientProps {
   importId: string
   programData: any
+  programId: string
+  programName: string
+  isDemo?: boolean
 }
 
-export default function ReviewProgramClient({ importId, programData }: ReviewProgramClientProps) {
+export default function ReviewProgramClient({
+  importId,
+  programData,
+  programId,
+  programName,
+  isDemo = false,
+}: ReviewProgramClientProps) {
   console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
   const router = useRouter()
   const { toast } = useToast()
@@ -70,9 +75,9 @@ export default function ReviewProgramClient({ importId, programData }: ReviewPro
   const [showSelectWeekDialog, setShowSelectWeekDialog] = useState(false)
   const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
+  const [showClientSelection, setShowClientSelection] = useState(false)
 
   // Client selection state
-  const [showClientSelection, setShowClientSelection] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [loadingClients, setLoadingClients] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
@@ -573,6 +578,60 @@ export default function ReviewProgramClient({ importId, programData }: ReviewPro
     fetchClients(trainer.uid)
   }
 
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "active":
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "inactive":
+        return "bg-gray-100 text-gray-800"
+      case "on hold":
+        return "bg-orange-100 text-orange-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const handleAssignProgram = async () => {
+    if (!selectedClientId) {
+      toast({
+        title: "No Client Selected",
+        description: "Please select a client to assign the program to.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsAssigning(true)
+    try {
+      const selectedClient = clients.find((c) => c.id === selectedClientId)
+
+      // TODO: Implement actual program assignment API
+      console.log("Assigning program", programId, "to client", selectedClientId)
+
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+
+      toast({
+        title: "Program Assigned!",
+        description: `Successfully assigned "${programName}" to ${selectedClient?.name || "client"}.`,
+      })
+
+      setShowClientSelection(false)
+      setSelectedClientId("")
+    } catch (error) {
+      console.error("Error assigning program:", error)
+      toast({
+        title: "Assignment Failed",
+        description: "Failed to assign program to client. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsAssigning(false)
+    }
+  }
+
   if (!programState) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -674,11 +733,14 @@ export default function ReviewProgramClient({ importId, programData }: ReviewPro
             </div>
           ) : clients.length === 0 ? (
             <div className="text-center py-8">
-              <User className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <div className="text-gray-600 mb-2">No clients with linked accounts found</div>
-              <div className="text-sm text-gray-500">
-                Your clients need to create accounts and link them to you before you can send programs.
+              <div className="text-gray-400 mb-2">
+                <Calendar className="mx-auto h-12 w-12" />
               </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-1">No clients with linked accounts found</h3>
+              <p className="text-gray-500 mb-4">
+                Your clients need to create accounts and link them to you before you can send programs.
+              </p>
+              <Button variant="outline">+ Add Client</Button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -996,20 +1058,6 @@ export default function ReviewProgramClient({ importId, programData }: ReviewPro
                               </div>
                             </div>
                           ))}
-
-                          <div className="grid grid-cols-9 gap-4 py-2 px-4">
-                            <div className="col-span-7"></div>
-                            <div className="col-span-2 flex justify-end">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => addSet(routineIndex, exerciseIndex)}
-                              >
-                                <Plus className="h-4 w-4 text-gray-400" />
-                              </Button>
-                            </div>
-                          </div>
                         </div>
                       ))}
                     </div>

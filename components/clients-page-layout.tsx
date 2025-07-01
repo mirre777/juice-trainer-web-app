@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Search, Filter, ChevronDown, PlusCircle, Share, ChevronUp } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Search, Filter, ChevronDown, PlusCircle, Share } from "lucide-react"
 import { ClientsList } from "@/components/clients/clients-list"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { ClientInvitationDialog } from "@/components/clients/client-invitation-dialog"
@@ -34,9 +34,24 @@ export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
   const [clients, setClients] = useState<Client[]>([])
   const [filteredClients, setFilteredClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
-  const [allClientsExpanded, setAllClientsExpanded] = useState(false)
   const [trainerCode, setTrainerCode] = useState<string>("")
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
+
+  // Handle clicking outside dropdown to close it
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   // Fetch trainer's universal invite code
   useEffect(() => {
@@ -205,10 +220,7 @@ export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
   const handleStatusChange = (status: string) => {
     console.log("[ClientsPageLayout] handleStatusChange called. New status:", status)
     setStatusFilter(status)
-  }
-
-  const handleToggleAll = () => {
-    setAllClientsExpanded((prev) => !prev)
+    setIsDropdownOpen(false)
   }
 
   return (
@@ -223,45 +235,44 @@ export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
             placeholder="Search clients..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4 py-2 w-full sm:w-[300px] border border-gray-200 rounded-lg"
+            className="pl-10 pr-4 py-2 w-full sm:w-[300px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
           />
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
         </div>
 
         <div className="flex flex-wrap gap-3 w-full sm:w-auto">
           {/* Status Filter */}
-          <div className="relative">
-            <div className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg">
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
               <Filter className="h-4 w-4 text-gray-500" />
               <span className="text-sm">Status:</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="appearance-none bg-transparent pr-8 text-sm focus:outline-none"
-              >
-                <option value="All">All</option>
-                <option value="Active">Active</option>
-                <option value="On Hold">On Hold</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Pending">Pending</option>
-                <option value="Accepted Invitation">Accepted Invitation</option>
-              </select>
-              <ChevronDown className="h-4 w-4 text-gray-500 absolute right-3" />
-            </div>
-          </div>
+              <span className="text-sm font-medium">{statusFilter}</span>
+              <ChevronDown
+                className={`h-4 w-4 text-gray-500 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`}
+              />
+            </button>
 
-          {/* Toggle All Button */}
-          <button
-            onClick={handleToggleAll}
-            className="px-4 py-2 border border-gray-200 rounded-lg flex items-center gap-2"
-          >
-            {allClientsExpanded ? (
-              <ChevronUp className="h-4 w-4 text-gray-500" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500" />
+            {isDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                <div className="py-1">
+                  {["All", "Active", "On Hold", "Inactive", "Pending", "Accepted Invitation"].map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusChange(status)}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                        statusFilter === status ? "bg-primary/10 text-primary font-medium" : "text-gray-700"
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
-            <span className="text-sm">{allClientsExpanded ? "Collapse All" : "Expand All"}</span>
-          </button>
+          </div>
 
           {/* Show Code Button */}
           <Button
@@ -288,7 +299,7 @@ export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
       {/* Clients List */}
       <ClientsList
         clients={filteredClients}
-        allClientsExpanded={allClientsExpanded}
+        allClientsExpanded={false}
         isDemo={isDemo}
         loading={loading}
         onClientDeleted={handleClientDeleted}
