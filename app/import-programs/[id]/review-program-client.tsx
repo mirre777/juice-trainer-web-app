@@ -57,7 +57,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
-  const [showSendProgramDialog, setShowSendProgramDialog] = useState(false)
+  const [showClientSelection, setShowClientSelection] = useState(false)
   const [messageToClient, setMessageToClient] = useState("")
   const [showSelectWeekDialog, setShowSelectWeekDialog] = useState(false)
   const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
@@ -204,41 +204,42 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  // Fetch clients when component mounts
+  // Load clients on component mount
   useEffect(() => {
-    const loadClients = async () => {
-      setIsLoadingClients(true)
-      try {
-        console.log("[ReviewProgramClient] Fetching trainer's clients...")
-        const response = await fetch("/api/clients")
+    fetchClients()
+  }, [])
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
+  // Fetch clients when send dialog opens
+  const fetchClients = async () => {
+    setIsLoadingClients(true)
+    try {
+      console.log("[fetchClients] Fetching trainer's clients...")
+      const response = await fetch("/api/clients")
 
-        const data = await response.json()
-        console.log("[ReviewProgramClient] Response:", data)
-
-        if (data.success) {
-          setClients(data.clients || [])
-          console.log(`[ReviewProgramClient] Loaded ${data.clients?.length || 0} clients`)
-        } else {
-          throw new Error(data.error || "Failed to fetch clients")
-        }
-      } catch (error) {
-        console.error("[ReviewProgramClient] Error:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load clients. Please try again.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoadingClients(false)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
-    }
 
-    loadClients()
-  }, [toast])
+      const data = await response.json()
+      console.log("[fetchClients] Response:", data)
+
+      if (data.success) {
+        setClients(data.clients || [])
+        console.log(`[fetchClients] Loaded ${data.clients?.length || 0} clients`)
+      } else {
+        throw new Error(data.error || "Failed to fetch clients")
+      }
+    } catch (error) {
+      console.error("[fetchClients] Error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load clients. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingClients(false)
+    }
+  }
 
   // Derived state for current routines based on current week
   const currentRoutines: WorkoutRoutine[] = useMemo(() => {
@@ -587,7 +588,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           title: "Success!",
           description: `Program "${programState.program_title}" sent to ${selectedClient.name} successfully!`,
         })
-        setShowSendProgramDialog(false)
+        setShowClientSelection(false)
         setSelectedClient(null)
         setMessageToClient("")
       } else {
@@ -665,10 +666,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </Button>
           <Button
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => {
-              setShowSendProgramDialog(true)
-              // Remove fetchClients() call since clients are already loaded
-            }}
+            onClick={() => setShowClientSelection(!showClientSelection)}
             disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
           >
             <Send className="h-4 w-4" />
@@ -958,40 +956,45 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         </div>
       )}
 
-      {/* Send Program Dialog */}
-      <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Send Program to Client</DialogTitle>
-            <DialogDescription>
-              Choose a client to send "{programState?.program_title}" to their mobile app.
-            </DialogDescription>
-          </DialogHeader>
-
+      {/* Client Selection Section */}
+      {showClientSelection && (
+        <Card className="mt-6 p-6">
           <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Send to Client</h3>
+                <p className="text-sm text-gray-500">
+                  Choose a client to send "{programState?.program_title}" to their mobile app.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowClientSelection(false)}>
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+            </div>
+
             {/* Client Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Client</label>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Select Client</label>
               {isLoadingClients ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
                   <span className="ml-2 text-gray-500">Loading clients...</span>
                 </div>
               ) : clients.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                   <User className="mx-auto h-8 w-8 mb-2" />
                   <p>No active clients with linked accounts found.</p>
                   <p className="text-sm">Make sure your clients have created accounts and are linked to you.</p>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
                   {clients.map((client) => (
                     <div
                       key={client.id}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                         selectedClient?.id === client.id
                           ? "border-lime-500 bg-lime-50"
-                          : "border-gray-200 hover:border-gray-300"
+                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                       }`}
                       onClick={() => setSelectedClient(client)}
                     >
@@ -1039,32 +1042,32 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 </div>
               </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isSendingProgram}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendToClient}
-              disabled={!selectedClient || isSendingProgram}
-              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
-            >
-              {isSendingProgram ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-800 mr-2"></div>
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Send Program
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            {/* Send Button */}
+            {selectedClient && (
+              <div className="flex justify-end pt-4 border-t">
+                <Button
+                  onClick={handleSendToClient}
+                  disabled={isSendingProgram}
+                  className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+                >
+                  {isSendingProgram ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-800 mr-2"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Program to {selectedClient.name}
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Confirmation Dialog for Unsaved Changes */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
