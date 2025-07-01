@@ -1,194 +1,44 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
+import { type NextRequest, NextResponse } from "next/server"
+import { getClientsForTrainer } from "@/lib/firebase/client-service"
 
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🚀 [API] Starting /api/clients request")
-    console.log("🚀 [API] Runtime:", process.env.VERCEL_REGION || "local")
-    console.log("🚀 [API] Node version:", process.version)
+    const { searchParams } = new URL(request.url)
+    const trainerId = searchParams.get("trainerId")
 
-    const cookieStore = cookies()
-    const userId = cookieStore.get("user_id")?.value
-    console.log("🆔 [API] User ID from cookie:", userId)
+    console.log("[API /clients] Request received with trainerId:", trainerId)
 
-    if (!userId) {
-      console.log("❌ [API] No user_id in cookies")
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    if (!trainerId) {
+      console.log("[API /clients] No trainerId provided")
+      return NextResponse.json({ success: false, error: "Trainer ID is required" }, { status: 400 })
     }
 
-    console.log("📊 [API] Attempting to import Firebase...")
+    console.log("[API /clients] Calling getClientsForTrainer...")
+    const clients = await getClientsForTrainer(trainerId)
+    console.log("[API /clients] Raw clients from service:", clients?.length || 0, "clients")
+    console.log("[API /clients] First few clients:", clients?.slice(0, 3))
 
-    // Test Firebase import
-    let db, collection, getDocs
-    try {
-      const firebaseModule = await import("@/lib/firebase/firebase")
-      db = firebaseModule.db
-      console.log("✅ [API] Firebase db imported:", !!db)
+    // Filter for active clients with linked accounts
+    const activeLinkedClients =
+      clients?.filter((client) => {
+        const hasLinkedAccount = client.hasFirebaseAuth === true
+        const isActive = client.status !== "archived" && client.status !== "deleted"
+        console.log(
+          `[API /clients] Client ${client.name}: hasFirebaseAuth=${client.hasFirebaseAuth}, status=${client.status}, included=${hasLinkedAccount && isActive}`,
+        )
+        return hasLinkedAccount && isActive
+      }) || []
 
-      const firestoreModule = await import("firebase/firestore")
-      collection = firestoreModule.collection
-      getDocs = firestoreModule.getDocs
-      console.log("✅ [API] Firestore functions imported")
-    } catch (importError) {
-      console.error("❌ [API] Firebase import failed:", importError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Firebase import failed",
-          details: importError.message,
-        },
-        { status: 500 },
-      )
-    }
+    console.log("[API /clients] Filtered active linked clients:", activeLinkedClients.length)
 
-    if (!db) {
-      console.error("❌ [API] Firebase db is null/undefined")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Firebase database not available",
-        },
-        { status: 500 },
-      )
-    }
-
-    console.log("📊 [API] Creating collection reference...")
-    const collectionPath = `users/${userId}/clients`
-    console.log("📍 [API] Collection path:", collectionPath)
-
-    let clientsRef, snapshot
-    try {
-      clientsRef = collection(db, "users", userId, "clients")
-      console.log("✅ [API] Collection reference created")
-
-      console.log("📊 [API] Executing getDocs query...")
-      snapshot = await getDocs(clientsRef)
-      console.log("✅ [API] Query executed successfully")
-    } catch (queryError) {
-      console.error("❌ [API] Query failed:", queryError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Firestore query failed",
-          details: queryError.message,
-        },
-        { status: 500 },
-      )
-    }
-
-    console.log(`📈 [API] Found ${snapshot.size} documents`)
-    console.log(`📈 [API] Snapshot empty:`, snapshot.empty)
-    console.log(`📈 [API] Snapshot metadata:`, {
-      hasPendingWrites: snapshot.metadata.hasPendingWrites,
-      fromCache: snapshot.metadata.fromCache,
-    })
-
-    const clients: any[] = []
-    let processedCount = 0
-    let validCount = 0
-    let invalidCount = 0
-
-    snapshot.forEach((doc) => {
-      processedCount++
-      const data = doc.data()
-
-      console.log(`[API] Processing document ${processedCount}/${snapshot.size} - ID: ${doc.id}`)
-      console.log(`[API] Document data:`, {
-        name: data.name,
-        nameType: typeof data.name,
-        nameLength: data.name?.length,
-        email: data.email,
-        status: data.status,
-        hasCreatedAt: !!data.createdAt,
-        keys: Object.keys(data),
-      })
-
-      // Use the same validation as the real-time listener
-      const hasValidName = data.name && typeof data.name === "string" && data.name.trim() !== ""
-
-      if (hasValidName) {
-        validCount++
-        const client = {
-          id: doc.id,
-          name: data.name,
-          email: data.email || "",
-          phone: data.phone || "",
-          status: data.status || "pending",
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
-          notes: data.notes || "",
-          progress: data.progress || 0,
-          sessions: data.sessions || { completed: 0, total: 0 },
-          completion: data.completion || 0,
-          bgColor: data.bgColor || "#f3f4f6",
-          textColor: data.textColor || "#111827",
-          lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
-          metrics: data.metrics || [],
-          goal: data.goal || "",
-          program: data.program || "",
-          inviteCode: data.inviteCode || "",
-          userId: data.userId || "",
-          initials: data.name
-            .split(" ")
-            .map((part: string) => part[0])
-            .join("")
-            .toUpperCase()
-            .substring(0, 2),
-        }
-
-        clients.push(client)
-        console.log(`[API] ✅ Added client ${validCount}: ${client.name}`)
-      } else {
-        invalidCount++
-        console.log(`[API] ❌ Skipped invalid client ${invalidCount}: ${doc.id}`)
-        console.log(`[API] ❌ Validation failed:`, {
-          hasName: !!data.name,
-          nameIsString: typeof data.name === "string",
-          nameNotEmpty: data.name?.trim() !== "",
-          actualName: data.name,
-        })
-      }
-    })
-
-    console.log(`📊 [API] Processing summary:`)
-    console.log(`  - Total documents: ${snapshot.size}`)
-    console.log(`  - Processed: ${processedCount}`)
-    console.log(`  - Valid clients: ${validCount}`)
-    console.log(`  - Invalid clients: ${invalidCount}`)
-    console.log(`  - Final array length: ${clients.length}`)
-
-    const response = {
+    return NextResponse.json({
       success: true,
-      clients: clients,
-      count: clients.length,
-      debug: {
-        totalDocuments: snapshot.size,
-        processedCount,
-        validCount,
-        invalidCount,
-        collectionPath,
-        userId,
-        timestamp: new Date().toISOString(),
-      },
-    }
-
-    console.log(`✅ [API] Returning response with ${clients.length} clients`)
-    return NextResponse.json(response)
-  } catch (error: any) {
-    console.error("💥 [API] Unexpected error:", error)
-    console.error("💥 [API] Error stack:", error.stack)
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error",
-        details: error?.message || "Unknown error",
-        stack: error?.stack,
-      },
-      { status: 500 },
-    )
+      clients: activeLinkedClients,
+      totalClients: clients?.length || 0,
+      activeLinkedClients: activeLinkedClients.length,
+    })
+  } catch (error) {
+    console.error("[API /clients] Error fetching clients:", error)
+    return NextResponse.json({ success: false, error: "Failed to fetch clients" }, { status: 500 })
   }
 }
