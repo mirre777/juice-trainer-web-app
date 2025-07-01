@@ -35,7 +35,102 @@ export function isValidClientData(data: any): boolean {
   return data && typeof data === "object" && typeof data.name === "string" && !data.name.includes("channel?VER=")
 }
 
-// Ensure the client data mapping includes the status field for subscription updates
+// NEW: Get user data by following the userId from client document
+async function getUserDataFromUserId(userId: string): Promise<any> {
+  try {
+    if (!userId) {
+      console.log(`[getUserDataFromUserId] No userId provided`)
+      return null
+    }
+
+    const userPath = `users/${userId}`
+    console.log(`[getUserDataFromUserId] 📍 Following userId to path: /${userPath}`)
+
+    const userRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userRef)
+
+    if (userDoc.exists()) {
+      const userData = userDoc.data()
+      console.log(`[getUserDataFromUserId] ✅ Found user data:`, {
+        id: userId,
+        name: userData.name || "NO_NAME",
+        email: userData.email || "NO_EMAIL",
+        status: userData.status || "NO_STATUS",
+        hasTrainers: !!(userData.trainers && userData.trainers.length > 0),
+      })
+      return userData
+    } else {
+      console.log(`[getUserDataFromUserId] ❌ User document does not exist at /${userPath}`)
+      return null
+    }
+  } catch (error) {
+    console.error(`[getUserDataFromUserId] Error getting user data for ${userId}:`, error)
+    return null
+  }
+}
+
+// Enhanced client data mapping that follows userId to get complete user data
+export async function mapClientDataWithUserInfo(id: string, data: any): Promise<Client | null> {
+  // Check for corrupted data
+  if (!isValidClientData(data)) {
+    console.error("Invalid client data detected:", data)
+    return null
+  }
+
+  console.log(`[mapClientDataWithUserInfo] 🔍 Processing client ${id}:`, {
+    name: data.name,
+    status: data.status,
+    userId: data.userId || "NO_USER_ID",
+    email: data.email || "NO_EMAIL_IN_CLIENT_DOC",
+  })
+
+  // If client has userId, follow it to get complete user data
+  let userData = null
+  if (data.userId) {
+    userData = await getUserDataFromUserId(data.userId)
+  }
+
+  // Merge client data with user data (user data takes precedence for contact info)
+  const mergedData = {
+    id: id,
+    name: userData?.name || data.name || "Unnamed Client",
+    initials: getInitials(userData?.name || data.name || "UC"),
+    status: data.status || "Pending",
+    progress: data.progress || 0,
+    sessions: data.sessions || { completed: 0, total: 0 },
+    completion: data.completion || 0,
+    notes: data.notes || "",
+    bgColor: data.bgColor || "#f3f4f6",
+    textColor: data.textColor || "#111827",
+    lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
+    metrics: data.metrics || [],
+    email: userData?.email || data.email || "", // Prefer user document email
+    goal: data.goal || "",
+    program: data.program || "",
+    createdAt: data.createdAt,
+    inviteCode: data.inviteCode || "",
+    userId: data.userId || "",
+    phone: userData?.phone || data.phone || "", // Prefer user document phone
+    // Add user-specific data
+    userStatus: userData?.status || "unknown",
+    hasLinkedAccount: !!(data.userId && userData),
+    _lastUpdated: Date.now(),
+  } as Client
+
+  console.log(`[mapClientDataWithUserInfo] ✅ Mapped client:`, {
+    id: mergedData.id,
+    name: mergedData.name,
+    email: mergedData.email,
+    status: mergedData.status,
+    userId: mergedData.userId,
+    hasLinkedAccount: mergedData.hasLinkedAccount,
+    userStatus: mergedData.userStatus,
+  })
+
+  return mergedData
+}
+
+// Synchronous version for backward compatibility
 export function mapClientData(id: string, data: any): Client | null {
   // Check for corrupted data
   if (!isValidClientData(data)) {
@@ -48,7 +143,7 @@ export function mapClientData(id: string, data: any): Client | null {
     id: id,
     name: data.name || "Unnamed Client",
     initials: getInitials(data.name || "UC"),
-    status: data.status || "Pending", // Ensure status is included and defaults to "Pending"
+    status: data.status || "Pending",
     progress: data.progress || 0,
     sessions: data.sessions || { completed: 0, total: 0 },
     completion: data.completion || 0,
@@ -63,185 +158,134 @@ export function mapClientData(id: string, data: any): Client | null {
     createdAt: data.createdAt,
     inviteCode: data.inviteCode || "",
     userId: data.userId || "",
-    phone: data.phone || "", // Add phone field
-    // Add a timestamp to force re-render when data changes
+    phone: data.phone || "",
     _lastUpdated: Date.now(),
   } as Client
 }
 
-// Get all clients for a specific trainer - ENHANCED WITH DETAILED DEBUGGING
+// Get all clients for a specific trainer - ENHANCED WITH DETAILED PATH LOGGING AND USER DATA FOLLOWING
 export async function fetchClients(trainerUid: string): Promise<Client[]> {
   try {
-    console.log(`[fetchClients] 🔍 Starting fetch for trainer: ${trainerUid}`)
-    console.log(`[fetchClients] 🔗 Firebase app name: ${db.app.name}`)
-    console.log(`[fetchClients] 🔗 Firebase project ID: ${db.app.options.projectId}`)
+    console.log(`[fetchClients] 🚀 === STARTING CLIENT FETCH PROCESS ===`)
+    console.log(`[fetchClients] 🔍 Trainer ID: ${trainerUid}`)
+    console.log(`[fetchClients] 🔗 Firebase app: ${db.app.name}`)
+    console.log(`[fetchClients] 🔗 Firebase project: ${db.app.options.projectId}`)
 
     if (!trainerUid) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "fetchClients" },
-        "No trainer UID provided",
-      )
-      logError(error)
       console.log(`[fetchClients] ❌ No trainer UID provided`)
       return []
     }
 
-    // Log the exact Firestore path we're trying to access
-    const firestorePath = `users/${trainerUid}/clients`
-    console.log(`[fetchClients] 📍 EXACT FIRESTORE PATH: /${firestorePath}`)
-    console.log(`[fetchClients] 📡 Creating Firestore reference to: /users/${trainerUid}/clients`)
+    // STEP 1: Define and log the exact Firestore paths
+    const trainerPath = `users/${trainerUid}`
+    const clientsCollectionPath = `users/${trainerUid}/clients`
 
-    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
-    console.log(`[fetchClients] 📋 Collection reference created successfully`)
+    console.log(`[fetchClients] 📍 FIRESTORE PATHS:`)
+    console.log(`[fetchClients]   - Trainer document: /${trainerPath}`)
+    console.log(`[fetchClients]   - Clients collection: /${clientsCollectionPath}`)
 
-    // First, let's try a simple query without orderBy to see if there are ANY documents
-    console.log(`[fetchClients] 🔍 Step 1: Checking if collection exists with simple query...`)
-    try {
-      const simpleQuery = query(clientsCollectionRef)
-      const simpleSnapshot = await getDocs(simpleQuery)
-      console.log(`[fetchClients] 📊 Simple query result: ${simpleSnapshot.size} documents found`)
+    // STEP 2: Verify trainer document exists
+    console.log(`[fetchClients] 🔍 Step 1: Verifying trainer document exists...`)
+    const trainerRef = doc(db, "users", trainerUid)
+    const trainerDoc = await getDoc(trainerRef)
 
-      if (simpleSnapshot.size === 0) {
-        console.log(`[fetchClients] ⚠️ COLLECTION IS COMPLETELY EMPTY`)
-        console.log(`[fetchClients] 🔍 Checking if trainer document exists...`)
-
-        // Check if the trainer document itself exists
-        const trainerRef = doc(db, "users", trainerUid)
-        const trainerDoc = await getDoc(trainerRef)
-
-        if (trainerDoc.exists()) {
-          console.log(`[fetchClients] ✅ Trainer document EXISTS`)
-          console.log(`[fetchClients] 📄 Trainer data:`, trainerDoc.data())
-        } else {
-          console.log(`[fetchClients] ❌ TRAINER DOCUMENT DOES NOT EXIST`)
-          return []
-        }
-
-        return []
-      }
-
-      // If we have documents, log them all
-      console.log(`[fetchClients] 📋 Documents found in simple query:`)
-      simpleSnapshot.forEach((doc, index) => {
-        const data = doc.data()
-        console.log(`[fetchClients] Document ${index + 1} (${doc.id}):`, {
-          name: data.name,
-          status: data.status,
-          userId: data.userId || "NO_USER_ID",
-          createdAt: data.createdAt ? "HAS_CREATED_AT" : "NO_CREATED_AT",
-          isTemporary: data.isTemporary,
-          email: data.email || "NO_EMAIL",
-        })
-      })
-    } catch (simpleQueryError) {
-      console.log(`[fetchClients] ❌ Simple query failed:`, simpleQueryError)
+    if (!trainerDoc.exists()) {
+      console.log(`[fetchClients] ❌ TRAINER DOCUMENT DOES NOT EXIST at /${trainerPath}`)
       return []
     }
 
-    // Now try the orderBy query
-    console.log(`[fetchClients] 🔍 Step 2: Trying orderBy query...`)
-    console.log(`[fetchClients] 📋 Creating query with orderBy createdAt desc`)
-
-    let clientsSnapshot
-    let queryError = null
-
-    try {
-      const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
-      console.log(`[fetchClients] 🚀 Executing orderBy query...`)
-
-      const result = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-        trainerUid,
-        function: "fetchClients",
-      })
-
-      clientsSnapshot = result[0]
-      queryError = result[1]
-    } catch (orderByError) {
-      console.log(`[fetchClients] ❌ OrderBy query failed, falling back to simple query:`, orderByError)
-      queryError = orderByError
-    }
-
-    if (queryError || !clientsSnapshot) {
-      console.log(`[fetchClients] ⚠️ OrderBy query failed, using simple query results`)
-
-      // Fall back to simple query results
-      const simpleQuery = query(clientsCollectionRef)
-      const simpleSnapshot = await getDocs(simpleQuery)
-      clientsSnapshot = simpleSnapshot
-    }
-
-    console.log(`[fetchClients] 📊 Final query returned ${clientsSnapshot.size} documents`)
-
-    if (clientsSnapshot.empty) {
-      console.log(`[fetchClients] ⚠️ Final result is empty`)
-      return []
-    }
-
-    const clients: Client[] = []
-    let validCount = 0
-    let invalidCount = 0
-
-    clientsSnapshot.forEach((doc) => {
-      const data = doc.data()
-      console.log(`[fetchClients] 🔍 Processing document ${doc.id}:`, {
-        name: data.name,
-        status: data.status,
-        userId: data.userId || "NO_USER_ID",
-        isTemporary: data.isTemporary,
-        email: data.email || "NO_EMAIL",
-        createdAt: data.createdAt ? "HAS_CREATED_AT" : "NO_CREATED_AT",
-        rawData: JSON.stringify(data, null, 2).substring(0, 200) + "...",
-      })
-
-      const client = mapClientData(doc.id, data)
-      if (client) {
-        clients.push(client)
-        validCount++
-        console.log(`[fetchClients] ✅ Added client: ${client.name} (${client.status})`)
-      } else {
-        invalidCount++
-        console.log(`[fetchClients] ❌ Skipped invalid client data for document ${doc.id}`)
-        console.log(`[fetchClients] ❌ Invalid data:`, data)
-      }
+    const trainerData = trainerDoc.data()
+    console.log(`[fetchClients] ✅ Trainer document exists:`, {
+      name: trainerData.name || "NO_NAME",
+      email: trainerData.email || "NO_EMAIL",
+      hasClients: !!(trainerData.clients && trainerData.clients.length > 0),
+      clientsArray: trainerData.clients || [],
     })
 
-    console.log(`[fetchClients] 📈 FINAL SUMMARY:`)
-    console.log(`[fetchClients]   - Firestore path: /${firestorePath}`)
-    console.log(`[fetchClients]   - Total documents: ${clientsSnapshot.size}`)
-    console.log(`[fetchClients]   - Valid clients: ${validCount}`)
-    console.log(`[fetchClients]   - Invalid clients: ${invalidCount}`)
-    console.log(`[fetchClients]   - Returning: ${clients.length} clients`)
+    // STEP 3: Query the clients collection
+    console.log(`[fetchClients] 🔍 Step 2: Querying clients collection...`)
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
 
-    // Log each client being returned with full details
+    // Try simple query first
+    console.log(`[fetchClients] 📡 Executing simple query on /${clientsCollectionPath}`)
+    const simpleQuery = query(clientsCollectionRef)
+    const simpleSnapshot = await getDocs(simpleQuery)
+
+    console.log(`[fetchClients] 📊 Simple query result: ${simpleSnapshot.size} documents`)
+
+    if (simpleSnapshot.size === 0) {
+      console.log(`[fetchClients] ⚠️ CLIENTS COLLECTION IS EMPTY`)
+      console.log(`[fetchClients] 💡 This means no client documents exist at /${clientsCollectionPath}`)
+      return []
+    }
+
+    // STEP 4: Process each client document and follow userId links
+    console.log(`[fetchClients] 🔍 Step 3: Processing client documents and following userId links...`)
+    const clients: Client[] = []
+    let processedCount = 0
+
+    for (const docSnapshot of simpleSnapshot.docs) {
+      processedCount++
+      const clientId = docSnapshot.id
+      const clientData = docSnapshot.data()
+
+      console.log(`[fetchClients] 📄 Processing client ${processedCount}/${simpleSnapshot.size} (${clientId}):`)
+      console.log(`[fetchClients]   - Document path: /${clientsCollectionPath}/${clientId}`)
+      console.log(`[fetchClients]   - Name: ${clientData.name || "NO_NAME"}`)
+      console.log(`[fetchClients]   - Status: ${clientData.status || "NO_STATUS"}`)
+      console.log(`[fetchClients]   - UserId: ${clientData.userId || "NO_USER_ID"}`)
+      console.log(`[fetchClients]   - Email in client doc: ${clientData.email || "NO_EMAIL"}`)
+      console.log(`[fetchClients]   - IsTemporary: ${clientData.isTemporary || false}`)
+
+      // Use enhanced mapping that follows userId
+      const client = await mapClientDataWithUserInfo(clientId, clientData)
+
+      if (client) {
+        clients.push(client)
+        console.log(`[fetchClients] ✅ Added client to results:`, {
+          id: client.id,
+          name: client.name,
+          status: client.status,
+          hasLinkedAccount: client.hasLinkedAccount,
+          email: client.email,
+        })
+      } else {
+        console.log(`[fetchClients] ❌ Skipped invalid client: ${clientId}`)
+      }
+    }
+
+    // STEP 5: Final summary and filtering
+    console.log(`[fetchClients] 📈 PROCESSING SUMMARY:`)
+    console.log(`[fetchClients]   - Total documents found: ${simpleSnapshot.size}`)
+    console.log(`[fetchClients]   - Valid clients processed: ${clients.length}`)
+    console.log(`[fetchClients]   - Firestore paths used:`)
+    console.log(`[fetchClients]     * Trainer: /${trainerPath}`)
+    console.log(`[fetchClients]     * Clients: /${clientsCollectionPath}`)
+    console.log(`[fetchClients]     * User docs: /users/{userId} (for each client with userId)`)
+
+    // Log each client with detailed info
     clients.forEach((client, index) => {
-      console.log(`[fetchClients] 🎯 Returning Client ${index + 1}:`, {
+      console.log(`[fetchClients] 🎯 Client ${index + 1} details:`, {
         id: client.id,
         name: client.name,
         status: client.status,
         userId: client.userId || "NO_USER_ID",
         email: client.email || "NO_EMAIL",
-        hasUserId: !!(client.userId && client.userId.trim() !== ""),
-        isActive: client.status === "Active",
-        willShowInDialog: !!(client.userId && client.userId.trim() !== "") && client.status === "Active",
+        hasLinkedAccount: client.hasLinkedAccount,
+        userStatus: client.userStatus,
+        willShowInDialog: !!(client.userId && client.hasLinkedAccount && client.status === "Active"),
       })
     })
 
+    console.log(`[fetchClients] 🏁 === FETCH PROCESS COMPLETE ===`)
     return clients
   } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "fetchClients", trainerUid },
-      "Unexpected error fetching trainer clients",
-    )
-    logError(appError)
-    console.log(`[fetchClients] ❌ Unexpected error:`, error)
-    console.log(`[fetchClients] ❌ Error details:`, {
+    console.error(`[fetchClients] ❌ UNEXPECTED ERROR:`, error)
+    console.error(`[fetchClients] ❌ Error details:`, {
       message: error.message,
       code: error.code,
       stack: error.stack?.substring(0, 500),
+      trainerUid,
     })
     return []
   }

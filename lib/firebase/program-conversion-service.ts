@@ -281,34 +281,35 @@ export class ProgramConversionService {
 
   /**
    * Get all clients for a trainer (for the selection dialog)
-   * NOW USES THE PROPER CLIENT SERVICE WITH DETAILED DEBUGGING
+   * ENHANCED WITH COMPREHENSIVE PATH LOGGING AND USER DATA FOLLOWING
    */
   async getTrainerClients(trainerId: string): Promise<Array<{ id: string; name: string; email?: string }>> {
     try {
-      console.log(`[ProgramConversionService.getTrainerClients] 🔍 Starting fetch for trainer: ${trainerId}`)
-      console.log(
-        `[ProgramConversionService.getTrainerClients] 📍 Will query Firestore path: /users/${trainerId}/clients`,
-      )
+      console.log(`[ProgramConversionService.getTrainerClients] 🚀 === STARTING CLIENT SELECTION PROCESS ===`)
+      console.log(`[ProgramConversionService.getTrainerClients] 🔍 Trainer ID: ${trainerId}`)
+      console.log(`[ProgramConversionService.getTrainerClients] 📍 Will query paths:`)
+      console.log(`[ProgramConversionService.getTrainerClients]   - Trainer: /users/${trainerId}`)
+      console.log(`[ProgramConversionService.getTrainerClients]   - Clients: /users/${trainerId}/clients`)
+      console.log(`[ProgramConversionService.getTrainerClients]   - User docs: /users/{userId} (for each client)`)
 
-      // Use the proper fetchClients function from client-service.ts
+      // Use the enhanced fetchClients function that follows userId links
       const allClients = await fetchClients(trainerId)
       console.log(
         `[ProgramConversionService.getTrainerClients] 📊 fetchClients returned ${allClients.length} total clients`,
       )
 
       if (allClients.length === 0) {
-        console.log(`[ProgramConversionService.getTrainerClients] ⚠️ NO CLIENTS FOUND AT ALL`)
-        console.log(`[ProgramConversionService.getTrainerClients] 🔍 This means either:`)
-        console.log(
-          `[ProgramConversionService.getTrainerClients]   1. The collection /users/${trainerId}/clients is empty`,
-        )
-        console.log(`[ProgramConversionService.getTrainerClients]   2. The trainer document doesn't exist`)
-        console.log(`[ProgramConversionService.getTrainerClients]   3. There's a permissions issue`)
-        console.log(`[ProgramConversionService.getTrainerClients]   4. The Firebase connection is failing`)
+        console.log(`[ProgramConversionService.getTrainerClients] ⚠️ NO CLIENTS FOUND`)
+        console.log(`[ProgramConversionService.getTrainerClients] 🔍 Possible reasons:`)
+        console.log(`[ProgramConversionService.getTrainerClients]   1. Collection /users/${trainerId}/clients is empty`)
+        console.log(`[ProgramConversionService.getTrainerClients]   2. Trainer document doesn't exist`)
+        console.log(`[ProgramConversionService.getTrainerClients]   3. Firebase permissions issue`)
+        console.log(`[ProgramConversionService.getTrainerClients]   4. Network/connection problem`)
         return []
       }
 
-      // Log all clients for debugging
+      // Log all clients with their linked user data
+      console.log(`[ProgramConversionService.getTrainerClients] 📋 All clients found:`)
       allClients.forEach((client, index) => {
         console.log(`[ProgramConversionService.getTrainerClients] Client ${index + 1}:`, {
           id: client.id,
@@ -316,57 +317,39 @@ export class ProgramConversionService {
           status: client.status,
           userId: client.userId || "NO_USER_ID",
           email: client.email || "NO_EMAIL",
+          hasLinkedAccount: client.hasLinkedAccount || false,
+          userStatus: client.userStatus || "unknown",
           isTemporary: client.isTemporary || false,
         })
       })
 
       // Filter to only active clients with linked accounts
+      console.log(`[ProgramConversionService.getTrainerClients] 🔍 Filtering for active clients with linked accounts...`)
       const activeClientsWithAccounts = allClients.filter((client) => {
         const hasUserId = client.userId && client.userId.trim() !== ""
         const isActive = client.status === "Active"
+        const hasLinkedAccount = client.hasLinkedAccount === true
 
-        console.log(`[ProgramConversionService.getTrainerClients] 🔍 Filtering client ${client.name}:`, {
+        console.log(`[ProgramConversionService.getTrainerClients] 🔍 Evaluating client ${client.name}:`, {
           hasUserId,
           isActive,
+          hasLinkedAccount,
           status: client.status,
           userId: client.userId || "NONE",
-          willInclude: hasUserId && isActive,
+          userStatus: client.userStatus || "unknown",
+          willInclude: hasUserId && isActive && hasLinkedAccount,
         })
 
-        return hasUserId && isActive
+        return hasUserId && isActive && hasLinkedAccount
       })
 
       console.log(
-        `[ProgramConversionService.getTrainerClients] ✅ After filtering: ${activeClientsWithAccounts.length} active clients with linked accounts`,
+        `[ProgramConversionService.getTrainerClients] ✅ After filtering: ${activeClientsWithAccounts.length} eligible clients`,
       )
 
       if (activeClientsWithAccounts.length === 0) {
-        console.log(`[ProgramConversionService.getTrainerClients] ⚠️ NO ACTIVE CLIENTS WITH LINKED ACCOUNTS`)
-        console.log(`[ProgramConversionService.getTrainerClients] 💡 This means:`)
-        console.log(`[ProgramConversionService.getTrainerClients]   - Clients exist but don't have userId field`)
-        console.log(`[ProgramConversionService.getTrainerClients]   - Clients exist but status is not 'Active'`)
-        console.log(`[ProgramConversionService.getTrainerClients]   - Clients need to accept invitations first`)
-      }
-
-      // Return in the format expected by the dialog
-      const result = activeClientsWithAccounts.map((client) => ({
-        id: client.id,
-        name: client.name,
-        email: client.email,
-      }))
-
-      console.log(`[ProgramConversionService.getTrainerClients] 🎯 Final result for dialog:`, result)
-      return result
-    } catch (error) {
-      console.error("[ProgramConversionService.getTrainerClients] ❌ Error fetching clients:", error)
-      console.error("[ProgramConversionService.getTrainerClients] ❌ Error details:", {
-        message: error.message,
-        code: error.code,
-        trainerId,
-      })
-      return []
-    }
-  }
-}
-
-export const programConversionService = new ProgramConversionService()
+        console.log(`[ProgramConversionService.getTrainerClients] ⚠️ NO ELIGIBLE CLIENTS FOR PROGRAM SENDING`)
+        console.log(`[ProgramConversionService.getTrainerClients] 💡 Requirements for eligibility:`)
+        console.log(`[ProgramConversionService.getTrainerClients]   - Must have userId field (linked account)`)
+        console.log(`[ProgramConversionService.getTrainerClients]   - Status must be 'Active'`)
+        console.log(`[ProgramConversionService.getTrainerClients]   - User document must exist at\
