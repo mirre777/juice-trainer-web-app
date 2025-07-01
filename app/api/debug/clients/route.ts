@@ -1,11 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import { fetchClients } from "@/lib/firebase/client-service"
 import { db } from "@/lib/firebase/firebase"
-import { collection, getDocs, doc, getDoc } from "firebase/firestore"
+import { collection, getDocs } from "firebase/firestore"
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.cookies.get("user_id")?.value
+    console.log("[DEBUG] Starting client debug endpoint...")
+
+    // Get user ID from cookie
+    const cookieStore = cookies()
+    const userId = cookieStore.get("user_id")?.value
 
     if (!userId) {
       return NextResponse.json(
@@ -17,10 +22,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log("[DEBUG] Starting debug analysis for user:", userId)
+    console.log("[DEBUG] User ID from cookie:", userId)
 
     // Get raw documents from Firestore
     const collectionPath = `users/${userId}/clients`
+    console.log("[DEBUG] Collection path:", collectionPath)
+
     const clientsRef = collection(db, collectionPath)
     const snapshot = await getDocs(clientsRef)
 
@@ -40,44 +47,30 @@ export async function GET(request: NextRequest) {
         documentId: doc.id,
         isValid,
         rawData: data,
-        validationDetails: {
-          hasName: !!data.name,
-          hasEmail: !!data.email,
-          hasStatus: !!data.status,
-          hasCreatedAt: !!data.createdAt,
-          nameType: typeof data.name,
-          emailType: typeof data.email,
-          statusType: typeof data.status,
-          createdAtType: typeof data.createdAt,
-        },
+        validationDetails: getValidationDetails(data),
       })
     })
 
-    // Get clients using the service
-    const serviceClients = await fetchClients(userId)
+    // Get clients via service
+    const serviceResult = await fetchClients(userId)
+    const serviceClients = serviceResult.success ? serviceResult.clients : []
 
-    // Check if user document exists
-    const userRef = doc(db, "users", userId)
-    const userDoc = await getDoc(userRef)
-
-    const debugInfo = {
-      userId,
-      collectionPath,
-      userExists: userDoc.exists(),
-      rawDocumentCount: rawDocuments.length,
-      serviceClientCount: serviceClients.length,
-      validDocuments: validationResults.filter((r) => r.isValid).length,
-      invalidDocuments: validationResults.filter((r) => !r.isValid).length,
-      rawDocuments: rawDocuments.slice(0, 3), // First 3 for debugging
-      validationResults,
-      serviceClients: serviceClients.slice(0, 3), // First 3 for debugging
-    }
-
-    console.log("[DEBUG] Analysis complete:", debugInfo)
+    console.log("[DEBUG] Raw documents:", rawDocuments.length)
+    console.log("[DEBUG] Service clients:", serviceClients.length)
 
     return NextResponse.json({
       success: true,
-      debug: debugInfo,
+      debug: {
+        userId,
+        collectionPath,
+        rawDocumentCount: rawDocuments.length,
+        serviceClientCount: serviceClients.length,
+        rawDocuments: rawDocuments.slice(0, 3), // First 3 for debugging
+        serviceClients: serviceClients.slice(0, 3), // First 3 for debugging
+        validationResults,
+        validDocuments: validationResults.filter((r) => r.isValid).length,
+        invalidDocuments: validationResults.filter((r) => !r.isValid).length,
+      },
     })
   } catch (error) {
     console.error("[DEBUG] Error:", error)
@@ -91,14 +84,24 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Simple validation function for debugging
+// Helper function to validate client data
 function isValidClientData(data: any): boolean {
-  return !!(
-    data &&
-    typeof data === "object" &&
-    data.name &&
-    typeof data.name === "string" &&
-    data.email &&
-    typeof data.email === "string"
-  )
+  if (!data || typeof data !== "object") return false
+  if (!data.name || typeof data.name !== "string") return false
+  if (!data.email || typeof data.email !== "string") return false
+  return true
+}
+
+// Helper function to get detailed validation info
+function getValidationDetails(data: any) {
+  const details = {
+    hasData: !!data,
+    isObject: typeof data === "object",
+    hasName: !!data?.name,
+    nameType: typeof data?.name,
+    hasEmail: !!data?.email,
+    emailType: typeof data?.email,
+    allFields: data ? Object.keys(data) : [],
+  }
+  return details
 }
