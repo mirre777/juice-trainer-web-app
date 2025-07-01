@@ -1,107 +1,97 @@
-import { type NextRequest, NextResponse } from "next/server"
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
+import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { fetchClients } from "@/lib/firebase/client-service"
-import { db } from "@/lib/firebase/firebase"
-import { collection, getDocs } from "firebase/firestore"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    console.log("[DEBUG] Starting client debug endpoint...")
+    console.log("🔍 [DEBUG] Starting debug clients endpoint")
 
-    // Get user ID from cookie
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
+    console.log("🆔 [DEBUG] User ID from cookie:", userId)
 
     if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "No user ID found in cookies",
-        },
-        { status: 401 },
-      )
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    console.log("[DEBUG] User ID from cookie:", userId)
+    // Import Firebase functions
+    const { db } = await import("@/lib/firebase/firebase")
+    const { collection, getDocs } = await import("firebase/firestore")
 
-    // Get raw documents from Firestore
-    const collectionPath = `users/${userId}/clients`
-    console.log("[DEBUG] Collection path:", collectionPath)
+    console.log("📊 [DEBUG] Checking Firestore collection...")
 
-    const clientsRef = collection(db, collectionPath)
+    // Check the collection directly
+    const clientsRef = collection(db, "users", userId, "clients")
     const snapshot = await getDocs(clientsRef)
 
-    const rawDocuments = []
-    const validationResults = []
+    console.log(`📈 [DEBUG] Found ${snapshot.size} documents in collection`)
+
+    const rawClients: any[] = []
+    const validClients: any[] = []
+    const invalidClients: any[] = []
 
     snapshot.forEach((doc) => {
       const data = doc.data()
-      rawDocuments.push({
+      const clientInfo = {
         id: doc.id,
-        ...data,
-      })
-
-      // Test validation on each document
-      const isValid = isValidClientData(data)
-      validationResults.push({
-        documentId: doc.id,
-        isValid,
+        name: data.name,
+        email: data.email,
+        status: data.status,
+        hasName: !!data.name,
+        hasEmail: !!data.email,
+        nameType: typeof data.name,
+        emailType: typeof data.email,
         rawData: data,
-        validationDetails: getValidationDetails(data),
-      })
+      }
+
+      rawClients.push(clientInfo)
+
+      // Check validation
+      if (
+        data.name &&
+        typeof data.name === "string" &&
+        data.name.trim() !== "" &&
+        data.email &&
+        typeof data.email === "string" &&
+        data.email.trim() !== ""
+      ) {
+        validClients.push(clientInfo)
+      } else {
+        invalidClients.push(clientInfo)
+      }
     })
-
-    // Get clients via service
-    const serviceResult = await fetchClients(userId)
-    const serviceClients = serviceResult.success ? serviceResult.clients : []
-
-    console.log("[DEBUG] Raw documents:", rawDocuments.length)
-    console.log("[DEBUG] Service clients:", serviceClients.length)
 
     return NextResponse.json({
       success: true,
-      debug: {
-        userId,
-        collectionPath,
-        rawDocumentCount: rawDocuments.length,
-        serviceClientCount: serviceClients.length,
-        rawDocuments: rawDocuments.slice(0, 3), // First 3 for debugging
-        serviceClients: serviceClients.slice(0, 3), // First 3 for debugging
-        validationResults,
-        validDocuments: validationResults.filter((r) => r.isValid).length,
-        invalidDocuments: validationResults.filter((r) => !r.isValid).length,
-      },
+      userId,
+      collectionPath: `users/${userId}/clients`,
+      totalDocuments: snapshot.size,
+      rawClients,
+      validClients: validClients.length,
+      invalidClients: invalidClients.length,
+      validationIssues: invalidClients.map((c) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        issues: [
+          !c.hasName && "Missing name",
+          !c.hasEmail && "Missing email",
+          c.nameType !== "string" && `Name is ${c.nameType}, not string`,
+          c.emailType !== "string" && `Email is ${c.emailType}, not string`,
+        ].filter(Boolean),
+      })),
     })
-  } catch (error) {
-    console.error("[DEBUG] Error:", error)
+  } catch (error: any) {
+    console.error("💥 [DEBUG] Error:", error)
     return NextResponse.json(
       {
         success: false,
         error: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )
   }
-}
-
-// Helper function to validate client data
-function isValidClientData(data: any): boolean {
-  if (!data || typeof data !== "object") return false
-  if (!data.name || typeof data.name !== "string") return false
-  if (!data.email || typeof data.email !== "string") return false
-  return true
-}
-
-// Helper function to get detailed validation info
-function getValidationDetails(data: any) {
-  const details = {
-    hasData: !!data,
-    isObject: typeof data === "object",
-    hasName: !!data?.name,
-    nameType: typeof data?.name,
-    hasEmail: !!data?.email,
-    emailType: typeof data?.email,
-    allFields: data ? Object.keys(data) : [],
-  }
-  return details
 }
