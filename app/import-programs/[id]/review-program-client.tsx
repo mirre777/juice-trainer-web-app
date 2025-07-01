@@ -204,37 +204,41 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }, [importData])
 
-  // Fetch clients when send dialog opens
-  const fetchClients = async () => {
-    setIsLoadingClients(true)
-    try {
-      console.log("[fetchClients] Fetching trainer's clients...")
-      const response = await fetch("/api/clients")
+  // Fetch clients when component mounts
+  useEffect(() => {
+    const loadClients = async () => {
+      setIsLoadingClients(true)
+      try {
+        console.log("[ReviewProgramClient] Fetching trainer's clients...")
+        const response = await fetch("/api/clients")
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log("[ReviewProgramClient] Response:", data)
+
+        if (data.success) {
+          setClients(data.clients || [])
+          console.log(`[ReviewProgramClient] Loaded ${data.clients?.length || 0} clients`)
+        } else {
+          throw new Error(data.error || "Failed to fetch clients")
+        }
+      } catch (error) {
+        console.error("[ReviewProgramClient] Error:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load clients. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoadingClients(false)
       }
-
-      const data = await response.json()
-      console.log("[fetchClients] Response:", data)
-
-      if (data.success) {
-        setClients(data.clients || [])
-        console.log(`[fetchClients] Loaded ${data.clients?.length || 0} clients`)
-      } else {
-        throw new Error(data.error || "Failed to fetch clients")
-      }
-    } catch (error) {
-      console.error("[fetchClients] Error:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load clients. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoadingClients(false)
     }
-  }
+
+    loadClients()
+  }, [toast])
 
   // Derived state for current routines based on current week
   const currentRoutines: WorkoutRoutine[] = useMemo(() => {
@@ -663,7 +667,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
             onClick={() => {
               setShowSendProgramDialog(true)
-              fetchClients() // Fetch clients when dialog opens
+              // Remove fetchClients() call since clients are already loaded
             }}
             disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
           >
