@@ -33,19 +33,38 @@ function getInitials(name: string): string {
 
 // Helper function to validate client data
 export function isValidClientData(data: any): boolean {
-  return data && typeof data === "object" && typeof data.name === "string" && !data.name.includes("channel?VER=")
+  const isValid =
+    data &&
+    typeof data === "object" &&
+    typeof data.name === "string" &&
+    data.name.trim() !== "" &&
+    !data.name.includes("channel?VER=") &&
+    data.status !== "Deleted"
+
+  console.log("[isValidClientData] Validating:", {
+    data: data,
+    isValid,
+    hasName: typeof data?.name === "string",
+    nameNotEmpty: data?.name?.trim() !== "",
+    noChannelCorruption: !data?.name?.includes("channel?VER="),
+    notDeleted: data?.status !== "Deleted",
+  })
+
+  return isValid
 }
 
 // Ensure the client data mapping includes the status field for subscription updates
 export function mapClientData(id: string, data: any): Client | null {
+  console.log("[mapClientData] Mapping client:", { id, data })
+
   // Check for corrupted data
   if (!isValidClientData(data)) {
-    console.error("Invalid client data detected:", data)
+    console.error("[mapClientData] Invalid client data detected:", data)
     return null
   }
 
   // Ensure we're getting the most up-to-date data
-  return {
+  const mappedClient = {
     id: id,
     name: data.name || "Unnamed Client",
     initials: getInitials(data.name || "UC"),
@@ -67,6 +86,9 @@ export function mapClientData(id: string, data: any): Client | null {
     phone: data.phone || "",
     _lastUpdated: Date.now(),
   } as Client
+
+  console.log("[mapClientData] Successfully mapped client:", mappedClient)
+  return mappedClient
 }
 
 // NEW: Check for duplicate email in trainer's clients
@@ -134,13 +156,35 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
 
   try {
     const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+    console.log(`[REALTIME] Collection path: users/${trainerUid}/clients`)
+
     const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
 
     // Create a single subscription and return the unsubscribe function
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        console.log(`[REALTIME] Received update: ${snapshot.size} clients, ${snapshot.docChanges().length} changes`)
+        console.log(`[REALTIME] Received update: ${snapshot.size} documents, ${snapshot.docChanges().length} changes`)
+        console.log(`[REALTIME] Snapshot metadata:`, {
+          hasPendingWrites: snapshot.metadata.hasPendingWrites,
+          isFromCache: snapshot.metadata.fromCache,
+          size: snapshot.size,
+          empty: snapshot.empty,
+        })
+
+        // Log all documents in the snapshot
+        snapshot.forEach((doc, index) => {
+          const data = doc.data()
+          console.log(`[REALTIME] Document ${index + 1}:`, {
+            id: doc.id,
+            exists: doc.exists(),
+            data: data,
+            name: data.name,
+            status: data.status,
+            isTemporary: data.isTemporary,
+            userId: data.userId || "none",
+          })
+        })
 
         // Log all changes for debugging
         snapshot.docChanges().forEach((change) => {
@@ -158,15 +202,18 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
 
         snapshot.forEach((doc) => {
           const data = doc.data()
+          console.log(`[REALTIME] Processing document ${doc.id}:`, data)
+
           const client = mapClientData(doc.id, data)
           if (client) {
+            console.log(`[REALTIME] ✅ Added client to list:`, client.name)
             clients.push(client)
           } else {
-            console.log(`[REALTIME] Skipping invalid client:`, { id: doc.id, data })
+            console.log(`[REALTIME] ❌ Skipped invalid client:`, { id: doc.id, data })
           }
         })
 
-        console.log(`[REALTIME] Processed ${clients.length} valid clients out of ${snapshot.size} total`)
+        console.log(`[REALTIME] Final result: ${clients.length} valid clients out of ${snapshot.size} total documents`)
         console.log(
           `[REALTIME] Valid clients:`,
           clients.map((c) => ({ id: c.id, name: c.name, status: c.status })),
@@ -205,7 +252,7 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
 // Get all clients for a specific trainer
 export async function fetchClients(trainerUid: string): Promise<Client[]> {
   try {
-    console.log("Fetching clients for trainer:", trainerUid)
+    console.log("[fetchClients] Starting fetch for trainer:", trainerUid)
 
     if (!trainerUid) {
       const error = createError(
@@ -215,37 +262,97 @@ export async function fetchClients(trainerUid: string): Promise<Client[]> {
         "No trainer UID provided",
       )
       logError(error)
+      console.error("[fetchClients] No trainer UID provided")
       return []
     }
 
+    console.log("[fetchClients] Building Firestore query...")
     const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
-    const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
+    console.log("[fetchClients] Collection path:", `users/${trainerUid}/clients`)
 
-    console.log("Executing Firestore query...")
+    const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
+    console.log("[fetchClients] Query created, executing...")
+
     const [clientsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       trainerUid,
       function: "fetchClients",
     })
 
-    if (error || !clientsSnapshot) {
+    if (error) {
+      console.error("[fetchClients] Query error:", error)
       return []
     }
 
-    console.log(`Found ${clientsSnapshot.size} clients`)
+    if (!clientsSnapshot) {
+      console.error("[fetchClients] No snapshot returned")
+      return []
+    }
+
+    console.log(`[fetchClients] Query successful! Found ${clientsSnapshot.size} documents`)
+    console.log(`[fetchClients] Snapshot metadata:`, {
+      hasPendingWrites: clientsSnapshot.metadata.hasPendingWrites,
+      isFromCache: clientsSnapshot.metadata.fromCache,
+      size: clientsSnapshot.size,
+      empty: clientsSnapshot.empty,
+    })
+
+    // Log all raw documents first
+    console.log("[fetchClients] Raw documents:")
+    clientsSnapshot.forEach((doc, index) => {
+      const data = doc.data()
+      console.log(`[fetchClients] Document ${index + 1}:`, {
+        id: doc.id,
+        exists: doc.exists(),
+        data: data,
+        name: data.name,
+        status: data.status,
+        isTemporary: data.isTemporary,
+        userId: data.userId || "none",
+      })
+    })
 
     const clients: Client[] = []
+    let processedCount = 0
+    let validCount = 0
+    let invalidCount = 0
+
     clientsSnapshot.forEach((doc) => {
+      processedCount++
       const data = doc.data()
-      console.log(`Processing client: ${doc.id}`, data)
+      console.log(`[fetchClients] Processing document ${processedCount}: ${doc.id}`, data)
+
       const client = mapClientData(doc.id, data)
       if (client) {
+        validCount++
         clients.push(client)
+        console.log(`[fetchClients] ✅ Added client ${validCount}: ${client.name}`)
+      } else {
+        invalidCount++
+        console.log(`[fetchClients] ❌ Skipped invalid client ${invalidCount}:`, { id: doc.id, data })
       }
     })
 
-    console.log("Returning clients:", clients)
+    console.log(`[fetchClients] Processing complete:`, {
+      totalDocuments: clientsSnapshot.size,
+      processedCount,
+      validCount,
+      invalidCount,
+      finalClientCount: clients.length,
+    })
+
+    console.log(
+      "[fetchClients] Final clients array:",
+      clients.map((c) => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        email: c.email,
+      })),
+    )
+
     return clients
   } catch (error) {
+    console.error("[fetchClients] Unexpected error:", error)
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
