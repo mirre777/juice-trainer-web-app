@@ -1,25 +1,35 @@
-const { spawn } = require("child_process")
+#!/usr/bin/env node
 
-const userId = process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1"
+const { spawn } = require("child_process")
+const path = require("path")
 
 console.log("🚀 Running Client Flow Test")
-console.log("👤 Using User ID:", userId)
 
-const testProcess = spawn("node", ["scripts/test-client-flow.js"], {
-  env: { ...process.env, REAL_USER_ID: userId },
+// Set environment variables
+const env = {
+  ...process.env,
+  REAL_USER_ID: process.env.REAL_USER_ID || "5tVdK6LXCifZgjXD7rml3nEOXmh1",
+}
+
+console.log("👤 Using User ID:", env.REAL_USER_ID)
+
+// Run the test script
+const testScript = path.join(__dirname, "test-client-flow.js")
+const child = spawn("node", [testScript], {
+  env,
   stdio: "inherit",
 })
 
-testProcess.on("close", (code) => {
+child.on("close", (code) => {
   if (code === 0) {
-    console.log("✅ All tests passed!")
+    console.log("✅ Test completed successfully")
   } else {
-    console.log("❌ Test failed with exit code:", code)
+    console.log(`❌ Test failed with exit code: ${code}`)
+    process.exit(code)
   }
-  process.exit(code)
 })
 
-testProcess.on("error", (error) => {
-  console.error("❌ Failed to start test:", error)
+child.on("error", (error) => {
+  console.error("💥 Failed to start test:", error.message)
   process.exit(1)
 })

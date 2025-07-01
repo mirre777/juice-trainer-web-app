@@ -10,7 +10,6 @@ export async function POST() {
 
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
-    console.log("🆔 [CREATE-TEST] User ID:", userId)
 
     if (!userId) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
@@ -20,28 +19,21 @@ export async function POST() {
     const { db } = await import("@/lib/firebase/firebase")
     const { collection, addDoc, serverTimestamp } = await import("firebase/firestore")
 
-    console.log("📝 [CREATE-TEST] Creating test client document...")
+    console.log("🧪 [CREATE-TEST] Creating test client for user:", userId)
 
     const testClient = {
-      name: "Test Client API",
-      email: "test-api@example.com",
+      name: "Test Client " + Date.now(),
+      email: "test" + Date.now() + "@example.com",
       phone: "+1234567890",
-      status: "pending",
-      notes: "Created via API test endpoint",
-      goals: ["Test goal"],
+      status: "Active",
+      notes: "Created by debug endpoint",
+      goals: ["Test Goal"],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       progress: 0,
       completion: 0,
       bgColor: "#f3f4f6",
       textColor: "#111827",
-      sessions: { completed: 0, total: 0 },
-      lastWorkout: { name: "", date: "", completion: 0 },
-      metrics: [],
-      goal: "Test goal",
-      program: "",
-      inviteCode: "",
-      userId: "",
     }
 
     const clientsRef = collection(db, "users", userId, "clients")
@@ -52,7 +44,10 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       clientId: docRef.id,
-      message: "Test client created successfully",
+      testClient: {
+        ...testClient,
+        id: docRef.id,
+      },
     })
   } catch (error: any) {
     console.error("💥 [CREATE-TEST] Error:", error)
@@ -60,6 +55,7 @@ export async function POST() {
       {
         success: false,
         error: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )
