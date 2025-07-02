@@ -245,71 +245,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       console.log("[fetchClientsDirectly] Raw clients from fetchClients:", allClients)
       console.log("[fetchClientsDirectly] Number of clients found:", allClients.length)
 
-      // Filter clients to only include those suitable for sending programs
-      console.log("[fetchClientsDirectly] Raw clients before filtering:", allClients.length)
-      console.log("[fetchClientsDirectly] Sample client data:", allClients.slice(0, 3))
-
-      const eligibleClients = allClients.filter((client) => {
-        const hasUserId = !!client.userId
-        const isActive = client.status === "Active"
-        const isPending = client.status === "Pending"
-        const hasLinkedAccount = client.hasLinkedAccount !== false
-
-        console.log(`[fetchClientsDirectly] Client ${client.name}:`, {
-          id: client.id,
-          userId: client.userId || "NO_USER_ID",
-          status: client.status,
-          hasLinkedAccount,
-          hasUserId,
-          isActive,
-          isPending,
-          willInclude: hasUserId && (isActive || isPending), // Include both Active and Pending with userId
-        })
-
-        // Include clients that have userId and are either Active or Pending
-        return hasUserId && (isActive || isPending)
-      })
-
-      // If no clients with userId, let's try a more lenient approach
-      if (eligibleClients.length === 0) {
-        console.log("[fetchClientsDirectly] No clients with userId found, trying more lenient filtering...")
-
-        const lenientClients = allClients.filter((client) => {
-          const hasName = !!client.name && client.name !== "Unnamed Client"
-          const hasValidStatus = client.status && client.status !== "Deleted"
-
-          console.log(`[fetchClientsDirectly] Lenient check for ${client.name}:`, {
-            hasName,
-            hasValidStatus,
-            status: client.status,
-            willInclude: hasName && hasValidStatus,
-          })
-
-          return hasName && hasValidStatus
-        })
-
-        console.log("[fetchClientsDirectly] Lenient filtering found:", lenientClients.length, "clients")
-
-        // Use lenient clients if we found any
-        if (lenientClients.length > 0) {
-          eligibleClients.push(...lenientClients)
-        }
-      }
-
-      console.log("[fetchClientsDirectly] Filtered eligible clients:", eligibleClients.length)
-      console.log(
-        "[fetchClientsDirectly] Eligible clients:",
-        eligibleClients.map((c) => ({
-          id: c.id,
-          name: c.name,
-          email: c.email,
-          status: c.status,
-          userId: c.userId,
-        })),
-      )
-
-      setClients(eligibleClients)
-      console.log(`[fetchClientsDirectly] ✅ Successfully loaded ${eligibleClients.length} eligible clients`)
+      // Set all clients without filtering for now - we want to see everything
+      setClients(allClients)
+      console.log(`[fetchClientsDirectly] ✅ Successfully loaded ${allClients.length} clients`)
     } catch (error) {
       console.error("[fetchClientsDirectly] ❌ Error occurred:", error)
       console.error("[fetchClientsDirectly] Error details:", {
@@ -337,20 +275,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       isLoadingClients,
     })
 
-    // If we're opening the client selection and have no clients, fetch them first
-    if (!showClientSelection && clients.length === 0 && !isLoadingClients) {
-      console.log("[toggleClientSelection] No clients loaded, fetching first...")
-      fetchClientsDirectly()
-    }
-
     const newState = !showClientSelection
     console.log("[toggleClientSelection] Setting showClientSelection to:", newState)
     setShowClientSelection(newState)
-
-    // Prevent immediate toggle back
-    if (newState === true) {
-      console.log("[toggleClientSelection] Client selection opened, preventing immediate close")
-    }
   }
 
   // Derived state for current routines based on current week
@@ -743,20 +670,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
-        {process.env.NODE_ENV === "development" && (
-          <Card className="p-4 mb-4 bg-yellow-50 border-yellow-200">
-            <h4 className="font-medium text-yellow-800 mb-2">Debug Info</h4>
-            <div className="text-sm text-yellow-700 space-y-1">
-              <div>hasChanges: {hasChanges.toString()}</div>
-              <div>isSaving: {isSaving.toString()}</div>
-              <div>justSaved: {justSaved.toString()}</div>
-              <div>showClientSelection: {showClientSelection.toString()}</div>
-              <div>clients.length: {clients.length}</div>
-              <div>isLoadingClients: {isLoadingClients.toString()}</div>
-              <div>Button disabled: {(hasChanges || isSaving).toString()}</div>
-            </div>
-          </Card>
-        )}
         <div className="flex gap-2">
           <Button
             variant="ghost"
@@ -794,42 +707,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             className={`${
               hasChanges || isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-800"
             } text-white flex items-center gap-2`}
-            onClick={() => {
-              console.log("[Send to Client Button] === BUTTON CLICK EVENT ===")
-              console.log("[Send to Client Button] Event timestamp:", new Date().toISOString())
-              console.log("[Send to Client Button] Current state:", {
-                hasChanges,
-                isSaving,
-                showClientSelection,
-                clientsLength: clients.length,
-                isLoadingClients,
-                programStateExists: !!programState,
-                programTitle: programState?.program_title,
-              })
-
-              const isDisabled = hasChanges || isSaving
-              console.log("[Send to Client Button] Button disabled?", isDisabled)
-
-              if (isDisabled) {
-                console.log("[Send to Client Button] ⚠️ Button is disabled, reasons:", {
-                  hasChanges: hasChanges ? "HAS_UNSAVED_CHANGES" : "NO_CHANGES",
-                  isSaving: isSaving ? "CURRENTLY_SAVING" : "NOT_SAVING",
-                })
-                return
-              }
-
-              console.log("[Send to Client Button] ✅ Button click proceeding...")
-              console.log(
-                "[Send to Client Button] Toggling showClientSelection from",
-                showClientSelection,
-                "to",
-                !showClientSelection,
-              )
-
-              toggleClientSelection()
-
-              console.log("[Send to Client Button] === BUTTON CLICK COMPLETE ===")
-            }}
+            onClick={toggleClientSelection}
             disabled={hasChanges || isSaving}
             title={hasChanges || isSaving ? "Save changes first before sending to client" : "Send program to client"}
           >
@@ -839,6 +717,45 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           </Button>
         </div>
       </div>
+
+      {/* Display Fetched Clients - Debug Section */}
+      <Card className="p-4 mb-6 bg-blue-50 border-blue-200">
+        <h4 className="font-medium text-blue-800 mb-3">
+          Fetched Clients ({clients.length}) {isLoadingClients && "(Loading...)"}
+        </h4>
+        {isLoadingClients ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-blue-600 text-sm">Loading clients...</span>
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="text-blue-700 text-sm">No clients found</div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+            {clients.map((client, index) => (
+              <div
+                key={client.id || index}
+                className="bg-white p-2 rounded border border-blue-200"
+                style={{ fontSize: "8px" }}
+              >
+                <div className="font-medium text-gray-900 truncate">{client.name || "No Name"}</div>
+                <div className="text-gray-600 truncate">{client.email || "No Email"}</div>
+                <div className="text-gray-500">Status: {client.status || "No Status"}</div>
+                <div className="text-gray-500">ID: {client.userId || "No UserID"}</div>
+                <div className="text-gray-500">Linked: {client.hasLinkedAccount ? "Yes" : "No"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 bg-transparent text-blue-700 border-blue-300"
+          onClick={fetchClientsDirectly}
+        >
+          Refresh Clients
+        </Button>
+      </Card>
 
       {/* Program Settings */}
       <Card className="p-6 mb-6">
@@ -1148,8 +1065,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               ) : clients.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                   <User className="mx-auto h-8 w-8 mb-2" />
-                  <p>No active clients with linked accounts found.</p>
-                  <p className="text-sm">Make sure your clients have created accounts and are linked to you.</p>
+                  <p>No clients found.</p>
                   <Button variant="outline" className="mt-3 bg-transparent" onClick={() => fetchClientsDirectly()}>
                     Refresh Clients
                   </Button>
