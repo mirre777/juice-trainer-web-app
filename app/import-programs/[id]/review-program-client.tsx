@@ -246,10 +246,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       console.log("[fetchClientsDirectly] Number of clients found:", allClients.length)
 
       // Filter clients to only include those suitable for sending programs
+      console.log("[fetchClientsDirectly] Raw clients before filtering:", allClients.length)
+      console.log("[fetchClientsDirectly] Sample client data:", allClients.slice(0, 3))
+
       const eligibleClients = allClients.filter((client) => {
         const hasUserId = !!client.userId
         const isActive = client.status === "Active"
-        const hasLinkedAccount = client.hasLinkedAccount !== false // Include if undefined or true
+        const isPending = client.status === "Pending"
+        const hasLinkedAccount = client.hasLinkedAccount !== false
 
         console.log(`[fetchClientsDirectly] Client ${client.name}:`, {
           id: client.id,
@@ -258,12 +262,39 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           hasLinkedAccount,
           hasUserId,
           isActive,
-          willInclude: hasUserId && isActive,
+          isPending,
+          willInclude: hasUserId && (isActive || isPending), // Include both Active and Pending with userId
         })
 
-        // For now, let's be less strict - just require userId and Active status
-        return hasUserId && isActive
+        // Include clients that have userId and are either Active or Pending
+        return hasUserId && (isActive || isPending)
       })
+
+      // If no clients with userId, let's try a more lenient approach
+      if (eligibleClients.length === 0) {
+        console.log("[fetchClientsDirectly] No clients with userId found, trying more lenient filtering...")
+
+        const lenientClients = allClients.filter((client) => {
+          const hasName = !!client.name && client.name !== "Unnamed Client"
+          const hasValidStatus = client.status && client.status !== "Deleted"
+
+          console.log(`[fetchClientsDirectly] Lenient check for ${client.name}:`, {
+            hasName,
+            hasValidStatus,
+            status: client.status,
+            willInclude: hasName && hasValidStatus,
+          })
+
+          return hasName && hasValidStatus
+        })
+
+        console.log("[fetchClientsDirectly] Lenient filtering found:", lenientClients.length, "clients")
+
+        // Use lenient clients if we found any
+        if (lenientClients.length > 0) {
+          eligibleClients.push(...lenientClients)
+        }
+      }
 
       console.log("[fetchClientsDirectly] Filtered eligible clients:", eligibleClients.length)
       console.log(
@@ -306,9 +337,20 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       isLoadingClients,
     })
 
+    // If we're opening the client selection and have no clients, fetch them first
+    if (!showClientSelection && clients.length === 0 && !isLoadingClients) {
+      console.log("[toggleClientSelection] No clients loaded, fetching first...")
+      fetchClientsDirectly()
+    }
+
     const newState = !showClientSelection
     console.log("[toggleClientSelection] Setting showClientSelection to:", newState)
     setShowClientSelection(newState)
+
+    // Prevent immediate toggle back
+    if (newState === true) {
+      console.log("[toggleClientSelection] Client selection opened, preventing immediate close")
+    }
   }
 
   // Derived state for current routines based on current week
