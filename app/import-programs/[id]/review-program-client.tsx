@@ -34,10 +34,9 @@ import {
 } from "@/components/ui/dialog"
 import { User } from "@/components/icons/user"
 import { useToast } from "@/hooks/use-toast"
-import { fetchClients } from "@/lib/firebase/client-service"
-import { getCurrentUser } from "@/lib/auth/auth-service"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
 import type { Client } from "@/types/client"
+import { getCurrentUser, fetchClients } from "@/lib/client-utils" // Import missing functions
 
 interface ReviewProgramClientProps {
   importData: any
