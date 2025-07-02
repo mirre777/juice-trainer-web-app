@@ -71,8 +71,15 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [isLoadingClients, setIsLoadingClients] = useState(false)
   const [isSendingProgram, setIsSendingProgram] = useState(false)
 
+  // Add logging when hasChanges state changes
+  const setHasChangesWithLogging = (value: boolean) => {
+    console.log("[ReviewProgramClient] hasChanges changing from", hasChanges, "to", value)
+    setHasChanges(value)
+  }
+
   // Initialize programState from importData on component mount or importData change
   useEffect(() => {
+    console.log("[ReviewProgramClient] Component initializing with importData:", importData)
     try {
       setIsLoading(true)
       setError(null)
@@ -194,7 +201,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         routines: [], // Ensure top-level routines are always empty
       })
       setCurrentWeek(1) // Always start at week 1 for display
-      setHasChanges(false)
+      setHasChangesWithLogging(false)
       setJustSaved(false)
       setIsLoading(false)
     } catch (err) {
@@ -212,12 +219,23 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
   // Fetch clients when send dialog opens
   const fetchClients = async () => {
-    console.log("[fetchClients] Starting to fetch clients...")
+    console.log("[fetchClients] === STARTING CLIENT FETCH ===")
+    console.log("[fetchClients] Current state:", {
+      isLoadingClients,
+      clientsLength: clients.length,
+      showClientSelection,
+    })
+
     setIsLoadingClients(true)
     try {
-      console.log("[fetchClients] Fetching trainer's clients...")
+      console.log("[fetchClients] Making API request to /api/clients...")
       const response = await fetch("/api/clients")
-      console.log("[fetchClients] Response status:", response.status)
+      console.log("[fetchClients] Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+      })
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -227,13 +245,19 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       console.log("[fetchClients] Response data:", data)
 
       if (data.success) {
+        console.log("[fetchClients] Setting clients:", data.clients)
         setClients(data.clients || [])
-        console.log(`[fetchClients] Loaded ${data.clients?.length || 0} clients`)
+        console.log(`[fetchClients] ✅ Successfully loaded ${data.clients?.length || 0} clients`)
       } else {
         throw new Error(data.error || "Failed to fetch clients")
       }
     } catch (error) {
-      console.error("[fetchClients] Error:", error)
+      console.error("[fetchClients] ❌ Error occurred:", error)
+      console.error("[fetchClients] Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      })
       toast({
         title: "Error",
         description: "Failed to load clients. Please try again.",
@@ -241,8 +265,22 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       })
     } finally {
       setIsLoadingClients(false)
-      console.log("[fetchClients] Finished fetching clients")
+      console.log("[fetchClients] === CLIENT FETCH COMPLETE ===")
     }
+  }
+
+  const toggleClientSelection = () => {
+    console.log("[toggleClientSelection] Current state:", {
+      showClientSelection,
+      hasChanges,
+      isSaving,
+      clientsLength: clients.length,
+      isLoadingClients,
+    })
+
+    const newState = !showClientSelection
+    console.log("[toggleClientSelection] Setting showClientSelection to:", newState)
+    setShowClientSelection(newState)
   }
 
   // Derived state for current routines based on current week
@@ -313,7 +351,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (!prev) return prev
       return { ...prev, program_title: e.target.value }
     })
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
   }
 
@@ -322,7 +360,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       if (!prev) return prev
       return { ...prev, program_notes: e.target.value }
     })
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
   }
 
@@ -362,7 +400,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       }
       return updatedProgram
     })
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
   }
 
@@ -370,7 +408,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const togglePeriodization = () => {
     if (!programState) return
 
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
 
     if (programState.is_periodized) {
@@ -421,7 +459,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       })
       setShowSelectWeekDialog(false)
       setCurrentWeek(1) // Reset current week for display purposes
-      setHasChanges(true)
+      setHasChangesWithLogging(true)
       setJustSaved(false)
     }
   }
@@ -437,7 +475,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         status: "reviewed",
         updatedAt: new Date(),
       })
-      setHasChanges(false)
+      setHasChangesWithLogging(false)
       setJustSaved(true)
       // Re-initialize importData to reflect the saved state for correct revert behavior
       // In a real app, you might refetch importData or update it via a parent callback
@@ -455,7 +493,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
       setProgramState(initialProgram)
       setCurrentWeek(1)
-      setHasChanges(false)
+      setHasChangesWithLogging(false)
       setJustSaved(false)
       setExpandedRoutines({ "0": true }) // Reset expanded routines
     }
@@ -487,7 +525,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       }
       return updatedProgram
     })
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
   }
 
@@ -514,7 +552,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       }
       return updatedProgram
     })
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
   }
 
@@ -535,7 +573,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       }
       return updatedProgram
     })
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
   }
 
@@ -551,7 +589,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       }
       return updatedProgram
     })
-    setHasChanges(true)
+    setHasChangesWithLogging(true)
     setJustSaved(false)
   }
 
@@ -687,19 +725,40 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               hasChanges || isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-800"
             } text-white flex items-center gap-2`}
             onClick={() => {
-              console.log("[Send to Client] Button clicked!")
-              console.log("[Send to Client] hasChanges:", hasChanges)
-              console.log("[Send to Client] isSaving:", isSaving)
-              console.log("[Send to Client] showClientSelection:", showClientSelection)
-              console.log("[Send to Client] Button disabled:", hasChanges || isSaving)
+              console.log("[Send to Client Button] === BUTTON CLICK EVENT ===")
+              console.log("[Send to Client Button] Event timestamp:", new Date().toISOString())
+              console.log("[Send to Client Button] Current state:", {
+                hasChanges,
+                isSaving,
+                showClientSelection,
+                clientsLength: clients.length,
+                isLoadingClients,
+                programStateExists: !!programState,
+                programTitle: programState?.program_title,
+              })
 
-              if (hasChanges || isSaving) {
-                console.log("[Send to Client] Button is disabled, not proceeding")
+              const isDisabled = hasChanges || isSaving
+              console.log("[Send to Client Button] Button disabled?", isDisabled)
+
+              if (isDisabled) {
+                console.log("[Send to Client Button] ⚠️ Button is disabled, reasons:", {
+                  hasChanges: hasChanges ? "HAS_UNSAVED_CHANGES" : "NO_CHANGES",
+                  isSaving: isSaving ? "CURRENTLY_SAVING" : "NOT_SAVING",
+                })
                 return
               }
 
-              console.log("[Send to Client] Toggling client selection...")
-              setShowClientSelection(!showClientSelection)
+              console.log("[Send to Client Button] ✅ Button click proceeding...")
+              console.log(
+                "[Send to Client Button] Toggling showClientSelection from",
+                showClientSelection,
+                "to",
+                !showClientSelection,
+              )
+
+              toggleClientSelection()
+
+              console.log("[Send to Client Button] === BUTTON CLICK COMPLETE ===")
             }}
             disabled={hasChanges || isSaving}
             title={hasChanges || isSaving ? "Save changes first before sending to client" : "Send program to client"}
@@ -1003,7 +1062,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                   Choose a client to send "{programState?.program_title}" to their mobile app.
                 </p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowClientSelection(false)}>
+              <Button variant="ghost" size="sm" onClick={() => toggleClientSelection()}>
                 <ChevronUp className="h-4 w-4" />
               </Button>
             </div>
@@ -1121,7 +1180,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             <Button
               variant="destructive"
               onClick={() => {
-                setHasChanges(false) // Ensure changes are marked as discarded
+                setHasChangesWithLogging(false) // Ensure changes are marked as discarded
                 router.push("/import-programs")
               }}
             >
