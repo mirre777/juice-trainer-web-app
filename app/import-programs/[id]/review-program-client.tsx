@@ -34,15 +34,10 @@ import {
 } from "@/components/ui/dialog"
 import { User } from "@/components/icons/user"
 import { useToast } from "@/hooks/use-toast"
+import { fetchClients } from "@/lib/firebase/client-service"
+import { getCurrentUser } from "@/lib/auth/auth-service"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
-
-interface Client {
-  id: string
-  name: string
-  email?: string
-  status?: string
-  userId?: string
-}
+import type { Client } from "@/types/client"
 
 interface ReviewProgramClientProps {
   importData: any
@@ -214,46 +209,79 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   // Load clients on component mount
   useEffect(() => {
     console.log("[useEffect] Component mounted, calling fetchClients...")
-    fetchClients()
+    fetchClientsDirectly()
   }, [])
 
-  // Fetch clients when send dialog opens
-  const fetchClients = async () => {
-    console.log("[fetchClients] === STARTING CLIENT FETCH ===")
-    console.log("[fetchClients] Current state:", {
-      isLoadingClients,
-      clientsLength: clients.length,
-      showClientSelection,
-    })
+  // Fetch clients directly using the same service as the clients page
+  const fetchClientsDirectly = async () => {
+    console.log("[fetchClientsDirectly] === STARTING DIRECT CLIENT FETCH ===")
 
     setIsLoadingClients(true)
     try {
-      console.log("[fetchClients] Making API request to /api/clients...")
-      const response = await fetch("/api/clients")
-      console.log("[fetchClients] Response received:", {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries()),
+      // Get current user first
+      console.log("[fetchClientsDirectly] Getting current user...")
+      const currentUser = await getCurrentUser()
+      console.log("[fetchClientsDirectly] Current user:", {
+        exists: !!currentUser,
+        uid: currentUser?.uid,
+        email: currentUser?.email,
+        name: currentUser?.name,
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      if (!currentUser) {
+        console.log("[fetchClientsDirectly] ❌ No current user found")
+        toast({
+          title: "Error",
+          description: "You must be logged in to load clients.",
+          variant: "destructive",
+        })
+        return
       }
 
-      const data = await response.json()
-      console.log("[fetchClients] Response data:", data)
+      console.log("[fetchClientsDirectly] Fetching clients for trainer:", currentUser.uid)
 
-      if (data.success) {
-        console.log("[fetchClients] Setting clients:", data.clients)
-        setClients(data.clients || [])
-        console.log(`[fetchClients] ✅ Successfully loaded ${data.clients?.length || 0} clients`)
-      } else {
-        throw new Error(data.error || "Failed to fetch clients")
-      }
+      // Fetch clients directly using the same service
+      const allClients = await fetchClients(currentUser.uid)
+      console.log("[fetchClientsDirectly] Raw clients from fetchClients:", allClients)
+      console.log("[fetchClientsDirectly] Number of clients found:", allClients.length)
+
+      // Filter clients to only include those suitable for sending programs
+      const eligibleClients = allClients.filter((client) => {
+        const hasUserId = !!client.userId
+        const isActive = client.status === "Active"
+        const hasLinkedAccount = client.hasLinkedAccount !== false // Include if undefined or true
+
+        console.log(`[fetchClientsDirectly] Client ${client.name}:`, {
+          id: client.id,
+          userId: client.userId || "NO_USER_ID",
+          status: client.status,
+          hasLinkedAccount,
+          hasUserId,
+          isActive,
+          willInclude: hasUserId && isActive,
+        })
+
+        // For now, let's be less strict - just require userId and Active status
+        return hasUserId && isActive
+      })
+
+      console.log("[fetchClientsDirectly] Filtered eligible clients:", eligibleClients.length)
+      console.log(
+        "[fetchClientsDirectly] Eligible clients:",
+        eligibleClients.map((c) => ({
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          status: c.status,
+          userId: c.userId,
+        })),
+      )
+
+      setClients(eligibleClients)
+      console.log(`[fetchClientsDirectly] ✅ Successfully loaded ${eligibleClients.length} eligible clients`)
     } catch (error) {
-      console.error("[fetchClients] ❌ Error occurred:", error)
-      console.error("[fetchClients] Error details:", {
+      console.error("[fetchClientsDirectly] ❌ Error occurred:", error)
+      console.error("[fetchClientsDirectly] Error details:", {
         message: error.message,
         stack: error.stack,
         name: error.name,
@@ -265,7 +293,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       })
     } finally {
       setIsLoadingClients(false)
-      console.log("[fetchClients] === CLIENT FETCH COMPLETE ===")
+      console.log("[fetchClientsDirectly] === DIRECT CLIENT FETCH COMPLETE ===")
     }
   }
 
@@ -1067,14 +1095,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               </Button>
             </div>
 
-            {/* Debug info in development */}
-            {process.env.NODE_ENV === "development" && (
-              <div className="bg-gray-100 p-3 rounded text-sm">
-                <strong>Debug:</strong> showClientSelection = {showClientSelection.toString()}, clients.length ={" "}
-                {clients.length}, isLoadingClients = {isLoadingClients.toString()}
-              </div>
-            )}
-
             {/* Client Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Select Client</label>
@@ -1086,14 +1106,11 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               ) : clients.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                   <User className="mx-auto h-8 w-8 mb-2" />
-                  <p className="font-medium">No active clients with linked accounts found.</p>
-                  <p className="text-sm mt-1">Make sure your clients have:</p>
-                  <ul className="text-sm mt-2 space-y-1">
-                    <li>• Created accounts using your invitation</li>
-                    <li>• Status = "Active"</li>
-                    <li>• Linked accounts (userId present)</li>
-                  </ul>
-                  <p className="text-xs mt-3 text-gray-400">Check the console for detailed client information</p>
+                  <p>No active clients with linked accounts found.</p>
+                  <p className="text-sm">Make sure your clients have created accounts and are linked to you.</p>
+                  <Button variant="outline" className="mt-3 bg-transparent" onClick={() => fetchClientsDirectly()}>
+                    Refresh Clients
+                  </Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
@@ -1112,6 +1129,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                         <div>
                           <p className="font-medium text-gray-900">{client.name}</p>
                           {client.email && <p className="text-sm text-gray-500">{client.email}</p>}
+                          <p className="text-xs text-gray-400">Status: {client.status}</p>
                         </div>
                       </div>
                     </div>
