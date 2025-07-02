@@ -1,73 +1,72 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { createClient } from "@/lib/firebase/client-service"
-import { programConversionService } from "@/lib/firebase/program-conversion-service"
-import { getCurrentUser } from "@/lib/auth/auth-service"
-
-export async function POST(request: NextRequest) {
-  try {
-    const cookieStore = cookies()
-    const userId = cookieStore.get("user_id")?.value
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json()
-    const { name, email, goal, program } = body
-
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 })
-    }
-
-    const result = await createClient(userId, {
-      name,
-      email: email || "",
-      goal: goal || "",
-      program: program || "",
-    })
-
-    if (result.success) {
-      return NextResponse.json({
-        success: true,
-        clientId: result.clientId,
-        message: "Client created successfully",
-      })
-    } else {
-      return NextResponse.json({ error: result.error?.message || "Failed to create client" }, { status: 500 })
-    }
-  } catch (error) {
-    console.error("Error creating client:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
+import { fetchClients } from "@/lib/firebase/client-service"
+import { getCurrentUser } from "@/lib/firebase/user-service"
 
 export async function GET(request: NextRequest) {
-  try {
-    console.log("[clients] API endpoint called")
+  console.log("[API /api/clients] === REQUEST RECEIVED ===")
 
-    // Get current user (trainer)
-    const user = await getCurrentUser()
-    if (!user) {
-      console.log("[clients] Unauthorized - no user found")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  try {
+    // Get current user
+    console.log("[API /api/clients] Getting current user...")
+    const currentUser = await getCurrentUser()
+    console.log("[API /api/clients] Current user:", {
+      exists: !!currentUser,
+      uid: currentUser?.uid,
+      email: currentUser?.email,
+      name: currentUser?.name,
+    })
+
+    if (!currentUser) {
+      console.log("[API /api/clients] ❌ No current user found")
+      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
     }
 
-    const trainerId = user.uid
-    console.log(`[clients] Fetching clients for trainer: ${trainerId}`)
+    console.log("[API /api/clients] Fetching clients for trainer:", currentUser.uid)
 
-    // Get trainer's clients using the program conversion service
-    // This will filter to only active clients with linked accounts
-    const clients = await programConversionService.getTrainerClients(trainerId)
+    // Fetch clients for the trainer
+    const clients = await fetchClients(currentUser.uid)
+    console.log("[API /api/clients] Raw clients from fetchClients:", clients)
+    console.log("[API /api/clients] Number of clients found:", clients.length)
 
-    console.log(`[clients] Found ${clients.length} active clients with linked accounts`)
+    // Filter clients to only include those with linked accounts and active status
+    const activeLinkedClients = clients.filter((client) => {
+      const hasUserId = !!client.userId
+      const isActive = client.status === "Active"
+      const hasLinkedAccount = client.hasLinkedAccount
+
+      console.log(`[API /api/clients] Client ${client.name}:`, {
+        id: client.id,
+        userId: client.userId || "NO_USER_ID",
+        status: client.status,
+        hasLinkedAccount,
+        hasUserId,
+        isActive,
+        willInclude: hasUserId && isActive && hasLinkedAccount,
+      })
+
+      return hasUserId && isActive && hasLinkedAccount
+    })
+
+    console.log("[API /api/clients] Filtered active linked clients:", activeLinkedClients.length)
+    console.log(
+      "[API /api/clients] Active linked clients:",
+      activeLinkedClients.map((c) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        status: c.status,
+        userId: c.userId,
+      })),
+    )
 
     return NextResponse.json({
       success: true,
-      clients,
+      clients: activeLinkedClients,
+      totalClients: clients.length,
+      activeLinkedClients: activeLinkedClients.length,
     })
   } catch (error) {
-    console.error("[clients] Error:", error)
-    return NextResponse.json({ error: "Failed to fetch clients", details: error.message }, { status: 500 })
+    console.error("[API /api/clients] ❌ Error:", error)
+    return NextResponse.json({ success: false, error: "Failed to fetch clients" }, { status: 500 })
   }
 }

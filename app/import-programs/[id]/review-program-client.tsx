@@ -1067,6 +1067,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               </Button>
             </div>
 
+            {/* Debug info in development */}
+            {process.env.NODE_ENV === "development" && (
+              <div className="bg-gray-100 p-3 rounded text-sm">
+                <strong>Debug:</strong> showClientSelection = {showClientSelection.toString()}, clients.length ={" "}
+                {clients.length}, isLoadingClients = {isLoadingClients.toString()}
+              </div>
+            )}
+
             {/* Client Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Select Client</label>
@@ -1078,8 +1086,14 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
               ) : clients.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                   <User className="mx-auto h-8 w-8 mb-2" />
-                  <p>No active clients with linked accounts found.</p>
-                  <p className="text-sm">Make sure your clients have created accounts and are linked to you.</p>
+                  <p className="font-medium">No active clients with linked accounts found.</p>
+                  <p className="text-sm mt-1">Make sure your clients have:</p>
+                  <ul className="text-sm mt-2 space-y-1">
+                    <li>• Created accounts using your invitation</li>
+                    <li>• Status = "Active"</li>
+                    <li>• Linked accounts (userId present)</li>
+                  </ul>
+                  <p className="text-xs mt-3 text-gray-400">Check the console for detailed client information</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
