@@ -206,22 +206,25 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
 
   // Load clients on component mount
   useEffect(() => {
+    console.log("[useEffect] Component mounted, calling fetchClients...")
     fetchClients()
   }, [])
 
   // Fetch clients when send dialog opens
   const fetchClients = async () => {
+    console.log("[fetchClients] Starting to fetch clients...")
     setIsLoadingClients(true)
     try {
       console.log("[fetchClients] Fetching trainer's clients...")
       const response = await fetch("/api/clients")
+      console.log("[fetchClients] Response status:", response.status)
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("[fetchClients] Response:", data)
+      console.log("[fetchClients] Response data:", data)
 
       if (data.success) {
         setClients(data.clients || [])
@@ -238,6 +241,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       })
     } finally {
       setIsLoadingClients(false)
+      console.log("[fetchClients] Finished fetching clients")
     }
   }
 
@@ -631,6 +635,20 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
           <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
           <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
         </div>
+        {process.env.NODE_ENV === "development" && (
+          <Card className="p-4 mb-4 bg-yellow-50 border-yellow-200">
+            <h4 className="font-medium text-yellow-800 mb-2">Debug Info</h4>
+            <div className="text-sm text-yellow-700 space-y-1">
+              <div>hasChanges: {hasChanges.toString()}</div>
+              <div>isSaving: {isSaving.toString()}</div>
+              <div>justSaved: {justSaved.toString()}</div>
+              <div>showClientSelection: {showClientSelection.toString()}</div>
+              <div>clients.length: {clients.length}</div>
+              <div>isLoadingClients: {isLoadingClients.toString()}</div>
+              <div>Button disabled: {(hasChanges || isSaving).toString()}</div>
+            </div>
+          </Card>
+        )}
         <div className="flex gap-2">
           <Button
             variant="ghost"
@@ -665,12 +683,30 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
             )}
           </Button>
           <Button
-            className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => setShowClientSelection(!showClientSelection)}
-            disabled={hasChanges || isSaving} // Disabled if there are unsaved changes
+            className={`${
+              hasChanges || isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-800"
+            } text-white flex items-center gap-2`}
+            onClick={() => {
+              console.log("[Send to Client] Button clicked!")
+              console.log("[Send to Client] hasChanges:", hasChanges)
+              console.log("[Send to Client] isSaving:", isSaving)
+              console.log("[Send to Client] showClientSelection:", showClientSelection)
+              console.log("[Send to Client] Button disabled:", hasChanges || isSaving)
+
+              if (hasChanges || isSaving) {
+                console.log("[Send to Client] Button is disabled, not proceeding")
+                return
+              }
+
+              console.log("[Send to Client] Toggling client selection...")
+              setShowClientSelection(!showClientSelection)
+            }}
+            disabled={hasChanges || isSaving}
+            title={hasChanges || isSaving ? "Save changes first before sending to client" : "Send program to client"}
           >
             <Send className="h-4 w-4" />
             Send to Client
+            {(hasChanges || isSaving) && <span className="text-xs ml-1">(Save first)</span>}
           </Button>
         </div>
       </div>
