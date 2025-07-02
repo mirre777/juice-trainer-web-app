@@ -34,8 +34,6 @@ import {
 } from "@/components/ui/dialog"
 import { User } from "@/components/icons/user"
 import { useToast } from "@/hooks/use-toast"
-import { fetchClients } from "@/lib/firebase/client-service"
-import { getCurrentUser } from "@/lib/firebase/user-service"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
 import type { Client } from "@/types/client"
 
@@ -212,42 +210,44 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     fetchClientsDirectly()
   }, [])
 
-  // Fetch clients directly using the same service as the clients page
+  // Fetch clients using the API route instead of direct service call
   const fetchClientsDirectly = async () => {
-    console.log("[fetchClientsDirectly] === STARTING DIRECT CLIENT FETCH ===")
+    console.log("[fetchClientsDirectly] === STARTING API CLIENT FETCH ===")
 
     setIsLoadingClients(true)
     try {
-      // Get current user first
-      console.log("[fetchClientsDirectly] Getting current user...")
-      const currentUser = await getCurrentUser()
-      console.log("[fetchClientsDirectly] Current user:", {
-        exists: !!currentUser,
-        uid: currentUser?.uid,
-        email: currentUser?.email,
-        name: currentUser?.name,
+      console.log("[fetchClientsDirectly] Calling /api/clients...")
+
+      const response = await fetch("/api/clients", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
       })
 
-      if (!currentUser) {
-        console.log("[fetchClientsDirectly] ❌ No current user found")
-        toast({
-          title: "Error",
-          description: "You must be logged in to load clients.",
-          variant: "destructive",
-        })
-        return
+      console.log("[fetchClientsDirectly] API response status:", response.status)
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      console.log("[fetchClientsDirectly] Fetching clients for trainer:", currentUser.uid)
+      const result = await response.json()
+      console.log("[fetchClientsDirectly] API response:", result)
 
-      // Fetch clients directly using the same service
-      const allClients = await fetchClients(currentUser.uid)
-      console.log("[fetchClientsDirectly] Raw clients from fetchClients:", allClients)
-      console.log("[fetchClientsDirectly] Number of clients found:", allClients.length)
-
-      // Set all clients without filtering for now - we want to see everything
-      setClients(allClients)
-      console.log(`[fetchClientsDirectly] ✅ Successfully loaded ${allClients.length} clients`)
+      if (result.success && result.clients) {
+        console.log("[fetchClientsDirectly] Successfully fetched clients:", result.clients.length)
+        setClients(result.clients)
+      } else {
+        console.log("[fetchClientsDirectly] API returned no clients or error:", result.error)
+        setClients([])
+        if (result.error) {
+          toast({
+            title: "Error",
+            description: result.error,
+            variant: "destructive",
+          })
+        }
+      }
     } catch (error) {
       console.error("[fetchClientsDirectly] ❌ Error occurred:", error)
       console.error("[fetchClientsDirectly] Error details:", {
@@ -260,9 +260,10 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
         description: "Failed to load clients. Please try again.",
         variant: "destructive",
       })
+      setClients([])
     } finally {
       setIsLoadingClients(false)
-      console.log("[fetchClientsDirectly] === DIRECT CLIENT FETCH COMPLETE ===")
+      console.log("[fetchClientsDirectly] === API CLIENT FETCH COMPLETE ===")
     }
   }
 
