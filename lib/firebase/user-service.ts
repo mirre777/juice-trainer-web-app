@@ -855,3 +855,21 @@ export const getUserData = async (uid: string) => {
     throw error
   }
 }
+
+// Get current authenticated user
+export async function getCurrentUser(): Promise<any | null> {
+  try {
+    const { auth } = await import("./firebase")
+    const { onAuthStateChanged } = await import("firebase/auth")
+
+    return new Promise((resolve) => {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        unsubscribe()
+        resolve(user)
+      })
+    })
+  } catch (error) {
+    console.error("Error getting current user:", error)
+    return null
+  }
+}
