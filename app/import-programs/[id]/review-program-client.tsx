@@ -34,9 +34,10 @@ import {
 } from "@/components/ui/dialog"
 import { User } from "@/components/icons/user"
 import { useToast } from "@/hooks/use-toast"
+import { fetchClients } from "@/lib/firebase/client-service"
+import { getCurrentUser } from "@/lib/firebase/user-service"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
 import type { Client } from "@/types/client"
-import { getCurrentUser, fetchClients } from "@/lib/client-utils" // Import missing functions
 
 interface ReviewProgramClientProps {
   importData: any
@@ -281,9 +282,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     } catch (error) {
       console.error("[fetchClientsDirectly] ❌ Error occurred:", error)
       console.error("[fetchClientsDirectly] Error details:", {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
       })
       toast({
         title: "Error",
