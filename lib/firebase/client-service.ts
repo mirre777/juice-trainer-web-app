@@ -1249,7 +1249,7 @@ export async function processLoginInvitation(
           updatedAt: serverTimestamp(),
         }),
       ErrorType.DB_WRITE_FAILED,
-      { function: "processLoginInvitation", trainerId, userId },
+      { function: "processLoginInvitation", userId, trainerId },
     )
 
     if (addToPendingError) {
