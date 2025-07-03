@@ -5,7 +5,7 @@ import { ClientsList } from "@/components/clients/clients-list"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
 import { subscribeToClients } from "@/lib/firebase/client-service"
-import { getCurrentUser } from "@/lib/firebase/user-service"
+import { getCurrentUserFromAPI } from "@/lib/services/client-user-service"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Plus, Users } from "lucide-react"
@@ -31,8 +31,8 @@ export default function ClientPage() {
 
     const setupSubscription = async () => {
       try {
-        console.log("[ClientPage] Getting current user...")
-        const currentUser = await getCurrentUser()
+        console.log("[ClientPage] Getting current user from API...")
+        const currentUser = await getCurrentUserFromAPI()
         console.log("[ClientPage] Current user result:", {
           exists: !!currentUser,
           uid: currentUser?.uid,

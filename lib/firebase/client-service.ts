@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   arrayUnion,
   orderBy,
+  Timestamp,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
@@ -155,7 +156,7 @@ export function mapClientData(id: string, data: any): Client | null {
     email: data.email || "",
     goal: data.goal || "",
     program: data.program || "",
-    createdAt: data.createdAt,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt || new Date(),
     inviteCode: data.inviteCode || "",
     userId: data.userId || "",
     phone: data.phone || "",
@@ -353,16 +354,19 @@ export function subscribeToClients(trainerId: string, callback: (clients: Client
   }
 
   try {
-    console.log(`[subscribeToClients] Setting up subscription for trainer: ${trainerId}`)
+    console.log("[subscribeToClients] Setting up subscription for trainer:", trainerId)
 
     const clientsRef = collection(db, "clients")
-    // Remove the problematic orderBy query that was causing issues
-    const q = query(clientsRef, where("trainerId", "==", trainerId))
+    const q = query(
+      clientsRef,
+      where("trainerId", "==", trainerId),
+      // Removed orderBy to avoid issues with missing createdAt fields
+    )
 
     const unsubscribe = onSnapshot(
       q,
       (querySnapshot) => {
-        console.log(`[subscribeToClients] Received ${querySnapshot.size} documents`)
+        console.log("[subscribeToClients] Received snapshot with", querySnapshot.size, "documents")
 
         const clients: Client[] = []
 
@@ -370,21 +374,21 @@ export function subscribeToClients(trainerId: string, callback: (clients: Client
           try {
             const client = mapClientData(doc)
             clients.push(client)
-            console.log(`[subscribeToClients] Mapped client: ${client.name} (${client.id})`)
+            console.log("[subscribeToClients] Mapped client:", { id: client.id, name: client.name })
           } catch (mappingError) {
-            console.error(`[subscribeToClients] Error mapping client ${doc.id}:`, mappingError)
-            // Continue processing other clients even if one fails
+            console.error("[subscribeToClients] Error mapping client document:", doc.id, mappingError)
+            // Continue processing other documents
           }
         })
 
-        // Sort clients by creation date (newest first) on the client side
+        // Sort clients by createdAt on the client side
         clients.sort((a, b) => {
-          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)
-          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt)
+          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
+          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
           return dateB.getTime() - dateA.getTime()
         })
 
-        console.log(`[subscribeToClients] Returning ${clients.length} clients`)
+        console.log("[subscribeToClients] Calling callback with", clients.length, "clients")
         callback(clients)
       },
       (error) => {
@@ -400,9 +404,10 @@ export function subscribeToClients(trainerId: string, callback: (clients: Client
       },
     )
 
+    console.log("[subscribeToClients] Subscription setup complete")
     return unsubscribe
   } catch (error) {
-    console.error("[subscribeToClients] Unexpected error:", error)
+    console.error("[subscribeToClients] Error setting up subscription:", error)
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
@@ -415,33 +420,66 @@ export function subscribeToClients(trainerId: string, callback: (clients: Client
   }
 }
 
-// Get a specific client by ID
-export async function getClientById(clientId: string): Promise<Client | null> {
+// Get clients for a trainer (one-time fetch)
+export async function getClientsByTrainer(trainerId: string): Promise<{ clients: Client[]; error?: any }> {
   try {
-    if (!clientId) {
-      console.error("[getClientById] No client ID provided")
-      return null
+    if (!trainerId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "getClientsByTrainer" },
+        "Trainer ID is required",
+      )
+      logError(error)
+      return { clients: [], error }
     }
 
-    console.log(`[getClientById] Fetching client: ${clientId}`)
-    const clientRef = doc(db, "clients", clientId)
-    const clientDoc = await getDoc(clientRef)
+    console.log("[getClientsByTrainer] Fetching clients for trainer:", trainerId)
 
-    if (clientDoc.exists()) {
-      const client = mapClientData(clientDoc)
-      console.log(`[getClientById] Found client: ${client.name}`)
-      return client
-    } else {
-      console.log(`[getClientById] Client not found: ${clientId}`)
-      return null
+    const clientsRef = collection(db, "clients")
+    const q = query(clientsRef, where("trainerId", "==", trainerId))
+
+    const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+      function: "getClientsByTrainer",
+      trainerId,
+    })
+
+    if (queryError || !querySnapshot) {
+      return { clients: [], error: queryError }
     }
+
+    const clients: Client[] = []
+    querySnapshot.forEach((doc) => {
+      try {
+        const client = mapClientData(doc)
+        clients.push(client)
+      } catch (mappingError) {
+        console.error("[getClientsByTrainer] Error mapping client:", doc.id, mappingError)
+      }
+    })
+
+    // Sort by createdAt
+    clients.sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
+      return dateB.getTime() - dateA.getTime()
+    })
+
+    console.log("[getClientsByTrainer] Found", clients.length, "clients")
+    return { clients }
   } catch (error) {
-    console.error(`[getClientById] Error fetching client ${clientId}:`, error)
-    return null
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "getClientsByTrainer", trainerId },
+      "Unexpected error fetching clients",
+    )
+    logError(appError)
+    return { clients: [], error: appError }
   }
 }
 
-// Add new client
+// Add a new client
 export async function addClient(
   clientData: Partial<Client>,
 ): Promise<{ success: boolean; clientId?: string; error?: any }> {
@@ -469,13 +507,13 @@ export async function addClient(
       return { success: false, error: addError }
     }
 
-    console.log(`[addClient] Successfully added client: ${docRef.id}`)
+    console.log("[addClient] Client added with ID:", docRef.id)
     return { success: true, clientId: docRef.id }
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "addClient", trainerId: clientData.trainerId },
+      { function: "addClient" },
       "Unexpected error adding client",
     )
     logError(appError)
@@ -483,7 +521,7 @@ export async function addClient(
   }
 }
 
-// Update client
+// Update a client
 export async function updateClient(
   clientId: string,
   updates: Partial<Client>,
@@ -515,7 +553,7 @@ export async function updateClient(
       return { success: false, error: updateError }
     }
 
-    console.log(`[updateClient] Successfully updated client: ${clientId}`)
+    console.log("[updateClient] Client updated:", clientId)
     return { success: true }
   } catch (error) {
     const appError = createError(
@@ -529,7 +567,7 @@ export async function updateClient(
   }
 }
 
-// Delete client
+// Delete a client
 export async function deleteClient(clientId: string): Promise<{ success: boolean; error?: any }> {
   try {
     if (!clientId) {
@@ -553,7 +591,7 @@ export async function deleteClient(clientId: string): Promise<{ success: boolean
       return { success: false, error: deleteError }
     }
 
-    console.log(`[deleteClient] Successfully deleted client: ${clientId}`)
+    console.log("[deleteClient] Client deleted:", clientId)
     return { success: true }
   } catch (error) {
     const appError = createError(
@@ -567,49 +605,46 @@ export async function deleteClient(clientId: string): Promise<{ success: boolean
   }
 }
 
-// Get clients for trainer (one-time fetch)
-export async function getClientsForTrainer(trainerId: string): Promise<Client[]> {
+// Get a single client by ID
+export async function getClientById(clientId: string): Promise<{ client: Client | null; error?: any }> {
   try {
-    if (!trainerId) {
-      console.error("[getClientsForTrainer] No trainer ID provided")
-      return []
+    if (!clientId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "getClientById" },
+        "Client ID is required",
+      )
+      logError(error)
+      return { client: null, error }
     }
 
-    console.log(`[getClientsForTrainer] Fetching clients for trainer: ${trainerId}`)
-    const clientsRef = collection(db, "clients")
-    const q = query(clientsRef, where("trainerId", "==", trainerId))
-
-    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      function: "getClientsForTrainer",
-      trainerId,
+    const clientRef = doc(db, "clients", clientId)
+    const [clientDoc, getError] = await tryCatch(() => getDoc(clientRef), ErrorType.DB_READ_FAILED, {
+      function: "getClientById",
+      clientId,
     })
 
-    if (error || !querySnapshot) {
-      return []
+    if (getError || !clientDoc) {
+      return { client: null, error: getError }
     }
 
-    const clients: Client[] = []
-    querySnapshot.forEach((doc) => {
-      try {
-        const client = mapClientData(doc)
-        clients.push(client)
-      } catch (mappingError) {
-        console.error(`[getClientsForTrainer] Error mapping client ${doc.id}:`, mappingError)
-      }
-    })
+    if (!clientDoc.exists()) {
+      console.log("[getClientById] Client not found:", clientId)
+      return { client: null }
+    }
 
-    // Sort by creation date
-    clients.sort((a, b) => {
-      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)
-      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt)
-      return dateB.getTime() - dateA.getTime()
-    })
-
-    console.log(`[getClientsForTrainer] Found ${clients.length} clients`)
-    return clients
+    const client = mapClientData(clientDoc)
+    return { client }
   } catch (error) {
-    console.error("[getClientsForTrainer] Unexpected error:", error)
-    return []
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "getClientById", clientId },
+      "Unexpected error fetching client",
+    )
+    logError(appError)
+    return { client: null, error: appError }
   }
 }
 

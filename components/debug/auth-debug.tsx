@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { getCurrentUser, getCurrentUserData } from "@/lib/firebase/user-service"
+import { getCurrentUserFromAPI } from "@/lib/services/client-user-service"
 import { getAuth, onAuthStateChanged } from "firebase/auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +11,7 @@ export function AuthDebug() {
   const [authState, setAuthState] = useState<any>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [userData, setUserData] = useState<any>(null)
+  const [apiUser, setApiUser] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,6 +67,23 @@ export function AuthDebug() {
     }
   }
 
+  const testGetCurrentUserFromAPI = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      console.log("[AuthDebug] Testing getCurrentUserFromAPI...")
+      const user = await getCurrentUserFromAPI()
+      console.log("[AuthDebug] getCurrentUserFromAPI result:", user)
+      setApiUser(user)
+    } catch (err) {
+      console.error("[AuthDebug] getCurrentUserFromAPI error:", err)
+      setError(`getCurrentUserFromAPI failed: ${err}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-4 p-4">
       <Card>
@@ -73,7 +92,7 @@ export function AuthDebug() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h3 className="font-semibold mb-2">Auth State (Real-time)</h3>
+            <h3 className="font-semibold mb-2">Firebase Auth State (Real-time)</h3>
             <pre className="bg-gray-100 p-2 rounded text-sm overflow-auto">
               {JSON.stringify(
                 authState
@@ -90,12 +109,15 @@ export function AuthDebug() {
             </pre>
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={testGetCurrentUser} disabled={loading}>
-              Test getCurrentUser()
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={testGetCurrentUser} disabled={loading} size="sm">
+              Test Firebase getCurrentUser()
             </Button>
-            <Button onClick={testGetCurrentUserData} disabled={loading}>
-              Test getCurrentUserData()
+            <Button onClick={testGetCurrentUserData} disabled={loading} size="sm">
+              Test Firebase getCurrentUserData()
+            </Button>
+            <Button onClick={testGetCurrentUserFromAPI} disabled={loading} size="sm">
+              Test API getCurrentUserFromAPI()
             </Button>
           </div>
 
@@ -104,7 +126,7 @@ export function AuthDebug() {
 
           {currentUser && (
             <div>
-              <h3 className="font-semibold mb-2">getCurrentUser() Result</h3>
+              <h3 className="font-semibold mb-2">Firebase getCurrentUser() Result</h3>
               <pre className="bg-gray-100 p-2 rounded text-sm overflow-auto">
                 {JSON.stringify(
                   {
@@ -122,8 +144,17 @@ export function AuthDebug() {
 
           {userData && (
             <div>
-              <h3 className="font-semibold mb-2">getCurrentUserData() Result</h3>
+              <h3 className="font-semibold mb-2">Firebase getCurrentUserData() Result</h3>
               <pre className="bg-gray-100 p-2 rounded text-sm overflow-auto">{JSON.stringify(userData, null, 2)}</pre>
+            </div>
+          )}
+
+          {apiUser && (
+            <div>
+              <h3 className="font-semibold mb-2">API getCurrentUserFromAPI() Result ✅</h3>
+              <pre className="bg-green-50 p-2 rounded text-sm overflow-auto border border-green-200">
+                {JSON.stringify(apiUser, null, 2)}
+              </pre>
             </div>
           )}
         </CardContent>
