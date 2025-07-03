@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/firebase/user-service"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Plus, Users } from "lucide-react"
+import { AuthDebug } from "@/components/debug/auth-debug"
 import type { Client } from "@/types/client"
 
 export default function ClientPage() {
@@ -20,6 +21,7 @@ export default function ClientPage() {
   const [statusFilter, setStatusFilter] = useState<string>("All")
   const [expandFilter, setExpandFilter] = useState<string>("All")
   const [collapseFilter, setCollapseFilter] = useState<string>("All")
+  const [showDebug, setShowDebug] = useState(false)
   const { toast } = useToast()
 
   // Set up real-time subscription to clients
@@ -130,9 +132,15 @@ export default function ClientPage() {
           <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Clients</h3>
           <p className="text-gray-500 mb-4">{error}</p>
-          <Button onClick={() => window.location.reload()} variant="outline">
-            Refresh Page
-          </Button>
+          <div className="space-y-2">
+            <Button onClick={() => window.location.reload()} variant="outline">
+              Refresh Page
+            </Button>
+            <Button onClick={() => setShowDebug(!showDebug)} variant="secondary">
+              {showDebug ? "Hide" : "Show"} Debug Info
+            </Button>
+          </div>
+          {showDebug && <AuthDebug />}
         </div>
       </div>
     )
@@ -140,6 +148,15 @@ export default function ClientPage() {
 
   return (
     <div className="space-y-6">
+      {/* Debug Toggle */}
+      <div className="flex justify-end">
+        <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+          {showDebug ? "Hide" : "Show"} Debug
+        </Button>
+      </div>
+
+      {showDebug && <AuthDebug />}
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
