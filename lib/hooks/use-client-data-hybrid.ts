@@ -38,6 +38,7 @@ export function useClientDataHybrid(isDemo = false) {
       inviteCode: "",
       userId: "demo-user-1",
       phone: "",
+      hasLinkedAccount: true,
     },
   ]
 
@@ -74,6 +75,7 @@ export function useClientDataHybrid(isDemo = false) {
       inviteCode: data.inviteCode || "",
       userId: data.userId || "",
       phone: data.phone || "",
+      hasLinkedAccount: data.hasLinkedAccount || false,
     }
   }
 

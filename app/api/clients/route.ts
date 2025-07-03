@@ -1,23 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { fetchClients } from "@/lib/firebase/client-service"
-import { getCurrentUser } from "@/lib/firebase/user-service"
+import { cookies } from "next/headers"
+import { decrypt } from "@/lib/crypto"
 
 export async function GET(request: NextRequest) {
   console.log("[API /api/clients] === REQUEST RECEIVED ===")
 
   try {
-    // Get current user
-    console.log("[API /api/clients] Getting current user...")
-    const currentUser = await getCurrentUser()
-    console.log("[API /api/clients] Current user:", {
-      exists: !!currentUser,
-      uid: currentUser?.uid,
-      email: currentUser?.email,
-      name: currentUser?.name,
-    })
+    // Get user from encrypted cookie (same method as /api/auth/me)
+    console.log("[API /api/clients] Getting user from cookies...")
+    const cookieStore = await cookies()
+    const encryptedUserData = cookieStore.get("user-data")?.value
 
-    if (!currentUser) {
-      console.log("[API /api/clients] ❌ No current user found")
+    if (!encryptedUserData) {
+      console.log("[API /api/clients] ❌ No user-data cookie found")
+      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
+    }
+
+    let currentUser
+    try {
+      const decryptedData = decrypt(encryptedUserData)
+      currentUser = JSON.parse(decryptedData)
+      console.log("[API /api/clients] ✅ User from cookie:", {
+        uid: currentUser.uid,
+        email: currentUser.email,
+        name: currentUser.name,
+        role: currentUser.role,
+      })
+    } catch (decryptError) {
+      console.error("[API /api/clients] ❌ Failed to decrypt user data:", decryptError)
+      return NextResponse.json({ success: false, error: "Invalid authentication" }, { status: 401 })
+    }
+
+    if (!currentUser || !currentUser.uid) {
+      console.log("[API /api/clients] ❌ Invalid user data in cookie")
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
     }
 
@@ -25,8 +41,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch clients for the trainer
     const clients = await fetchClients(currentUser.uid)
-    console.log("[API /api/clients] Raw clients from fetchClients:", clients)
-    console.log("[API /api/clients] Number of clients found:", clients.length)
+    console.log("[API /api/clients] Raw clients from fetchClients:", clients.length)
 
     // Filter clients to only include those with linked accounts and active status
     const activeLinkedClients = clients.filter((client) => {
@@ -48,16 +63,6 @@ export async function GET(request: NextRequest) {
     })
 
     console.log("[API /api/clients] Filtered active linked clients:", activeLinkedClients.length)
-    console.log(
-      "[API /api/clients] Active linked clients:",
-      activeLinkedClients.map((c) => ({
-        id: c.id,
-        name: c.name,
-        email: c.email,
-        status: c.status,
-        userId: c.userId,
-      })),
-    )
 
     return NextResponse.json({
       success: true,
