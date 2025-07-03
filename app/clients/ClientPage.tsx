@@ -41,7 +41,7 @@ export default function ClientPage() {
 
         if (!currentUser) {
           console.error("[ClientPage] No current user found")
-          setError("Authentication required")
+          setError("Authentication required - Please log in to view clients")
           setLoading(false)
           return
         }
