@@ -13,7 +13,7 @@ export function useClientDataHybrid(isDemo = false) {
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
   // Demo clients data
-  const demoClients = [
+  const demoClients: Client[] = [
     {
       id: "1",
       name: "Salty Snack",
@@ -31,6 +31,13 @@ export function useClientDataHybrid(isDemo = false) {
         { name: "Body Fat", value: "18%", change: "-1.5%" },
         { name: "Squat 1RM", value: "225 lbs", change: "+15 lbs" },
       ],
+      email: "salty@example.com",
+      goal: "Build muscle",
+      program: "Strength Training",
+      createdAt: new Date(),
+      inviteCode: "",
+      userId: "demo-user-1",
+      phone: "",
     },
   ]
 
@@ -86,22 +93,26 @@ export function useClientDataHybrid(isDemo = false) {
       console.log("📡 [Hybrid] API response status:", response.status)
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`)
+        const errorText = await response.text()
+        console.error("❌ [Hybrid] API error response:", errorText)
+        throw new Error(`API request failed: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
       console.log("📊 [Hybrid] API response data:", {
+        success: data.success,
         clientCount: data.clients?.length || 0,
-        userId: data.userId,
+        totalClients: data.totalClients,
+        activeLinkedClients: data.activeLinkedClients,
       })
 
-      if (data.clients && Array.isArray(data.clients)) {
+      if (data.success && data.clients && Array.isArray(data.clients)) {
         setClients(data.clients)
         setLastFetchTime(new Date())
         console.log("✅ [Hybrid] Successfully loaded", data.clients.length, "existing clients")
         return data.clients
       } else {
-        console.log("⚠️ [Hybrid] No clients in API response")
+        console.log("⚠️ [Hybrid] No clients in API response or API failed")
         setClients([])
         setLastFetchTime(new Date())
         return []
