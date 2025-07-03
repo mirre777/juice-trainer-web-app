@@ -29,18 +29,30 @@ export default function ClientPage() {
 
     const setupSubscription = async () => {
       try {
+        console.log("[ClientPage] Getting current user...")
         const currentUser = await getCurrentUser()
-        console.log("[ClientPage] Current user:", currentUser?.uid)
+        console.log("[ClientPage] Current user result:", {
+          exists: !!currentUser,
+          uid: currentUser?.uid,
+          email: currentUser?.email,
+        })
 
         if (!currentUser) {
+          console.error("[ClientPage] No current user found")
           setError("Authentication required")
           setLoading(false)
           return
         }
 
+        console.log("[ClientPage] Setting up subscription for user:", currentUser.uid)
+
         // Set up real-time subscription
         unsubscribe = subscribeToClients(currentUser.uid, (updatedClients, subscriptionError) => {
-          console.log("[ClientPage] Received updated clients:", updatedClients.length)
+          console.log("[ClientPage] Subscription callback called:", {
+            clientsCount: updatedClients.length,
+            hasError: !!subscriptionError,
+            errorMessage: subscriptionError?.message,
+          })
 
           if (subscriptionError) {
             console.error("[ClientPage] Subscription error:", subscriptionError)
@@ -51,11 +63,17 @@ export default function ClientPage() {
               variant: "destructive",
             })
           } else {
+            console.log(
+              "[ClientPage] Setting clients:",
+              updatedClients.map((c) => ({ id: c.id, name: c.name })),
+            )
             setClients(updatedClients)
             setError(null)
           }
           setLoading(false)
         })
+
+        console.log("[ClientPage] Subscription setup complete")
       } catch (err) {
         console.error("[ClientPage] Error setting up subscription:", err)
         setError("Failed to initialize client data")

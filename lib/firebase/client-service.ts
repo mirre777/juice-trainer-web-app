@@ -356,7 +356,11 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
 
   try {
     const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
-    const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
+    // OLD CODE - This can fail if documents don't have createdAt
+    // const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
+
+    // NEW CODE - Remove the orderBy to make it more robust
+    const q = query(clientsCollectionRef)
 
     // Create a single subscription and return the unsubscribe function
     const unsubscribe = onSnapshot(
@@ -379,11 +383,24 @@ export function subscribeToClients(trainerUid: string, callback: (clients: Clien
         const clients: Client[] = []
 
         snapshot.forEach((doc) => {
-          const data = doc.data()
-          const client = mapClientData(doc.id, data)
-          if (client) {
-            clients.push(client)
+          try {
+            const data = doc.data()
+            const client = mapClientData(doc.id, data)
+            if (client) {
+              clients.push(client)
+            }
+          } catch (docError) {
+            console.error(`[REALTIME] Error processing document ${doc.id}:`, docError)
+            // Continue processing other documents
           }
+        })
+
+        // Sort clients by createdAt if available, otherwise by name
+        clients.sort((a, b) => {
+          if (a.createdAt && b.createdAt) {
+            return b.createdAt.toMillis() - a.createdAt.toMillis()
+          }
+          return a.name.localeCompare(b.name)
         })
 
         console.log(`[REALTIME] Processed ${clients.length} valid clients, calling callback`)
