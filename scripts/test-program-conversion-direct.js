@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app"
-import { getFirestore } from "firebase/firestore"
-import { programConversionService } from "../lib/firebase/program-conversion-service.js"
+import { getFirestore, doc, getDoc, setDoc, collection } from "firebase/firestore"
+import { v4 as uuidv4 } from "uuid"
 
 // Firebase config from environment variables
 const firebaseConfig = {
@@ -11,6 +11,12 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
+
+console.log("🔧 Firebase Config Check:")
+console.log("  - API Key:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "✅ Present" : "❌ Missing")
+console.log("  - Auth Domain:", process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? "✅ Present" : "❌ Missing")
+console.log("  - Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? "✅ Present" : "❌ Missing")
+console.log("")
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
@@ -27,116 +33,25 @@ console.log("")
 const testProgramData = {
   program_title: "Test Program - Direct Push",
   program_notes: "Testing direct program conversion without UI",
-  program_weeks: 2,
-  is_periodized: true,
-  weeks: [
+  program_weeks: 1,
+  routines: [
     {
-      week_number: 1,
-      routines: [
+      routine_name: "Day 1 - Test Workout",
+      notes: "Simple test workout",
+      exercises: [
         {
-          routine_name: "Day 1 - Upper Body",
-          notes: "Focus on compound movements",
-          exercises: [
+          name: "Push-ups",
+          notes: "Basic exercise",
+          sets: [
             {
-              name: "Bench Press",
-              notes: "1a. Primary chest exercise",
-              sets: [
-                {
-                  set_number: 1,
-                  reps: "8",
-                  weight: "100",
-                  rpe: "7",
-                  rest: "2min",
-                  notes: "Warm up set",
-                  warmup: false,
-                  set_type: "normal",
-                },
-                {
-                  set_number: 2,
-                  reps: "6",
-                  weight: "120",
-                  rpe: "8",
-                  rest: "3min",
-                  notes: "Working set",
-                  warmup: false,
-                  set_type: "normal",
-                },
-              ],
-            },
-            {
-              name: "Pull-ups",
-              notes: "1b. Back exercise",
-              sets: [
-                {
-                  set_number: 1,
-                  reps: "10",
-                  weight: "bodyweight",
-                  rpe: "7",
-                  rest: "2min",
-                  notes: "Controlled tempo",
-                  warmup: false,
-                  set_type: "normal",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          routine_name: "Day 2 - Lower Body",
-          notes: "Leg day focus",
-          exercises: [
-            {
-              name: "Squats",
-              notes: "1a. Primary leg exercise",
-              sets: [
-                {
-                  set_number: 1,
-                  reps: "10",
-                  weight: "80",
-                  rpe: "6",
-                  rest: "2min",
-                  notes: "Warm up",
-                  warmup: true,
-                  set_type: "warmup",
-                },
-                {
-                  set_number: 2,
-                  reps: "8",
-                  weight: "100",
-                  rpe: "8",
-                  rest: "3min",
-                  notes: "Working set",
-                  warmup: false,
-                  set_type: "normal",
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    {
-      week_number: 2,
-      routines: [
-        {
-          routine_name: "Day 1 - Upper Body",
-          notes: "Week 2 progression",
-          exercises: [
-            {
-              name: "Bench Press",
-              notes: "1a. Increased intensity",
-              sets: [
-                {
-                  set_number: 1,
-                  reps: "6",
-                  weight: "125",
-                  rpe: "8",
-                  rest: "3min",
-                  notes: "Progressive overload",
-                  warmup: false,
-                  set_type: "normal",
-                },
-              ],
+              set_number: 1,
+              reps: "10",
+              weight: "bodyweight",
+              rpe: "7",
+              rest: "1min",
+              notes: "Test set",
+              warmup: false,
+              set_type: "normal",
             },
           ],
         },
@@ -145,72 +60,171 @@ const testProgramData = {
   ],
 }
 
-async function testDirectProgramConversion() {
+async function testDocumentAccess() {
+  console.log("🔍 === TESTING DOCUMENT ACCESS ===")
+
+  const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1"
+  const clientId = "CGLJmpv59IngpsYpW7PZ"
+  const userId = "HN2QjNvnWKQ37nVXCSkhXdCwMEH2"
+
   try {
-    console.log("🔍 Step 1: Testing client userId lookup...")
+    // Test 1: Check trainer document
+    console.log("📄 Test 1: Checking trainer document...")
+    const trainerDocRef = doc(db, "users", trainerId)
+    const trainerDoc = await getDoc(trainerDocRef)
 
-    const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1"
-    const clientId = "CGLJmpv59IngpsYpW7PZ"
-
-    // Test getting client userId
-    const userId = await programConversionService.getClientUserId(trainerId, clientId)
-
-    if (!userId) {
-      console.error("❌ FAILED: Could not get userId for client")
-      return
+    if (trainerDoc.exists()) {
+      console.log("✅ Trainer document EXISTS")
+      const trainerData = trainerDoc.data()
+      console.log("  - Name:", trainerData.name || "No name")
+      console.log("  - Email:", trainerData.email || "No email")
+    } else {
+      console.log("❌ Trainer document does NOT exist")
     }
 
-    console.log(`✅ Found userId: ${userId}`)
+    // Test 2: Check client document
     console.log("")
+    console.log("📄 Test 2: Checking client document...")
+    const clientDocRef = doc(db, "users", trainerId, "clients", clientId)
+    const clientDoc = await getDoc(clientDocRef)
 
-    console.log("🔍 Step 2: Testing program conversion...")
-    console.log("📄 Program structure:")
-    console.log(`  - Title: ${testProgramData.program_title}`)
-    console.log(`  - Weeks: ${testProgramData.program_weeks}`)
-    console.log(`  - Week 1 routines: ${testProgramData.weeks[0].routines.length}`)
-    console.log(`  - Week 2 routines: ${testProgramData.weeks[1].routines.length}`)
-    console.log("")
+    if (clientDoc.exists()) {
+      console.log("✅ Client document EXISTS")
+      const clientData = clientDoc.data()
+      console.log("  - Name:", clientData.name || "No name")
+      console.log("  - Email:", clientData.email || "No email")
+      console.log("  - Status:", clientData.status || "No status")
+      console.log("  - UserId:", clientData.userId || "No userId")
+      console.log("  - IsTemporary:", clientData.isTemporary || false)
+    } else {
+      console.log("❌ Client document does NOT exist")
+      console.log("  - Path checked: users/" + trainerId + "/clients/" + clientId)
+    }
 
-    // Convert and send program
-    console.log("🚀 Converting and sending program...")
-    const programId = await programConversionService.convertAndSendProgram(testProgramData, userId)
+    // Test 3: Check user document
+    console.log("")
+    console.log("📄 Test 3: Checking user document...")
+    const userDocRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userDocRef)
 
-    console.log("")
-    console.log("🎉 === SUCCESS ===")
-    console.log(`✅ Program created with ID: ${programId}`)
-    console.log("")
-    console.log("🔍 Check Firebase at these paths:")
-    console.log(`  - Program: /users/${userId}/programs/${programId}`)
-    console.log(`  - Routines: /users/${userId}/routines/[routine-ids]`)
-    console.log(`  - Exercises: /users/${userId}/exercises/[exercise-ids]`)
-    console.log("")
-    console.log("📱 The program should now be visible in the mobile app!")
+    if (userDoc.exists()) {
+      console.log("✅ User document EXISTS")
+      const userData = userDoc.data()
+      console.log("  - Name:", userData.name || "No name")
+      console.log("  - Email:", userData.email || "No email")
+      console.log("  - Status:", userData.status || "No status")
+      console.log("  - HasFirebaseAuth:", userData.hasFirebaseAuth || false)
+      console.log("  - Trainers:", userData.trainers || [])
+    } else {
+      console.log("❌ User document does NOT exist")
+      console.log("  - Path checked: users/" + userId)
+    }
+
+    return { trainerExists: trainerDoc.exists(), clientExists: clientDoc.exists(), userExists: userDoc.exists() }
   } catch (error) {
-    console.error("")
-    console.error("❌ === CONVERSION FAILED ===")
-    console.error("Error details:", {
-      message: error.message,
-      code: error.code,
-      stack: error.stack?.substring(0, 500),
-    })
-
-    if (error.message.includes("permission")) {
-      console.error("")
-      console.error("🔒 PERMISSION ISSUE:")
-      console.error("  - Check Firestore security rules")
-      console.error("  - Verify Firebase admin credentials")
-      console.error("  - Ensure service account has write permissions")
-    }
-
-    if (error.message.includes("not found")) {
-      console.error("")
-      console.error("📄 DOCUMENT NOT FOUND:")
-      console.error("  - Client document might not exist")
-      console.error("  - User document might not exist")
-      console.error("  - Check document IDs are correct")
-    }
+    console.error("❌ Error accessing documents:", error)
+    return { trainerExists: false, clientExists: false, userExists: false }
   }
 }
 
-// Run the test
-testDirectProgramConversion()
+async function testProgramCreation() {
+  console.log("")
+  console.log("🚀 === TESTING PROGRAM CREATION ===")
+
+  const userId = "HN2QjNvnWKQ37nVXCSkhXdCwMEH2"
+
+  try {
+    // Create a simple program directly
+    const programId = uuidv4()
+    const timestamp = new Date()
+
+    console.log("📝 Creating program with ID:", programId)
+
+    const program = {
+      id: programId,
+      name: testProgramData.program_title,
+      notes: testProgramData.program_notes,
+      startedAt: timestamp.toISOString(),
+      duration: testProgramData.program_weeks,
+      createdAt: timestamp.toISOString(),
+      updated_at: timestamp.toISOString(),
+      routines: [],
+    }
+
+    // Create program document
+    const programsRef = collection(db, "users", userId, "programs")
+    const programDocRef = doc(programsRef, programId)
+
+    console.log("💾 Saving program to path: users/" + userId + "/programs/" + programId)
+    await setDoc(programDocRef, program)
+
+    console.log("✅ Program created successfully!")
+    console.log("  - Program ID:", programId)
+    console.log("  - Path: users/" + userId + "/programs/" + programId)
+
+    // Verify it was created
+    console.log("")
+    console.log("🔍 Verifying program was saved...")
+    const savedProgramDoc = await getDoc(programDocRef)
+
+    if (savedProgramDoc.exists()) {
+      console.log("✅ Program verification SUCCESS")
+      const savedData = savedProgramDoc.data()
+      console.log("  - Saved name:", savedData.name)
+      console.log("  - Saved duration:", savedData.duration)
+      console.log("  - Created at:", savedData.createdAt)
+    } else {
+      console.log("❌ Program verification FAILED - document not found after creation")
+    }
+
+    return programId
+  } catch (error) {
+    console.error("❌ Error creating program:", error)
+    console.error("  - Error code:", error.code)
+    console.error("  - Error message:", error.message)
+
+    if (error.code === "permission-denied") {
+      console.error("🔒 PERMISSION DENIED - Check Firestore security rules")
+    }
+
+    return null
+  }
+}
+
+async function runFullTest() {
+  console.log("🎯 === STARTING FULL DIAGNOSTIC TEST ===")
+  console.log("")
+
+  // Step 1: Test document access
+  const accessResults = await testDocumentAccess()
+
+  console.log("")
+  console.log("📊 === ACCESS RESULTS SUMMARY ===")
+  console.log("  - Trainer document:", accessResults.trainerExists ? "✅ EXISTS" : "❌ MISSING")
+  console.log("  - Client document:", accessResults.clientExists ? "✅ EXISTS" : "❌ MISSING")
+  console.log("  - User document:", accessResults.userExists ? "✅ EXISTS" : "❌ MISSING")
+
+  if (!accessResults.userExists) {
+    console.log("")
+    console.log("🛑 STOPPING TEST - User document is required for program creation")
+    return
+  }
+
+  // Step 2: Test program creation
+  const programId = await testProgramCreation()
+
+  if (programId) {
+    console.log("")
+    console.log("🎉 === TEST COMPLETED SUCCESSFULLY ===")
+    console.log("✅ Program created with ID:", programId)
+    console.log("🔍 Check Firebase console at:")
+    console.log("  - users/HN2QjNvnWKQ37nVXCSkhXdCwMEH2/programs/" + programId)
+  } else {
+    console.log("")
+    console.log("❌ === TEST FAILED ===")
+    console.log("Program creation failed - check error messages above")
+  }
+}
+
+// Run the full test
+runFullTest()

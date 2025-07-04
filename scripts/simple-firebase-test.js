@@ -12,67 +12,70 @@ const firebaseConfig = {
 }
 
 console.log("🔧 === FIREBASE CONNECTION TEST ===")
-console.log("📋 Environment Variables:")
-console.log("  - API Key:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "✅ Set" : "❌ Missing")
-console.log("  - Auth Domain:", process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? "✅ Set" : "❌ Missing")
-console.log("  - Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? "✅ Set" : "❌ Missing")
+console.log("")
+console.log("Environment Variables Check:")
+console.log("  - NEXT_PUBLIC_FIREBASE_API_KEY:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "✅ Present" : "❌ Missing")
+console.log(
+  "  - NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:",
+  process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? "✅ Present" : "❌ Missing",
+)
+console.log(
+  "  - NEXT_PUBLIC_FIREBASE_PROJECT_ID:",
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? "✅ Present" : "❌ Missing",
+)
+console.log(
+  "  - NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:",
+  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? "✅ Present" : "❌ Missing",
+)
+console.log(
+  "  - NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:",
+  process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ? "✅ Present" : "❌ Missing",
+)
+console.log("  - NEXT_PUBLIC_FIREBASE_APP_ID:", process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? "✅ Present" : "❌ Missing")
 console.log("")
 
 try {
   // Initialize Firebase
   const app = initializeApp(firebaseConfig)
   const db = getFirestore(app)
+
   console.log("✅ Firebase initialized successfully")
+  console.log("📊 Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)
   console.log("")
 
   // Test specific document access
   console.log("🔍 Testing document access...")
+  console.log("")
 
-  const testCases = [
-    {
-      name: "Client Document",
-      path: "users/5tVdK6LXCifZgjxD7rml3nEOXmh1/clients/CGLJmpv59IngpsYpW7PZ",
-      expectedFields: ["name", "email", "status", "userId"],
-    },
-    {
-      name: "User Document",
-      path: "users/HN2QjNvnWKQ37nVXCSkhXdCwMEH2",
-      expectedFields: ["name", "email", "status", "trainers"],
-    },
-  ]
+  const userId = "HN2QjNvnWKQ37nVXCSkhXdCwMEH2"
+  console.log("Testing user document:", userId)
 
-  for (const testCase of testCases) {
-    console.log(`\n📄 Testing ${testCase.name}:`)
-    console.log(`   Path: ${testCase.path}`)
+  const userDocRef = doc(db, "users", userId)
+  const userDoc = await getDoc(userDocRef)
 
-    try {
-      const docRef = doc(db, testCase.path)
-      const docSnap = await getDoc(docRef)
+  if (userDoc.exists()) {
+    console.log("✅ User document EXISTS")
+    const userData = userDoc.data()
+    console.log("User data:")
+    console.log("  - Name:", userData.name)
+    console.log("  - Email:", userData.email)
+    console.log("  - Status:", userData.status)
+    console.log("  - HasFirebaseAuth:", userData.hasFirebaseAuth)
+    console.log("  - Trainers count:", userData.trainers ? userData.trainers.length : 0)
+  } else {
+    console.log("❌ User document does NOT exist")
+    console.log("Path checked: users/" + userId)
+  }
+} catch (error) {
+  console.error("❌ Firebase initialization failed:")
+  console.error("  - Error code:", error.code)
+  console.error("  - Error message:", error.message)
 
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        console.log(`   ✅ Document exists`)
-        console.log(`   📊 Fields found:`)
-
-        testCase.expectedFields.forEach((field) => {
-          const value = data[field]
-          if (value !== undefined) {
-            console.log(`     - ${field}: ${typeof value === "object" ? JSON.stringify(value) : value}`)
-          } else {
-            console.log(`     - ${field}: ❌ Missing`)
-          }
-        })
-      } else {
-        console.log(`   ❌ Document does not exist`)
-      }
-    } catch (error) {
-      console.log(`   ❌ Error accessing document:`, error.message)
-    }
+  if (error.code === "app/invalid-api-key") {
+    console.error("🔑 Invalid API key - check NEXT_PUBLIC_FIREBASE_API_KEY")
   }
 
-  console.log("")
-  console.log("🎯 === TEST COMPLETE ===")
-} catch (error) {
-  console.error("❌ Firebase initialization failed:", error.message)
-  console.error("🔧 Check your environment variables and Firebase config")
+  if (error.code === "app/project-not-found") {
+    console.error("🏗️ Project not found - check NEXT_PUBLIC_FIREBASE_PROJECT_ID")
+  }
 }
