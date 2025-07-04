@@ -1,41 +1,56 @@
 import { UnifiedAuthService } from "./unified-auth-service"
 import { UnifiedClientService } from "./unified-client-service"
-import type { User } from "@/types/index"
 
-/**
- * @deprecated Use UnifiedAuthService and UnifiedClientService instead
- * This service is maintained for backward compatibility
- */
+export interface ClientUser {
+  id: string
+  email: string
+  name: string
+  role: "trainer" | "client"
+  trainerId?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
 export class ClientUserService {
-  private authService: UnifiedAuthService
-  private clientService: UnifiedClientService
+  private authService = new UnifiedAuthService()
+  private clientService = new UnifiedClientService()
 
-  constructor() {
-    this.authService = new UnifiedAuthService()
-    this.clientService = new UnifiedClientService()
+  async getCurrentUser(): Promise<ClientUser | null> {
+    try {
+      const user = await this.authService.getCurrentUser()
+      if (!user) return null
 
-    console.warn("ClientUserService is deprecated. Use UnifiedAuthService and UnifiedClientService directly.")
+      return {
+        id: user.uid,
+        email: user.email || "",
+        name: user.displayName || user.email?.split("@")[0] || "",
+        role: "trainer", // Default role, can be enhanced later
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    } catch (error) {
+      console.error("Error getting current user:", error)
+      return null
+    }
   }
 
-  async getCurrentUser(): Promise<User | null> {
-    return this.authService.getCurrentUser()
-  }
-
-  async getClients(userId: string) {
+  async getUserClients(userId: string) {
     return this.clientService.getClients(userId)
   }
 
-  async addClient(userId: string, clientData: any) {
+  async addClientForUser(userId: string, clientData: any) {
     return this.clientService.addClient(userId, clientData)
   }
 
-  async updateClient(userId: string, clientId: string, updates: any) {
+  async updateClientForUser(userId: string, clientId: string, updates: any) {
     return this.clientService.updateClient(userId, clientId, updates)
   }
 
-  async deleteClient(userId: string, clientId: string) {
+  async deleteClientForUser(userId: string, clientId: string) {
     return this.clientService.deleteClient(userId, clientId)
   }
-}
 
-export const clientUserService = new ClientUserService()
+  async getClientById(userId: string, clientId: string) {
+    return this.clientService.getClientById(userId, clientId)
+  }
+}

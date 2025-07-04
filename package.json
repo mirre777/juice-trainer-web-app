@@ -59,8 +59,6 @@
     "glob": "latest",
     "google-auth-library": "latest",
     "googleapis": "latest",
-    "http": "latest",
-    "https": "latest",
     "input-otp": "latest",
     "jest": "latest",
     "jsonwebtoken": "latest",

@@ -1,40 +1,38 @@
 import { UnifiedAuthService } from "../services/unified-auth-service"
 
-/**
- * @deprecated Use UnifiedAuthService instead
- * This service is maintained for backward compatibility
- */
+// Legacy auth service - deprecated, use UnifiedAuthService instead
 export class AuthService {
-  private unifiedAuthService: UnifiedAuthService
+  private unifiedService = new UnifiedAuthService()
 
   constructor() {
-    this.unifiedAuthService = new UnifiedAuthService()
-    console.warn("AuthService is deprecated. Use UnifiedAuthService directly.")
+    console.warn("AuthService is deprecated. Please use UnifiedAuthService instead.")
   }
 
   async login(email: string, password: string) {
-    return this.unifiedAuthService.login(email, password)
+    console.warn("AuthService.login is deprecated. Use UnifiedAuthService.signIn instead.")
+    return this.unifiedService.signIn(email, password)
   }
 
-  async signup(email: string, password: string, userData: any) {
-    return this.unifiedAuthService.signup(email, password, userData)
+  async signup(email: string, password: string, userData?: any) {
+    console.warn("AuthService.signup is deprecated. Use UnifiedAuthService.signUp instead.")
+    return this.unifiedService.signUp(email, password, userData)
   }
 
   async logout() {
-    return this.unifiedAuthService.logout()
+    console.warn("AuthService.logout is deprecated. Use UnifiedAuthService.signOut instead.")
+    return this.unifiedService.signOut()
   }
 
   async getCurrentUser() {
-    return this.unifiedAuthService.getCurrentUser()
-  }
-
-  async refreshToken() {
-    return this.unifiedAuthService.refreshToken()
+    console.warn("AuthService.getCurrentUser is deprecated. Use UnifiedAuthService.getCurrentUser instead.")
+    return this.unifiedService.getCurrentUser()
   }
 
   onAuthStateChanged(callback: (user: any) => void) {
-    return this.unifiedAuthService.onAuthStateChanged(callback)
+    console.warn("AuthService.onAuthStateChanged is deprecated. Use UnifiedAuthService.onAuthStateChanged instead.")
+    return this.unifiedService.onAuthStateChanged(callback)
   }
 }
 
+// Export singleton instance for backward compatibility
 export const authService = new AuthService()
