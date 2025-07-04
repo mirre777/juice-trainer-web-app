@@ -1,17 +1,18 @@
-import { cookies } from "next/headers"
-import { signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { auth, db } from "@/lib/firebase/firebase"
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+} from "firebase/auth"
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
 export interface AuthUser {
   uid: string
-  email: string
+  email: string | null
   name?: string
   role?: string
-  user_type?: string
-  universalInviteCode?: string
-  inviteCode?: string
 }
 
 export interface AuthResult {
@@ -24,58 +25,80 @@ export interface AuthResult {
 /**
  * Unified Authentication Service
  * Single source of truth for all authentication operations
+ * Uses Firebase Auth with consistent error handling
  */
 export class UnifiedAuthService {
+  private static currentUser: AuthUser | null = null
+  private static authStateListeners: ((user: AuthUser | null) => void)[] = []
+
   /**
-   * Get current user from cookies and validate with Firestore
+   * Initialize auth state listener
+   */
+  static initialize(): void {
+    console.log("[UnifiedAuth] 🚀 Initializing authentication service...")
+
+    onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        console.log("[UnifiedAuth] 👤 User signed in:", firebaseUser.email)
+
+        // Get additional user data from Firestore
+        const userData = await this.getUserData(firebaseUser.uid)
+
+        this.currentUser = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: userData?.name || firebaseUser.displayName || undefined,
+          role: userData?.role || "user",
+        }
+      } else {
+        console.log("[UnifiedAuth] 👤 User signed out")
+        this.currentUser = null
+      }
+
+      // Notify all listeners
+      this.authStateListeners.forEach((listener) => listener(this.currentUser))
+    })
+  }
+
+  /**
+   * Get current authenticated user
    */
   static async getCurrentUser(): Promise<AuthResult> {
     try {
-      console.log("🔍 [UnifiedAuth] Getting current user...")
-
-      const cookieStore = cookies()
-      const userId = cookieStore.get("user_id")?.value
-
-      if (!userId) {
-        console.log("❌ [UnifiedAuth] No user_id in cookies")
-        return {
-          success: false,
-          error: createError(ErrorType.AUTH_UNAUTHORIZED, null, { function: "getCurrentUser" }, "Not authenticated"),
-        }
+      // Return cached user if available
+      if (this.currentUser) {
+        return { success: true, user: this.currentUser }
       }
 
-      // Get user data from Firestore
-      const userRef = doc(db, "users", userId)
-      const [userDoc, docError] = await tryCatch(() => getDoc(userRef), ErrorType.DB_READ_FAILED, {
-        function: "getCurrentUser",
-        userId,
+      // Wait for auth state to be determined
+      return new Promise((resolve) => {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          unsubscribe()
+
+          if (firebaseUser) {
+            const userData = await this.getUserData(firebaseUser.uid)
+            const user: AuthUser = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: userData?.name || firebaseUser.displayName || undefined,
+              role: userData?.role || "user",
+            }
+
+            this.currentUser = user
+            resolve({ success: true, user })
+          } else {
+            resolve({
+              success: false,
+              error: createError(
+                ErrorType.AUTH_UNAUTHORIZED,
+                null,
+                { function: "getCurrentUser" },
+                "No authenticated user",
+              ),
+            })
+          }
+        })
       })
-
-      if (docError || !userDoc) {
-        return { success: false, error: docError }
-      }
-
-      if (!userDoc.exists()) {
-        console.log("❌ [UnifiedAuth] User document not found for ID:", userId)
-        return {
-          success: false,
-          error: createError(ErrorType.DB_DOCUMENT_NOT_FOUND, null, { userId }, "User not found"),
-        }
-      }
-
-      const userData = userDoc.data()
-      const user: AuthUser = {
-        uid: userId,
-        email: userData?.email || "",
-        name: userData?.name || "",
-        role: userData?.role,
-        user_type: userData?.user_type,
-        universalInviteCode: userData?.universalInviteCode || "",
-        inviteCode: userData?.inviteCode || "",
-      }
-
-      console.log("✅ [UnifiedAuth] Current user retrieved:", { uid: user.uid, email: user.email, role: user.role })
-      return { success: true, user }
     } catch (error: any) {
       const appError = createError(
         ErrorType.UNKNOWN_ERROR,
@@ -91,9 +114,9 @@ export class UnifiedAuthService {
   /**
    * Sign in with email and password
    */
-  static async signIn(email: string, password: string, invitationCode?: string): Promise<AuthResult> {
+  static async signIn(email: string, password: string): Promise<AuthResult> {
     try {
-      console.log(`[UnifiedAuth] 🚀 Processing login for ${email}`)
+      console.log("[UnifiedAuth] 🔐 Signing in user:", email)
 
       if (!email || !password) {
         return {
@@ -107,73 +130,33 @@ export class UnifiedAuthService {
         }
       }
 
-      // Check if user exists in Firestore first
-      const { user: existingUser } = await this.getUserByEmail(email)
-
-      if (!existingUser) {
-        console.log(`[UnifiedAuth] ❌ User not found in Firestore: ${email}`)
-        if (invitationCode) {
-          return {
-            success: false,
-            error: createError(
-              ErrorType.DB_DOCUMENT_NOT_FOUND,
-              null,
-              { email },
-              "Account not found. Please sign up first.",
-            ),
-            message: "Account not found. Please sign up first.",
-          }
-        }
-        return {
-          success: false,
-          error: createError(
-            ErrorType.DB_DOCUMENT_NOT_FOUND,
-            null,
-            { email },
-            "No account found with this email address",
-          ),
-        }
-      }
-
-      // Authenticate with Firebase
-      const [userCredential, authError] = await tryCatch(
+      const [userCredential, signInError] = await tryCatch(
         () => signInWithEmailAndPassword(auth, email, password),
         ErrorType.AUTH_INVALID_CREDENTIALS,
         { function: "signIn", email },
       )
 
-      if (authError || !userCredential) {
-        return { success: false, error: authError }
+      if (signInError || !userCredential) {
+        return { success: false, error: signInError }
       }
 
-      const firebaseUser = userCredential.user
-      const [token, tokenError] = await tryCatch(() => firebaseUser.getIdToken(), ErrorType.AUTH_TOKEN_EXPIRED, {
-        function: "signIn",
-        uid: firebaseUser.uid,
-      })
+      // Get user data from Firestore
+      const userData = await this.getUserData(userCredential.user.uid)
 
-      if (tokenError || !token) {
-        return { success: false, error: tokenError }
+      const user: AuthUser = {
+        uid: userCredential.user.uid,
+        email: userCredential.user.email,
+        name: userData?.name || userCredential.user.displayName || undefined,
+        role: userData?.role || "user",
       }
 
-      // Set cookies
-      this.setAuthCookies(token, existingUser.uid)
+      this.currentUser = user
+      console.log("[UnifiedAuth] ✅ Sign in successful:", user.email)
 
-      // Process invitation if provided
-      if (invitationCode) {
-        console.log(`[UnifiedAuth] Processing invitation code: ${invitationCode}`)
-        // Store invitation code and process it
-        await this.storeInvitationCode(existingUser.uid, invitationCode)
-        // Import and process the invitation
-        const { processLoginInvitation } = await import("@/lib/firebase/client-service")
-        await processLoginInvitation(invitationCode, existingUser.uid)
-      }
-
-      console.log(`[UnifiedAuth] ✅ Login successful for user: ${existingUser.uid}`)
       return {
         success: true,
-        user: existingUser,
-        message: invitationCode ? "Login successful! Your request has been sent to the trainer." : "Login successful!",
+        user,
+        message: "Sign in successful",
       }
     } catch (error: any) {
       const appError = createError(
@@ -188,26 +171,94 @@ export class UnifiedAuthService {
   }
 
   /**
+   * Sign up with email and password
+   */
+  static async signUp(email: string, password: string, name?: string): Promise<AuthResult> {
+    try {
+      console.log("[UnifiedAuth] 📝 Creating new user:", email)
+
+      if (!email || !password) {
+        return {
+          success: false,
+          error: createError(
+            ErrorType.API_MISSING_PARAMS,
+            null,
+            { function: "signUp" },
+            "Email and password are required",
+          ),
+        }
+      }
+
+      const [userCredential, signUpError] = await tryCatch(
+        () => createUserWithEmailAndPassword(auth, email, password),
+        ErrorType.AUTH_EMAIL_ALREADY_EXISTS,
+        { function: "signUp", email },
+      )
+
+      if (signUpError || !userCredential) {
+        return { success: false, error: signUpError }
+      }
+
+      // Create user document in Firestore
+      const userData = {
+        email: userCredential.user.email,
+        name: name || "",
+        role: "user",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }
+
+      await this.createUserDocument(userCredential.user.uid, userData)
+
+      const user: AuthUser = {
+        uid: userCredential.user.uid,
+        email: userCredential.user.email,
+        name: name,
+        role: "user",
+      }
+
+      this.currentUser = user
+      console.log("[UnifiedAuth] ✅ Sign up successful:", user.email)
+
+      return {
+        success: true,
+        user,
+        message: "Account created successfully",
+      }
+    } catch (error: any) {
+      const appError = createError(
+        ErrorType.UNKNOWN_ERROR,
+        error,
+        { function: "signUp", email },
+        "Unexpected error during sign up",
+      )
+      logError(appError)
+      return { success: false, error: appError }
+    }
+  }
+
+  /**
    * Sign out current user
    */
   static async signOut(): Promise<AuthResult> {
     try {
-      console.log("[UnifiedAuth] 🚪 Signing out user...")
+      console.log("[UnifiedAuth] 🚪 Signing out user")
 
-      // Sign out from Firebase
-      const [, authError] = await tryCatch(() => signOut(auth), ErrorType.AUTH_UNAUTHORIZED, {
+      const [, signOutError] = await tryCatch(() => firebaseSignOut(auth), ErrorType.AUTH_SIGNOUT_FAILED, {
         function: "signOut",
       })
 
-      if (authError) {
-        logError(authError)
+      if (signOutError) {
+        return { success: false, error: signOutError }
       }
 
-      // Clear cookies
-      this.clearAuthCookies()
-
+      this.currentUser = null
       console.log("[UnifiedAuth] ✅ Sign out successful")
-      return { success: true, message: "Signed out successfully" }
+
+      return {
+        success: true,
+        message: "Signed out successfully",
+      }
     } catch (error: any) {
       const appError = createError(
         ErrorType.UNKNOWN_ERROR,
@@ -221,78 +272,54 @@ export class UnifiedAuthService {
   }
 
   /**
-   * Get user by email
+   * Subscribe to auth state changes
    */
-  private static async getUserByEmail(email: string): Promise<{ user?: AuthUser; error?: any }> {
+  static onAuthStateChanged(callback: (user: AuthUser | null) => void): () => void {
+    this.authStateListeners.push(callback)
+
+    // Call immediately with current state
+    callback(this.currentUser)
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.authStateListeners.indexOf(callback)
+      if (index > -1) {
+        this.authStateListeners.splice(index, 1)
+      }
+    }
+  }
+
+  // Private helper methods
+
+  private static async getUserData(uid: string): Promise<any> {
     try {
-      // This would need to be implemented based on your existing getUserByEmail function
-      // For now, returning a placeholder
-      return { user: undefined }
+      const userRef = doc(db, "users", uid)
+      const userDoc = await getDoc(userRef)
+
+      if (userDoc.exists()) {
+        return userDoc.data()
+      }
+
+      return null
     } catch (error) {
-      return { error }
+      console.error("[UnifiedAuth] Error getting user data:", error)
+      return null
     }
   }
 
-  /**
-   * Store invitation code for user
-   */
-  private static async storeInvitationCode(userId: string, invitationCode: string): Promise<void> {
+  private static async createUserDocument(uid: string, userData: any): Promise<void> {
     try {
-      const userRef = doc(db, "users", userId)
-      await updateDoc(userRef, {
-        inviteCode: invitationCode,
-        updatedAt: serverTimestamp(),
-      })
-      console.log(`[UnifiedAuth] ✅ Stored invitation code for user: ${userId}`)
+      const userRef = doc(db, "users", uid)
+      await setDoc(userRef, userData)
+      console.log("[UnifiedAuth] User document created:", uid)
     } catch (error) {
-      console.error(`[UnifiedAuth] ❌ Failed to store invitation code:`, error)
+      console.error("[UnifiedAuth] Error creating user document:", error)
+      throw error
     }
   }
+}
 
-  /**
-   * Set authentication cookies
-   */
-  private static setAuthCookies(token: string, userId: string): void {
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: "/",
-    }
-
-    cookies().set("auth_token", token, cookieOptions)
-    cookies().set("user_id", userId, { ...cookieOptions, httpOnly: false })
-  }
-
-  /**
-   * Clear authentication cookies
-   */
-  private static clearAuthCookies(): void {
-    const cookieOptions = {
-      path: "/",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 0,
-    }
-
-    cookies().set("auth_token", "", cookieOptions)
-    cookies().set("user_id", "", { ...cookieOptions, httpOnly: false })
-  }
-
-  /**
-   * Check if user is authenticated
-   */
-  static async isAuthenticated(): Promise<boolean> {
-    const result = await this.getCurrentUser()
-    return result.success && !!result.user
-  }
-
-  /**
-   * Get user ID from cookies
-   */
-  static getUserIdFromCookies(): string | null {
-    const cookieStore = cookies()
-    return cookieStore.get("user_id")?.value || null
-  }
+// Initialize the service
+if (typeof window !== "undefined") {
+  UnifiedAuthService.initialize()
 }
