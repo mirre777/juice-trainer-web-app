@@ -42,6 +42,12 @@ export function useClientDataHybrid(isDemo = false) {
     },
   ]
 
+  // Helper function to get auth token from localStorage
+  const getAuthToken = () => {
+    if (typeof window === "undefined") return null
+    return localStorage.getItem("auth_token")
+  }
+
   // Helper function to get initials from name
   const getInitials = (name: string) => {
     return name
@@ -79,16 +85,23 @@ export function useClientDataHybrid(isDemo = false) {
     }
   }
 
-  // Step 1: Fetch existing clients via API
+  // Step 1: Fetch existing clients via API with auth token
   const fetchExistingClients = async () => {
     try {
       console.log("🚀 [Hybrid] Step 1: Fetching existing clients via API...")
 
+      const authToken = getAuthToken()
+      if (!authToken) {
+        throw new Error("No auth token found in localStorage")
+      }
+
+      console.log("🔑 [Hybrid] Auth token found, length:", authToken.length)
+
       const response = await fetch("/api/clients", {
         method: "GET",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
         },
       })
 
@@ -219,7 +232,7 @@ export function useClientDataHybrid(isDemo = false) {
 
         console.log("🎬 [Hybrid] Starting hybrid client fetching...")
 
-        // Step 1: Fetch existing clients via API
+        // Step 1: Fetch existing clients via API with auth token
         const existingClients = await fetchExistingClients()
 
         // Step 2: Get current user to set up real-time listener

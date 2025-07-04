@@ -1,30 +1,40 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/firebase/user-service"
+import { fetchClients } from "@/lib/firebase/client-service"
+import { verifyToken } from "@/lib/auth/token-service"
 
 export async function GET(request: NextRequest) {
   console.log("[API /api/clients] === REQUEST RECEIVED ===")
 
   try {
-    // Use the same getCurrentUser function that works elsewhere
-    console.log("[API /api/clients] Getting current user...")
-    const currentUser = await getCurrentUser()
-    console.log("[API /api/clients] Current user:", {
-      exists: !!currentUser,
-      uid: currentUser?.uid,
-      email: currentUser?.email,
-      name: currentUser?.name,
-    })
+    // Get auth token from Authorization header
+    const authHeader = request.headers.get("authorization")
+    console.log("[API /api/clients] Auth header:", authHeader ? "Present" : "Missing")
 
-    if (!currentUser) {
-      console.log("[API /api/clients] ❌ No current user found")
-      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("[API /api/clients] ❌ No valid Authorization header")
+      return NextResponse.json({ success: false, error: "Authorization header required" }, { status: 401 })
     }
 
-    console.log("[API /api/clients] Fetching clients for trainer:", currentUser.uid)
+    const token = authHeader.substring(7) // Remove "Bearer " prefix
+    console.log("[API /api/clients] Token extracted, length:", token.length)
 
-    // Import and use your existing fetchClients function
-    const { fetchClients } = await import("@/lib/firebase/client-service")
-    const clients = await fetchClients(currentUser.uid)
+    // Verify the token
+    const tokenData = await verifyToken(token)
+    if (!tokenData || !tokenData.uid) {
+      console.log("[API /api/clients] ❌ Invalid or expired token")
+      return NextResponse.json({ success: false, error: "Invalid or expired token" }, { status: 401 })
+    }
+
+    console.log("[API /api/clients] ✅ Token verified for user:", {
+      uid: tokenData.uid,
+      email: tokenData.email,
+      role: tokenData.role,
+    })
+
+    console.log("[API /api/clients] Fetching clients for trainer:", tokenData.uid)
+
+    // Fetch clients for the trainer
+    const clients = await fetchClients(tokenData.uid)
     console.log("[API /api/clients] Raw clients from fetchClients:", clients.length)
 
     // Filter clients to only include those with linked accounts and active status

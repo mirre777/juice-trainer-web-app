@@ -1,144 +1,109 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Plus, Users } from "lucide-react"
+import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
 import { ClientsList } from "@/components/clients/clients-list"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
-import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
-import { AuthDebug } from "@/components/debug/auth-debug"
 import { AddClientModal } from "@/components/clients/add-client-modal"
-import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { Plus, RefreshCw } from "lucide-react"
+import { AuthDebug } from "@/components/debug/auth-debug"
+import { toast } from "sonner"
 
 export default function ClientPage() {
+  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid()
   const [showAddModal, setShowAddModal] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("All")
-  const [expandFilter, setExpandFilter] = useState("All")
-  const [collapseFilter, setCollapseFilter] = useState("All")
-  const { toast } = useToast()
-
-  // Use the hybrid approach for client data
-  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid()
-
-  console.log("[ClientPage] Render state:", {
-    clientsCount: clients.length,
-    loading,
-    error,
-    lastFetchTime: lastFetchTime?.toISOString(),
-  })
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Filter clients based on search and status
   const filteredClients = clients.filter((client) => {
     const matchesSearch =
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      client.email.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === "All" || client.status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refetch()
+      toast.success("Clients refreshed successfully")
+    } catch (err) {
+      toast.error("Failed to refresh clients")
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   const handleAddClient = () => {
     setShowAddModal(true)
   }
 
   const handleClientAdded = () => {
-    // The hybrid approach will automatically pick up new clients via real-time listener
-    console.log("[ClientPage] Client added - real-time listener should pick it up")
-    toast({
-      title: "Client added",
-      description: "The new client has been added successfully.",
-    })
-  }
-
-  const handleClientDeleted = () => {
-    // Refresh the data when a client is deleted
-    refetch()
-    toast({
-      title: "Client deleted",
-      description: "The client has been deleted successfully.",
-    })
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-            <p className="text-gray-500">Loading your coaching clients...</p>
-          </div>
-          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
-            {showDebug ? "Hide" : "Show"} Debug
-          </Button>
-        </div>
-
-        {showDebug && <AuthDebug />}
-
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-        </div>
-      </div>
-    )
+    setShowAddModal(false)
+    // The real-time listener should automatically pick up new clients
+    toast.success("Client added successfully")
   }
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
+      <div className="container mx-auto p-6">
+        <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-            <p className="text-gray-500">Manage your coaching clients</p>
+            <h1 className="text-3xl font-bold">Clients</h1>
+            <p className="text-gray-600">Manage your coaching clients</p>
           </div>
-          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
-            {showDebug ? "Hide" : "Show"} Debug
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+              {showDebug ? "Hide" : "Show"} Debug
+            </Button>
+          </div>
         </div>
 
         {showDebug && <AuthDebug />}
 
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Clients</h3>
-            <p className="text-gray-500 mb-4">{error}</p>
-            <div className="space-y-2">
-              <Button onClick={refetch} variant="outline">
-                Try Again
-              </Button>
-            </div>
-          </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Clients</h2>
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={handleRefresh} disabled={isRefreshing}>
+            {isRefreshing ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              "Try Again"
+            )}
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-          <p className="text-gray-500">
-            Manage your coaching clients
-            {lastFetchTime && (
-              <span className="text-sm text-gray-400 ml-2">(Last updated: {lastFetchTime.toLocaleTimeString()})</span>
-            )}
-          </p>
+          <h1 className="text-3xl font-bold">Clients</h1>
+          <p className="text-gray-600">Manage your coaching clients</p>
+          {lastFetchTime && (
+            <p className="text-sm text-gray-500 mt-1">Last updated: {lastFetchTime.toLocaleTimeString()}</p>
+          )}
         </div>
         <div className="flex gap-2">
-          <Button onClick={refetch} variant="outline" size="sm">
-            Refresh
+          <Button onClick={handleRefresh} variant="outline" size="sm" disabled={isRefreshing}>
+            {isRefreshing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           </Button>
           <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
             {showDebug ? "Hide" : "Show"} Debug
           </Button>
-          <Button
-            onClick={handleAddClient}
-            className="bg-lime-400 hover:bg-lime-500 text-gray-800"
-            data-add-client-button="true"
-          >
-            <Plus className="h-4 w-4 mr-2" />
+          <Button onClick={handleAddClient} className="bg-green-600 hover:bg-green-700">
+            <Plus className="w-4 h-4 mr-2" />
             Add Client
           </Button>
         </div>
@@ -147,30 +112,21 @@ export default function ClientPage() {
       {/* Debug Panel */}
       {showDebug && <AuthDebug />}
 
-      {/* Filters */}
+      {/* Filter Bar */}
       <ClientsFilterBar
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        expandFilter={expandFilter}
-        onExpandFilterChange={setExpandFilter}
-        collapseFilter={collapseFilter}
-        onCollapseFilterChange={setCollapseFilter}
+        onStatusChange={setStatusFilter}
         clientCount={filteredClients.length}
         totalCount={clients.length}
       />
 
       {/* Clients List */}
-      <ClientsList
-        clients={filteredClients}
-        allClientsExpanded={expandFilter === "All"}
-        loading={loading}
-        onClientDeleted={handleClientDeleted}
-      />
+      <ClientsList clients={filteredClients} loading={loading} />
 
       {/* Add Client Modal */}
-      <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+      <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onClientAdded={handleClientAdded} />
     </div>
   )
 }
