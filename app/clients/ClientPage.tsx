@@ -32,13 +32,14 @@ export default function ClientPage() {
 
   // Filter clients based on search and status
   const filteredClients = clients.filter((client) => {
+    // Search filter - check multiple fields
     const matchesSearch =
       searchTerm === "" ||
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.goal?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.program?.toLowerCase().includes(searchTerm.toLowerCase())
+      [client.name, client.email, client.goal, client.program, client.notes].some(
+        (field) => field && field.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
 
+    // Status filter
     const matchesStatus = statusFilter === "All" || client.status === statusFilter
 
     return matchesSearch && matchesStatus
@@ -62,6 +63,14 @@ export default function ClientPage() {
       title: "Client deleted",
       description: "The client has been deleted successfully.",
     })
+  }
+
+  const handleSearchChange = (term: string) => {
+    setSearchTerm(term)
+  }
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status)
   }
 
   if (loading) {
@@ -174,9 +183,9 @@ export default function ClientPage() {
       {/* Filters */}
       <ClientsFilterBar
         searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
+        onSearchChange={handleSearchChange}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
         expandFilter={expandFilter}
         onExpandFilterChange={setExpandFilter}
         collapseFilter={collapseFilter}
