@@ -1,7 +1,5 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-
 import type React from "react"
 
 import { createContext, useContext, useState } from "react"
@@ -23,12 +21,6 @@ interface ToastItem {
   description?: string
   type: ToastType
   duration?: number
-  pages?: string[] // Added for specific toast behavior
-  ctaButton?: {
-    text: string
-    onClick: () => void
-  }
-  onDismiss?: () => void // Added onDismiss callback
 }
 
 interface ToastContextType {
@@ -48,24 +40,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => [...prev, newToast])
 
     // Auto dismiss after duration
-    if (newToast.duration !== null) {
-      // Only auto-dismiss if duration is not null
-      setTimeout(() => {
-        dismissToast(id)
-      }, newToast.duration)
-    }
+    setTimeout(() => {
+      dismissToast(id)
+    }, newToast.duration)
 
     return id
   }
 
   const dismissToast = (id: string) => {
-    setToasts((prev) => {
-      const toastToDismiss = prev.find((toast) => toast.id === id)
-      if (toastToDismiss && toastToDismiss.onDismiss) {
-        toastToDismiss.onDismiss() // Call the specific onDismiss callback
-      }
-      return prev.filter((toast) => toast.id !== id)
-    })
+    setToasts((prev) => prev.filter((toast) => toast.id !== id))
   }
 
   return (
@@ -93,19 +76,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   <ToastTitle>{toast.title}</ToastTitle>
                   {toast.description && <ToastDescription>{toast.description}</ToastDescription>}
                 </div>
-                {toast.ctaButton && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => {
-                        toast.ctaButton?.onClick()
-                        dismissToast(toast.id) // This line ensures the toast is dismissed
-                      }}
-                      className="bg-black text-white hover:bg-gray-800 text-sm px-4 py-2"
-                    >
-                      {toast.ctaButton.text}
-                    </Button>
-                  </div>
-                )}
                 <ToastClose onClick={() => dismissToast(toast.id)} />
               </Toast>
             </motion.div>

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { getFirebaseAdminFirestore } from "@/lib/firebase/firebase-admin"
-import { doc, getDoc, updateDoc } from "firebase/firestore" // Keep these for type inference if needed, but use admin db
+import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
@@ -24,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   try {
     const { id } = params
     const body = await request.json()
-    const docRef = doc(getFirebaseAdminFirestore(), "sheets_imports", id)
+    const docRef = doc(db, "sheets_imports", id)
 
     // Only allow updating 'name' and 'status' for now
     const updateData: { name?: string; status?: string } = {}

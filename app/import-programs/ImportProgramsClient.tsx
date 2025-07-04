@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // A
 import { Search, FileSpreadsheet, ChevronRight, X } from "lucide-react"
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { useEffect, useState, useMemo, useCallback } from "react" // Added useCallback
+import { useEffect, useState, useMemo } from "react"
 import { useToast } from "@/components/ui/toast-context"
 import { useDebounce } from "@/hooks/use-debounce"
 
@@ -184,33 +184,13 @@ export default function ImportProgramsClient() {
           credentials: "include",
         })
 
-        const rawResponseText = await response.text() // Capture raw response text
-        console.log("[ImportPrograms] Raw /api/auth/me response text:", rawResponseText)
-
         if (response.ok) {
-          try {
-            const userData = JSON.parse(rawResponseText) // Parse the captured text
-            const currentUserId = userData.uid || userData.id
-            console.log("[ImportPrograms] User authenticated:", currentUserId)
-            setUserId(currentUserId)
-          } catch (jsonError) {
-            console.error("[ImportPrograms] Failed to parse /api/auth/me JSON:", jsonError, "Raw:", rawResponseText)
-            // Handle the case where the response is not valid JSON but status is OK
-            toast({
-              title: "Authentication Error",
-              description: "Received invalid user data. Please try logging in again.",
-              variant: "destructive",
-            })
-          }
+          const userData = await response.json()
+          const currentUserId = userData.uid || userData.id
+          console.log("[ImportPrograms] User authenticated:", currentUserId)
+          setUserId(currentUserId)
         } else {
-          console.log("[ImportPrograms] User not authenticated. Status:", response.status, "Text:", rawResponseText)
-          // Optionally, parse error message if response is not OK but is JSON
-          try {
-            const errorData = JSON.parse(rawResponseText)
-            console.error("[ImportPrograms] Auth error details:", errorData)
-          } catch (e) {
-            // Not JSON, just log raw text
-          }
+          console.log("[ImportPrograms] User not authenticated")
         }
       } catch (error) {
         console.error("[ImportPrograms] Error checking auth:", error)
@@ -219,17 +199,6 @@ export default function ImportProgramsClient() {
       }
     }
     checkAuth()
-  }, [])
-
-  // Helper to mark programs as dismissed
-  const markProgramsAsDismissed = useCallback((programIds: string[]) => {
-    setDismissedNotifications((prev) => {
-      const newDismissed = new Set(prev)
-      programIds.forEach((id) => newDismissed.add(id))
-      localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(newDismissed)))
-      return newDismissed
-    })
-    setActiveToastId(null) // Clear active toast ID when dismissed
   }, [])
 
   // Fetch user's imports from Firebase
@@ -309,7 +278,7 @@ export default function ImportProgramsClient() {
         setCompletedImports(newlyCompleted)
         setIsLoadingImports(false)
 
-        // Show toast if there are newly completed imports and no active toast
+        // Show toast if there are newly completed imports
         if (newlyCompleted.length > 0 && !activeToastId) {
           showCompletionToast(newlyCompleted)
         }
@@ -324,12 +293,12 @@ export default function ImportProgramsClient() {
       console.log("[ImportPrograms] Cleaning up Firebase listener for userId:", userId)
       unsubscribe()
     }
-  }, [userId, dismissedNotifications, activeToastId, markProgramsAsDismissed]) // Added markProgramsAsDismissed to dependencies
+  }, [userId, dismissedNotifications, activeToastId])
 
-  // Persist dismissed notifications to localStorage - now handled by markProgramsAsDismissed
-  // useEffect(() => {
-  //   localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
-  // }, [dismissedNotifications])
+  // Persist dismissed notifications to localStorage
+  useEffect(() => {
+    localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
+  }, [dismissedNotifications])
 
   // Memoized search filtering
   const filteredImports = useMemo(() => {
@@ -467,8 +436,6 @@ export default function ImportProgramsClient() {
 
   // Show completion toast
   const showCompletionToast = (newlyCompleted: SheetsImport[]) => {
-    const programIdsToDismiss = newlyCompleted.map((imp) => imp.id)
-
     const title =
       newlyCompleted.length === 1
         ? `Your Program "${formatProgramName(newlyCompleted[0])}" Is Ready!`
@@ -476,14 +443,13 @@ export default function ImportProgramsClient() {
 
     const toastId = toast.success({
       title,
-      description:
+      message:
         "Your workout program is now good to go! Review it, edit if needed, and you're all set to send it out. 💪",
-      duration: null, // Keep toast open until dismissed by user
+      duration: null,
       pages: ["/programs", "/import-programs", "/demo/programs", "/demo/import-programs"],
       ctaButton: {
         text: "Show Me",
         onClick: () => {
-          markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when CTA is clicked
           if (window.location.pathname !== "/import-programs") {
             router.push("/import-programs")
             setTimeout(() => {
@@ -504,10 +470,14 @@ export default function ImportProgramsClient() {
               })
             }
           }
+
+          const newDismissed = new Set(dismissedNotifications)
+          newlyCompleted.forEach((imp) => {
+            newDismissed.add(imp.id)
+          })
+          setDismissedNotifications(newDismissed)
+          setActiveToastId(null)
         },
-      },
-      onDismiss: () => {
-        markProgramsAsDismissed(programIdsToDismiss) // Mark as dismissed when 'X' or auto-dismiss occurs
       },
     })
 
