@@ -26,12 +26,18 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
 interface ReviewProgramClientProps {
-  programData: any
-  importId: string
+  programData?: any
+  importId?: string
   importData: any
+  initialClients?: Client[]
 }
 
-export default function ReviewProgramClient({ programData, importId, importData }: ReviewProgramClientProps) {
+export default function ReviewProgramClient({
+  programData,
+  importId,
+  importData,
+  initialClients = [],
+}: ReviewProgramClientProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
@@ -48,13 +54,18 @@ export default function ReviewProgramClient({ programData, importId, importData 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Client selection state - using API approach like ClientPage
-  const { clients, loading: isLoadingClients, error: clientError, refetch } = useClientDataAPI()
+  // Client selection state - use server-side data first, then API as fallback
+  const { clients: apiClients, loading: isLoadingClients, error: clientError, refetch } = useClientDataAPI()
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isSendingProgram, setIsSendingProgram] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
+
+  // Use initial clients from server, fallback to API clients
+  const clients = initialClients.length > 0 ? initialClients : apiClients
+  const clientsLoading = initialClients.length > 0 ? false : isLoadingClients
+  const clientsError = initialClients.length > 0 ? null : clientError
 
   // Add logging when hasChanges state changes
   const setHasChangesWithLogging = (value: boolean) => {
@@ -65,6 +76,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
   // Initialize programState from importData on component mount or importData change
   useEffect(() => {
     console.log("[ReviewProgramClient] Component initializing with importData:", importData)
+    console.log("[ReviewProgramClient] Initial clients provided:", initialClients.length)
     try {
       setIsLoading(true)
       setError(null)
@@ -194,7 +206,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
       setError("Failed to load program data")
       setIsLoading(false)
     }
-  }, [importData])
+  }, [importData, initialClients.length])
 
   const toggleClientSelection = () => {
     console.log("[toggleClientSelection] Current state:", {
@@ -202,7 +214,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
       hasChanges,
       isSaving,
       clientsLength: clients.length,
-      isLoadingClients,
+      clientsLoading,
     })
 
     const newState = !showClientSelection
@@ -601,7 +613,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
       console.log("[ReviewProgramClient] Sending program to client:", {
         clientId: selectedClientId,
         clientName: selectedClient.name,
-        programTitle: programData.program_title,
+        programTitle: programData?.program_title || programState?.program_title,
         importId,
       })
 
@@ -613,7 +625,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
         },
         body: JSON.stringify({
           clientId: selectedClientId,
-          programData,
+          programData: programData || programState,
           customMessage,
           importId,
         }),
@@ -629,7 +641,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
 
       toast({
         title: "Program Sent Successfully!",
-        description: `The program "${programData.program_title}" has been sent to ${selectedClient.name}.`,
+        description: `The program "${programData?.program_title || programState?.program_title}" has been sent to ${selectedClient.name}.`,
       })
 
       // Reset form
@@ -648,33 +660,135 @@ export default function ReviewProgramClient({ programData, importId, importData 
   }
 
   const getRoutineCount = () => {
-    return programData?.routines?.length || 0
+    return programData?.routines?.length || programState?.weeks?.[0]?.routines?.length || 0
   }
 
   const getTotalExercises = () => {
-    if (!programData?.routines) return 0
-    return programData.routines.reduce((total: number, routine: any) => {
+    const routines = programData?.routines || programState?.weeks?.[0]?.routines || []
+    return routines.reduce((total: number, routine: any) => {
       return total + (routine.exercises?.length || 0)
     }, 0)
   }
 
   const getProgramWeeks = () => {
-    return programData?.program_weeks || 0
+    return programData?.program_weeks || programState?.program_weeks || 0
   }
 
   // Log client loading for debugging
   const logClientLoading = () => {
     console.log("[ReviewProgramClient] Client loading state:", {
-      isLoadingClients,
+      clientsLoading,
       clientCount: clients.length,
-      clientError,
+      clientsError,
       selectedClientId,
+      initialClientsCount: initialClients.length,
+      usingServerData: initialClients.length > 0,
     })
   }
 
-  useEffect(() => {
-    logClientLoading()
-  }, [isLoadingClients, clients.length, clientError, selectedClientId])
+  // Debug Section - Server-side vs API client loading
+  const debugSection = (
+    <Card className="mt-8 border-dashed">
+      <CardHeader>
+        <CardTitle className="text-sm">Debug: Client Data Source</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="text-xs space-y-1">
+          <p>
+            <strong>Data Source:</strong> {initialClients.length > 0 ? "Server-side (SSR)" : "Client-side API"}
+          </p>
+          <p>
+            <strong>Server Clients:</strong> {initialClients.length}
+          </p>
+          <p>
+            <strong>API Clients:</strong> {apiClients.length}
+          </p>
+          <p>
+            <strong>Active Clients:</strong> {clients.length}
+          </p>
+          <p>
+            <strong>Loading:</strong> {clientsLoading ? "Yes" : "No"}
+          </p>
+          <p>
+            <strong>Error:</strong> {clientsError || "None"}
+          </p>
+          <p>
+            <strong>Selected Client:</strong> {selectedClientId || "None"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  // Confirmation Dialog for Unsaved Changes
+  const confirmDialog = (
+    <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Unsaved Changes</DialogTitle>
+          <DialogDescription>
+            You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+            Continue Editing
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              setHasChangesWithLogging(false) // Ensure changes are marked as discarded
+              router.push("/import-programs")
+            }}
+          >
+            Leave Without Saving
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
+  // Select Week Dialog for switching from Periodized to Non-Periodized
+  const selectWeekDialog = (
+    <Dialog open={showSelectWeekDialog} onOpenChange={setShowSelectWeekDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Select Week to Keep</DialogTitle>
+          <DialogDescription>
+            You are switching from a periodized program to a non-periodized program. Please select which week's data you
+            would like to keep as the single routine for this program.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-2 py-4">
+          {programState.weeks?.map((week) => (
+            <Button
+              key={week.week_number}
+              variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
+              onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
+              className="justify-start"
+            >
+              Week {week.week_number} ({week.routines?.length || 0} routines)
+            </Button>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (selectedWeekForNonPeriodized) {
+                handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
+              }
+            }}
+            disabled={!selectedWeekForNonPeriodized}
+          >
+            Keep Week {selectedWeekForNonPeriodized}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -688,7 +802,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
         </Link>
         <div>
           <h1 className="text-3xl font-bold">Review & Send Program</h1>
-          <p className="text-gray-600 mt-1">Review the imported program and send it to a client</p>
+          <p className="text-gray-600 mt-1">Review the imported workout program and send it to a client</p>
         </div>
       </div>
 
@@ -704,8 +818,14 @@ export default function ReviewProgramClient({ programData, importId, importData 
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="font-semibold text-lg">{programData?.program_title || "Untitled Program"}</h3>
-              {programData?.program_notes && <p className="text-gray-600 text-sm mt-1">{programData.program_notes}</p>}
+              <h3 className="font-semibold text-lg">
+                {programData?.program_title || programState?.program_title || "Untitled Program"}
+              </h3>
+              {(programData?.program_notes || programState?.program_notes) && (
+                <p className="text-gray-600 text-sm mt-1">
+                  {programData?.program_notes || programState?.program_notes}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -731,18 +851,20 @@ export default function ReviewProgramClient({ programData, importId, importData 
               </p>
             </div>
 
-            {programData?.routines && (
+            {(programData?.routines || programState?.weeks?.[0]?.routines) && (
               <div className="space-y-2">
                 <h4 className="font-medium text-sm">Routines:</h4>
                 <div className="flex flex-wrap gap-1">
-                  {programData.routines.slice(0, 3).map((routine: any, index: number) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {routine.routine_name}
-                    </Badge>
-                  ))}
-                  {programData.routines.length > 3 && (
+                  {(programData?.routines || programState?.weeks?.[0]?.routines || [])
+                    .slice(0, 3)
+                    .map((routine: any, index: number) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {routine.routine_name}
+                      </Badge>
+                    ))}
+                  {(programData?.routines || programState?.weeks?.[0]?.routines || []).length > 3 && (
                     <Badge variant="outline" className="text-xs">
-                      +{programData.routines.length - 3} more
+                      +{(programData?.routines || programState?.weeks?.[0]?.routines || []).length - 3} more
                     </Badge>
                   )}
                 </div>
@@ -764,14 +886,14 @@ export default function ReviewProgramClient({ programData, importId, importData 
             {/* Client Selection */}
             <div className="space-y-2">
               <Label htmlFor="client-select">Select Client</Label>
-              {isLoadingClients ? (
+              {clientsLoading ? (
                 <div className="flex items-center gap-2 p-3 border rounded-md">
                   <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
                   <span className="text-sm text-gray-600">Loading clients...</span>
                 </div>
-              ) : clientError ? (
+              ) : clientsError ? (
                 <div className="p-3 border border-red-200 rounded-md bg-red-50">
-                  <p className="text-sm text-red-600">Error loading clients: {clientError}</p>
+                  <p className="text-sm text-red-600">Error loading clients: {clientsError}</p>
                   <Button variant="outline" size="sm" onClick={refetch} className="mt-2 bg-transparent">
                     Retry
                   </Button>
@@ -824,7 +946,7 @@ export default function ReviewProgramClient({ programData, importId, importData 
             {/* Send Button */}
             <Button
               onClick={handleSendToClient}
-              disabled={!selectedClientId || isSending || isLoadingClients}
+              disabled={!selectedClientId || isSending || clientsLoading}
               className="w-full"
             >
               {isSending ? (
@@ -843,102 +965,11 @@ export default function ReviewProgramClient({ programData, importId, importData 
         </Card>
       </div>
 
-      {/* Debug Section - API-based client loading */}
-      {process.env.NODE_ENV === "development" && (
-        <Card className="mt-8 border-dashed">
-          <CardHeader>
-            <CardTitle className="text-sm">Debug: API-based Client Loading</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xs space-y-1">
-              <p>
-                <strong>Loading:</strong> {isLoadingClients ? "Yes" : "No"}
-              </p>
-              <p>
-                <strong>Client Count:</strong> {clients.length}
-              </p>
-              <p>
-                <strong>Error:</strong> {clientError || "None"}
-              </p>
-              <p>
-                <strong>Selected Client:</strong> {selectedClientId || "None"}
-              </p>
-              <p>
-                <strong>Auth Method:</strong> Cookie-based API (same as Clients page)
-              </p>
-              <p>
-                <strong>Data Source:</strong> /api/clients endpoint
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {process.env.NODE_ENV === "development" && debugSection}
 
-      {/* Confirmation Dialog for Unsaved Changes */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Continue Editing
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setHasChangesWithLogging(false) // Ensure changes are marked as discarded
-                router.push("/import-programs")
-              }}
-            >
-              Leave Without Saving
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {confirmDialog}
 
-      {/* Select Week Dialog for switching from Periodized to Non-Periodized */}
-      <Dialog open={showSelectWeekDialog} onOpenChange={setShowSelectWeekDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select Week to Keep</DialogTitle>
-            <DialogDescription>
-              You are switching from a periodized program to a non-periodized program. Please select which week's data
-              you would like to keep as the single routine for this program.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2 py-4">
-            {programState.weeks?.map((week) => (
-              <Button
-                key={week.week_number}
-                variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
-                onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
-                className="justify-start"
-              >
-                Week {week.week_number} ({week.routines?.length || 0} routines)
-              </Button>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (selectedWeekForNonPeriodized) {
-                  handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
-                }
-              }}
-              disabled={!selectedWeekForNonPeriodized}
-            >
-              Keep Week {selectedWeekForNonPeriodized}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {selectWeekDialog}
     </div>
   )
 }
