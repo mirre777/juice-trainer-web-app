@@ -1,15 +1,12 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { setCookie } from "cookies-next"
-import { storeInvitationCode } from "@/lib/firebase/user-service"
 
 interface AuthFormProps {
   mode: "login" | "signup"
@@ -29,7 +26,6 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
   const [showInviteInfo, setShowInviteInfo] = useState(!!invitationCode)
 
   useEffect(() => {
-    // Update showInviteInfo if invitationCode changes
     setShowInviteInfo(!!invitationCode)
   }, [invitationCode])
 
@@ -70,26 +66,6 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
 
       console.log(`[AuthForm] ${mode} successful:`, data)
 
-      // Set cookies and local storage
-      if (data.userId) {
-        setCookie("user_id", data.userId)
-        localStorage.setItem("user_id", data.userId)
-
-        // If we have an invitation code, store it in the user document
-        if (invitationCode && mode === "signup") {
-          console.log(`[AuthForm] Storing invitation code ${invitationCode} for user ${data.userId}`)
-          await storeInvitationCode(data.userId, invitationCode)
-        }
-      }
-
-      // Set auth token cookie from the response (for login or auto-signed-in signup)
-      if (data.token) {
-        setCookie("auth_token", data.token)
-        console.log("[AuthForm] Auth token set in cookies")
-      } else {
-        console.log("[AuthForm] No auth token received from server")
-      }
-
       // Handle different response scenarios
       if (mode === "signup") {
         if (invitationCode) {
@@ -121,7 +97,7 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
           await new Promise((resolve) => setTimeout(resolve, 100))
 
           const userResponse = await fetch("/api/auth/me", {
-            credentials: "include", // Ensure cookies are sent
+            credentials: "include",
           })
           const userData = await userResponse.json()
 
@@ -129,7 +105,6 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
 
           if (!userResponse.ok) {
             console.error("[AuthForm] Failed to get user data:", userData)
-            // Fallback to mobile app success for safety
             router.push("/mobile-app-success")
             return
           }
@@ -143,7 +118,6 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
           }
         } catch (userError) {
           console.error("[AuthForm] Error fetching user data:", userError)
-          // Fallback to mobile app success for safety
           router.push("/mobile-app-success")
         }
       }

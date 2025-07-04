@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { getCookie } from "cookies-next"
+import { UnifiedClientService } from "@/lib/services/unified-client-service"
+import { UnifiedAuthService } from "@/lib/services/unified-auth-service"
 import { ClientInvitationDialog } from "./client-invitation-dialog"
 import { DuplicateClientDialog } from "./duplicate-client-dialog"
-import { checkDuplicateEmail } from "@/lib/firebase/client-service"
 import type { Client } from "@/types/client"
 
 interface AddClientModalProps {
@@ -54,11 +54,10 @@ export function AddClientModal({
   const checkTrainerInviteCode = async () => {
     try {
       console.log("🔍 [ADD CLIENT] Checking trainer invite code...")
-      const response = await fetch("/api/auth/me")
 
-      if (response.ok) {
-        const userData = await response.json()
-        const code = userData.universalInviteCode || ""
+      const authResult = await UnifiedAuthService.getCurrentUser()
+      if (authResult.success && authResult.user) {
+        const code = authResult.user.universalInviteCode || ""
         console.log("✅ [ADD CLIENT] Current invite code:", code)
 
         if (code && code.trim() !== "") {
@@ -69,7 +68,7 @@ export function AddClientModal({
           setNeedsInviteCode(true)
         }
       } else {
-        console.error("❌ [ADD CLIENT] Failed to check invite code")
+        console.error("❌ [ADD CLIENT] Failed to get current user")
         setNeedsInviteCode(true)
       }
     } catch (error) {
@@ -131,27 +130,6 @@ export function AddClientModal({
     setDuplicateClient(null)
   }
 
-  const checkForDuplicateEmail = async (email: string, trainerId: string): Promise<boolean> => {
-    if (!email.trim()) return false
-
-    try {
-      console.log("🔍 [ADD CLIENT] Checking for duplicate email:", email)
-      const { exists, client } = await checkDuplicateEmail(trainerId, email.trim())
-
-      if (exists && client) {
-        console.log("⚠️ [ADD CLIENT] Found duplicate client:", client)
-        setDuplicateClient(client)
-        setShowDuplicateDialog(true)
-        return true
-      }
-
-      return false
-    } catch (error) {
-      console.error("💥 [ADD CLIENT] Error checking duplicate email:", error)
-      return false
-    }
-  }
-
   const createClientDirectly = async (skipDuplicateCheck = false) => {
     console.log("🚀 [ADD CLIENT] Starting client creation...")
 
@@ -176,21 +154,6 @@ export function AddClientModal({
         return
       }
 
-      // Get user ID
-      const userId = getCookie("user_id")?.toString()
-      if (!userId) {
-        throw new Error("Please log in again")
-      }
-
-      // Check for duplicate email (unless we're skipping the check)
-      if (!skipDuplicateCheck && email.trim()) {
-        const isDuplicate = await checkForDuplicateEmail(email, userId)
-        if (isDuplicate) {
-          setIsSubmitting(false)
-          return // Stop here and show duplicate dialog
-        }
-      }
-
       // Update invite code if needed
       if (needsInviteCode && newInviteCode.trim()) {
         console.log("📝 [ADD CLIENT] Setting new invite code...")
@@ -200,55 +163,49 @@ export function AddClientModal({
         }
       }
 
-      // Create client
-      console.log("📝 [ADD CLIENT] Creating client...")
-      const response = await fetch("/api/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          email: email || "",
-          phone: phone || "",
-        }),
+      // Create client using unified service
+      console.log("📝 [ADD CLIENT] Creating client with unified service...")
+      const clientResult = await UnifiedClientService.addClient({
+        name,
+        email: email || "",
+        phone: phone || "",
       })
 
-      const data = await response.json()
-      console.log("📡 [ADD CLIENT] API Response:", data)
+      if (!clientResult.success) {
+        console.log("❌ [ADD CLIENT] Failed to create client:", clientResult.error?.message)
+        throw new Error(clientResult.error?.message || "Failed to create client")
+      }
 
-      if (response.ok && (data.success || data.clientId)) {
-        console.log("✅ [ADD CLIENT] Client created successfully")
+      console.log("✅ [ADD CLIENT] Client created successfully:", clientResult.clientId)
 
-        // Create client object
-        const newClient = {
-          id: data.clientId,
-          name: name,
-          email: email,
-          phone: phone,
-        }
-        setCreatedClient(newClient)
+      // Create client object for invitation dialog
+      const newClient = {
+        id: clientResult.clientId,
+        name: name,
+        email: email,
+        phone: phone,
+      }
+      setCreatedClient(newClient)
 
-        // Use the invite code (either existing or newly set)
-        const finalInviteCode = needsInviteCode ? newInviteCode.toUpperCase() : trainerInviteCode
+      // Use the invite code (either existing or newly set)
+      const finalInviteCode = needsInviteCode ? newInviteCode.toUpperCase() : trainerInviteCode
 
-        if (finalInviteCode && finalInviteCode.trim() !== "") {
-          console.log("🎉 [ADD CLIENT] Showing invite dialog with code:", finalInviteCode)
-          setShowInviteDialog(true)
-          onClose() // Close add client modal
-        } else {
-          console.log("❌ [ADD CLIENT] No invite code available")
-          onClose()
-          toast({
-            title: "Client Added",
-            description: "Client added successfully! Set up your invite code in Settings to send invitations.",
-          })
-        }
-
-        // Callback
-        if (onAddClient) {
-          onAddClient(data.clientId)
-        }
+      if (finalInviteCode && finalInviteCode.trim() !== "") {
+        console.log("🎉 [ADD CLIENT] Showing invite dialog with code:", finalInviteCode)
+        setShowInviteDialog(true)
+        onClose() // Close add client modal
       } else {
-        throw new Error(data.error || "Failed to create client")
+        console.log("❌ [ADD CLIENT] No invite code available")
+        onClose()
+        toast({
+          title: "Client Added",
+          description: "Client added successfully! Set up your invite code in Settings to send invitations.",
+        })
+      }
+
+      // Callback
+      if (onAddClient && clientResult.clientId) {
+        onAddClient(clientResult.clientId)
       }
     } catch (error: any) {
       console.error("💥 [ADD CLIENT] Error:", error)

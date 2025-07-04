@@ -1,46 +1,96 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { fetchClients } from "@/lib/firebase/client-service"
+import { NextResponse } from "next/server"
+import { UnifiedClientService } from "@/lib/services/unified-client-service"
 
-export async function GET(request: NextRequest) {
-  console.log("[API /api/clients] === REQUEST RECEIVED ===")
-
+export async function GET() {
   try {
-    // Use the SAME authentication method as your existing working routes
-    const cookieStore = cookies()
-    const userId = cookieStore.get("user_id")?.value
-    const userIdAlt = cookieStore.get("userId")?.value // Fallback for inconsistent naming
-    const trainerId = userId || userIdAlt
+    console.log("🚀 [API:clients] GET - Fetching clients")
 
-    console.log("🔍 [API /api/clients] Auth check:", {
-      userId,
-      userIdAlt,
-      trainerId,
-      hasCookies: !!cookieStore,
-    })
+    // Use unified client service to get clients
+    const clientResult = await UnifiedClientService.getClients()
 
-    if (!trainerId) {
-      console.log("❌ [API /api/clients] No trainer ID found in cookies")
-      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
+    if (!clientResult.success) {
+      console.log("❌ [API:clients] Failed to fetch clients:", clientResult.error?.message)
+
+      const statusCode = clientResult.error?.errorType === "AUTH_UNAUTHORIZED" ? 401 : 500
+      return NextResponse.json(
+        {
+          error: clientResult.error?.message || "Failed to fetch clients",
+          clients: [],
+        },
+        { status: statusCode },
+      )
     }
 
-    console.log("✅ [API /api/clients] Authenticated trainer:", trainerId)
-
-    // Use your existing fetchClients function - NO server-side filtering
-    console.log("📊 [API /api/clients] Calling fetchClients...")
-    const allClients = await fetchClients(trainerId)
-    console.log("[API /api/clients] Raw clients from fetchClients:", allClients.length)
-
-    // Return ALL clients - no filtering
-    console.log("[API /api/clients] Returning ALL clients without any filtering")
+    console.log(`✅ [API:clients] Successfully fetched ${clientResult.clients?.length || 0} clients`)
 
     return NextResponse.json({
       success: true,
-      clients: allClients,
-      totalClients: allClients.length,
+      clients: clientResult.clients || [],
+      count: clientResult.clients?.length || 0,
     })
-  } catch (error) {
-    console.error("[API /api/clients] ❌ Error:", error)
-    return NextResponse.json({ success: false, error: "Failed to fetch clients" }, { status: 500 })
+  } catch (error: any) {
+    console.error("💥 [API:clients] Unexpected error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error?.message || "Unknown error",
+        clients: [],
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    console.log("🚀 [API:clients] POST - Adding new client")
+
+    const body = await request.json()
+    const { name, email, phone, goal, program, notes } = body
+
+    if (!name || typeof name !== "string" || name.trim() === "") {
+      return NextResponse.json({ error: "Client name is required" }, { status: 400 })
+    }
+
+    // Use unified client service to add client
+    const clientResult = await UnifiedClientService.addClient({
+      name: name.trim(),
+      email: email?.trim() || "",
+      phone: phone?.trim() || "",
+      goal: goal?.trim() || "",
+      program: program?.trim() || "",
+      notes: notes?.trim() || "",
+    })
+
+    if (!clientResult.success) {
+      console.log("❌ [API:clients] Failed to add client:", clientResult.error?.message)
+
+      const statusCode = clientResult.error?.errorType === "AUTH_UNAUTHORIZED" ? 401 : 400
+      return NextResponse.json(
+        {
+          error: clientResult.error?.message || "Failed to add client",
+          success: false,
+        },
+        { status: statusCode },
+      )
+    }
+
+    console.log(`✅ [API:clients] Successfully added client: ${clientResult.clientId}`)
+
+    return NextResponse.json({
+      success: true,
+      clientId: clientResult.clientId,
+      message: clientResult.message || "Client added successfully",
+    })
+  } catch (error: any) {
+    console.error("💥 [API:clients] Unexpected error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error?.message || "Unknown error",
+        success: false,
+      },
+      { status: 500 },
+    )
   }
 }
