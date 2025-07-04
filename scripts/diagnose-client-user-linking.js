@@ -1,168 +1,262 @@
 import { initializeApp } from "firebase/app"
 import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore"
 
-// Firebase config - you'll need to add your actual config
+// Firebase config using environment variables
 const firebaseConfig = {
-  // Add your Firebase config here
-  projectId: "your-project-id", // Replace with actual project ID
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const app = initializeApp(firebaseConfig)
-const db = getFirestore(app)
+console.log("🔧 Firebase Config Check:")
+console.log("  Project ID:", firebaseConfig.projectId || "MISSING")
+console.log("  Auth Domain:", firebaseConfig.authDomain || "MISSING")
+console.log("  API Key:", firebaseConfig.apiKey ? "✅ Present" : "❌ Missing")
+
+let app, db
+
+try {
+  app = initializeApp(firebaseConfig)
+  db = getFirestore(app)
+  console.log("✅ Firebase initialized successfully")
+} catch (error) {
+  console.error("❌ Firebase initialization failed:", error.message)
+  process.exit(1)
+}
 
 async function diagnoseClientUserLinking() {
-  console.log("🔍 === DIAGNOSING CLIENT-USER LINKING ===")
+  console.log("\n🔍 === DIAGNOSING CLIENT-USER LINKING ===")
+  console.log("Timestamp:", new Date().toISOString())
 
   const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1"
   const testCases = [
     {
-      name: "Client with userId",
+      name: "Client with userId (CGLJmpv59IngpsYpW7PZ)",
       clientId: "CGLJmpv59IngpsYpW7PZ",
       expectedUserId: "HN2QjNvnWKQ37nVXCSkhXdCwMEH2",
     },
     {
-      name: "Client without userId",
+      name: "Client without userId (tgFRWFvdcwp1iIYoegYr)",
       clientId: "tgFRWFvdcwp1iIYoegYr",
       expectedUserId: "HN2QjNvnWKQ37nVXCSkhXdCwMEH2",
     },
   ]
 
-  for (const testCase of testCases) {
-    console.log(`\n📋 Testing: ${testCase.name}`)
+  console.log(`\n📋 Testing ${testCases.length} client cases for trainer: ${trainerId}`)
+
+  for (let i = 0; i < testCases.length; i++) {
+    const testCase = testCases[i]
+    console.log(`\n${"=".repeat(80)}`)
+    console.log(`📋 TEST CASE ${i + 1}: ${testCase.name}`)
     console.log(`   Client ID: ${testCase.clientId}`)
     console.log(`   Expected User ID: ${testCase.expectedUserId}`)
+    console.log(`${"=".repeat(80)}`)
 
     // Step 1: Check if client document exists
-    console.log("\n🔍 Step 1: Checking client document...")
+    console.log("\n🔍 STEP 1: Checking client document...")
     const clientPath = `users/${trainerId}/clients/${testCase.clientId}`
-    console.log(`   Path: /${clientPath}`)
+    console.log(`   Full Path: /${clientPath}`)
 
     try {
+      console.log("   📡 Fetching client document...")
       const clientRef = doc(db, "users", trainerId, "clients", testCase.clientId)
       const clientDoc = await getDoc(clientRef)
 
       if (clientDoc.exists()) {
         const clientData = clientDoc.data()
-        console.log("   ✅ Client document exists")
-        console.log("   📄 Client data:", {
-          name: clientData.name,
-          email: clientData.email,
-          status: clientData.status,
-          userId: clientData.userId || "MISSING",
-          isTemporary: clientData.isTemporary,
-        })
+        console.log("   ✅ Client document EXISTS")
+        console.log("   📄 Raw client data keys:", Object.keys(clientData))
+        console.log("   📄 Client document data:")
+        console.log("      - name:", clientData.name || "MISSING")
+        console.log("      - email:", clientData.email || "MISSING")
+        console.log("      - status:", clientData.status || "MISSING")
+        console.log("      - userId:", clientData.userId || "❌ MISSING")
+        console.log("      - isTemporary:", clientData.isTemporary)
+        console.log("      - createdAt:", clientData.createdAt || "MISSING")
+        console.log("      - updatedAt:", clientData.updatedAt || "MISSING")
 
         // Step 2: Check if user document exists (if userId is present)
         if (clientData.userId) {
-          console.log("\n🔍 Step 2: Checking user document...")
+          console.log("\n🔍 STEP 2: Checking user document...")
           const userPath = `users/${clientData.userId}`
-          console.log(`   Path: /${userPath}`)
+          console.log(`   Full Path: /${userPath}`)
 
           try {
+            console.log("   📡 Fetching user document...")
             const userRef = doc(db, "users", clientData.userId)
             const userDoc = await getDoc(userRef)
 
             if (userDoc.exists()) {
               const userData = userDoc.data()
-              console.log("   ✅ User document exists")
-              console.log("   👤 User data:", {
-                name: userData.name,
-                email: userData.email,
-                status: userData.status,
-                hasTrainers: !!(userData.trainers && userData.trainers.length > 0),
-                trainers: userData.trainers || [],
-              })
+              console.log("   ✅ User document EXISTS")
+              console.log("   👤 Raw user data keys:", Object.keys(userData))
+              console.log("   👤 User document data:")
+              console.log("      - name:", userData.name || "MISSING")
+              console.log("      - email:", userData.email || "MISSING")
+              console.log("      - status:", userData.status || "MISSING")
+              console.log("      - trainers:", userData.trainers || "MISSING")
+              console.log("      - trainers length:", (userData.trainers || []).length)
+              console.log("      - createdAt:", userData.createdAt || "MISSING")
+              console.log("      - linkedAt:", userData.linkedAt || "MISSING")
 
               // Step 3: Check if trainer is in user's trainers array
-              if (userData.trainers && userData.trainers.includes(trainerId)) {
-                console.log("   ✅ Trainer is in user's trainers array")
+              console.log("\n🔍 STEP 3: Checking trainer relationship...")
+              if (userData.trainers && Array.isArray(userData.trainers)) {
+                console.log("   📋 User's trainers array:", userData.trainers)
+                if (userData.trainers.includes(trainerId)) {
+                  console.log("   ✅ Trainer IS in user's trainers array")
+                  console.log("   🎯 PROGRAM SENDING SHOULD WORK")
+                } else {
+                  console.log("   ❌ Trainer is NOT in user's trainers array")
+                  console.log("   🚨 This will cause program sending to FAIL")
+                  console.log("   🔧 Need to add trainer to user's trainers array")
+                }
               } else {
-                console.log("   ❌ Trainer is NOT in user's trainers array")
-                console.log("   🔧 This could cause issues with program sending")
+                console.log("   ❌ User has no trainers array or it's not an array")
+                console.log("   🚨 This will cause program sending to FAIL")
+              }
+
+              // Email verification
+              console.log("\n🔍 STEP 4: Email verification...")
+              if (clientData.email && userData.email) {
+                if (clientData.email === userData.email) {
+                  console.log("   ✅ Client and user emails MATCH")
+                } else {
+                  console.log("   ⚠️  Client and user emails DO NOT MATCH")
+                  console.log("      Client email:", clientData.email)
+                  console.log("      User email:", userData.email)
+                }
+              } else {
+                console.log("   ⚠️  Missing email data")
+                console.log("      Client email:", clientData.email || "MISSING")
+                console.log("      User email:", userData.email || "MISSING")
               }
             } else {
               console.log("   ❌ User document does NOT exist")
-              console.log("   🚨 This is the problem! Client has userId but user document is missing")
+              console.log("   🚨 CRITICAL ISSUE: Client has userId but user document is missing")
+              console.log("   🔧 Possible solutions:")
+              console.log("      1. Create user document at this path")
+              console.log("      2. Update client userId to correct value")
+              console.log("      3. Remove userId field and re-link client")
             }
           } catch (userError) {
-            console.log("   ❌ Error fetching user document:", userError.message)
+            console.log("   ❌ ERROR fetching user document:", userError.message)
+            console.log("   📊 Error details:", userError)
           }
         } else {
-          console.log("\n⚠️  Step 2: Skipped - Client has no userId field")
+          console.log("\n⚠️  STEP 2: SKIPPED - Client has no userId field")
 
           // Try to find user by email
-          console.log("\n🔍 Step 2b: Searching for user by email...")
+          console.log("\n🔍 STEP 2b: Searching for user by email...")
           if (clientData.email) {
             try {
+              console.log("   📡 Searching users collection by email...")
               const usersRef = collection(db, "users")
               const emailQuery = query(usersRef, where("email", "==", clientData.email))
               const emailSnapshot = await getDocs(emailQuery)
 
+              console.log("   📊 Search results:", emailSnapshot.size, "documents found")
+
               if (!emailSnapshot.empty) {
-                const foundUser = emailSnapshot.docs[0]
-                console.log("   ✅ Found user by email:", foundUser.id)
-                console.log("   📧 User email matches client email")
-                console.log("   🔧 This client should be linked to user:", foundUser.id)
+                emailSnapshot.forEach((doc) => {
+                  const userData = doc.data()
+                  console.log("   ✅ Found user by email:")
+                  console.log("      User ID:", doc.id)
+                  console.log("      Name:", userData.name)
+                  console.log("      Status:", userData.status)
+                  console.log("      Trainers:", userData.trainers || [])
+                  console.log("   🔧 This client SHOULD be linked to user:", doc.id)
+                })
               } else {
                 console.log("   ❌ No user found with email:", clientData.email)
+                console.log("   🔧 User might need to be created or email might be different")
               }
             } catch (emailError) {
-              console.log("   ❌ Error searching by email:", emailError.message)
+              console.log("   ❌ ERROR searching by email:", emailError.message)
             }
+          } else {
+            console.log("   ❌ Cannot search by email - client has no email field")
           }
         }
       } else {
         console.log("   ❌ Client document does NOT exist")
+        console.log("   🚨 CRITICAL ISSUE: Client document missing entirely")
+        console.log("   🔧 Check if client ID is correct:", testCase.clientId)
       }
     } catch (clientError) {
-      console.log("   ❌ Error fetching client document:", clientError.message)
+      console.log("   ❌ ERROR fetching client document:", clientError.message)
+      console.log("   📊 Error details:", clientError)
     }
-
-    console.log("\n" + "=".repeat(60))
   }
 
-  // Step 4: Check program conversion service logic
-  console.log("\n🔍 Step 4: Testing program conversion service logic...")
+  // Summary
+  console.log("\n" + "=".repeat(80))
+  console.log("🏁 === DIAGNOSIS SUMMARY ===")
+  console.log("=".repeat(80))
 
-  for (const testCase of testCases) {
-    console.log(`\n📋 Testing program conversion for: ${testCase.name}`)
+  for (let i = 0; i < testCases.length; i++) {
+    const testCase = testCases[i]
+    console.log(`\n📋 ${testCase.name}:`)
 
     try {
-      // Simulate the getClientUserId function
       const clientRef = doc(db, "users", trainerId, "clients", testCase.clientId)
       const clientDoc = await getDoc(clientRef)
 
       if (clientDoc.exists()) {
         const clientData = clientDoc.data()
-        const userId = clientData.userId || null
+        const hasUserId = !!clientData.userId
 
-        console.log(`   Client userId from document: ${userId || "NULL"}`)
+        console.log(`   Client exists: ✅`)
+        console.log(`   Has userId: ${hasUserId ? "✅" : "❌"}`)
 
-        if (userId) {
-          // Check if this userId actually exists
-          const userRef = doc(db, "users", userId)
+        if (hasUserId) {
+          const userRef = doc(db, "users", clientData.userId)
           const userDoc = await getDoc(userRef)
+          const userExists = userDoc.exists()
 
-          if (userDoc.exists()) {
-            console.log("   ✅ Program conversion should work - user document exists")
+          console.log(`   User exists: ${userExists ? "✅" : "❌"}`)
+
+          if (userExists) {
+            const userData = userDoc.data()
+            const hasTrainer = userData.trainers && userData.trainers.includes(trainerId)
+            console.log(`   Trainer linked: ${hasTrainer ? "✅" : "❌"}`)
+            console.log(`   Can send programs: ${hasTrainer ? "✅ YES" : "❌ NO"}`)
           } else {
-            console.log("   ❌ Program conversion will FAIL - user document missing")
-            console.log("   🔧 Need to either:")
-            console.log("      1. Create user document at /users/" + userId)
-            console.log("      2. Update client userId to correct value")
-            console.log("      3. Remove userId field and re-link client")
+            console.log(`   Can send programs: ❌ NO (user missing)`)
           }
         } else {
-          console.log("   ❌ Program conversion will FAIL - no userId in client document")
+          console.log(`   Can send programs: ❌ NO (no userId)`)
         }
+      } else {
+        console.log(`   Client exists: ❌`)
+        console.log(`   Can send programs: ❌ NO (client missing)`)
       }
     } catch (error) {
-      console.log("   ❌ Error in program conversion test:", error.message)
+      console.log(`   Error: ${error.message}`)
     }
   }
 
-  console.log("\n🏁 === DIAGNOSIS COMPLETE ===")
+  console.log("\n🔧 === RECOMMENDED ACTIONS ===")
+  console.log("1. Check the API endpoint: GET /api/debug/client-user-link")
+  console.log("2. Use the client linking service to fix broken links")
+  console.log("3. Verify Firebase permissions and indexes")
+  console.log("\n✅ Diagnosis complete!")
 }
 
-// Run the diagnosis
-diagnoseClientUserLinking().catch(console.error)
+// Run the diagnosis with error handling
+console.log("🚀 Starting client-user linking diagnosis...")
+
+diagnoseClientUserLinking()
+  .then(() => {
+    console.log("\n🎉 Diagnosis completed successfully!")
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error("\n💥 Diagnosis failed with error:")
+    console.error("Error message:", error.message)
+    console.error("Stack trace:", error.stack)
+    process.exit(1)
+  })
