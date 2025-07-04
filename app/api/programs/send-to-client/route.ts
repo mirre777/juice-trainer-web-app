@@ -1,47 +1,62 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { programConversionService } from "@/lib/firebase/program-conversion-service"
+import { convertProgramToFirebaseFormat } from "@/lib/firebase/program-conversion-service"
+import { clientService } from "@/lib/firebase/client-service"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🚀 API Route: /api/programs/send-to-client called")
+    console.log("🚀 API: Starting program send to client...")
 
     const body = await request.json()
-    console.log("📝 Request body:", JSON.stringify(body, null, 2))
+    console.log("📝 API: Request body:", JSON.stringify(body, null, 2))
 
     const { clientId, programData, customMessage } = body
 
-    // Validate required fields
-    if (!clientId) {
-      console.error("❌ Missing clientId")
-      return NextResponse.json({ error: "Client ID is required" }, { status: 400 })
+    if (!clientId || !programData) {
+      console.error("❌ API: Missing required fields")
+      return NextResponse.json({ error: "Missing clientId or programData" }, { status: 400 })
     }
 
-    if (!programData) {
-      console.error("❌ Missing programData")
-      return NextResponse.json({ error: "Program data is required" }, { status: 400 })
+    console.log("🔍 API: Getting client document...")
+    const client = await clientService.getClient(clientId)
+
+    if (!client) {
+      console.error("❌ API: Client not found:", clientId)
+      return NextResponse.json({ error: "Client not found" }, { status: 404 })
     }
 
-    console.log("✅ Validation passed, calling program conversion service...")
-    console.log("🎯 Client ID:", clientId)
-    console.log("📊 Program name:", programData.name)
-    console.log("📅 Duration:", programData.duration_weeks, "weeks")
-    console.log("🏋️ Routines count:", programData.routines?.length || 0)
+    console.log("✅ API: Client found:", client.name)
+    console.log("🔗 API: Client userId:", client.userId)
 
-    // Call the program conversion service
-    const result = await programConversionService.sendProgramToClient(clientId, programData, customMessage)
+    if (!client.userId) {
+      console.error("❌ API: Client has no linked user account")
+      return NextResponse.json(
+        { error: "Client not found or client does not have a linked user account" },
+        { status: 404 },
+      )
+    }
 
-    console.log("✅ Program conversion service completed successfully")
-    console.log("📋 Result:", JSON.stringify(result, null, 2))
+    console.log("🔄 API: Converting program to Firebase format...")
+    const result = await convertProgramToFirebaseFormat(
+      programData,
+      client.userId,
+      customMessage || `Program sent from trainer`,
+    )
+
+    console.log("✅ API: Program conversion successful")
+    console.log("📊 API: Result:", {
+      programId: result.programId,
+      routineIds: result.routineIds,
+      userId: client.userId,
+    })
 
     return NextResponse.json({
       success: true,
-      message: "Program sent to client successfully",
-      data: result,
+      message: `Program successfully sent to ${client.name}`,
+      programId: result.programId,
+      routineIds: result.routineIds,
     })
   } catch (error) {
-    console.error("❌ Error in /api/programs/send-to-client:", error)
-    console.error("📍 Error stack:", error instanceof Error ? error.stack : "No stack trace")
-
+    console.error("💥 API: Error sending program to client:", error)
     return NextResponse.json(
       {
         error: "Failed to send program to client",
