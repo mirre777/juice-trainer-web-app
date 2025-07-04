@@ -8,37 +8,31 @@ import { SheetsImportDialog } from "./sheets-import-dialog"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
-const SESSION_STORAGE_KEY = "hasSeenImportInstructions" // Define a key for session storage
+const SESSION_STORAGE_KEY = "hasSeenImportInstructions"
 
 export function GoogleSheetsImport() {
   const [isLoading, setIsLoading] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [showImportDialog, setShowImportDialog] = useState(false) // For the instructions modal
-  const [showSheetLinkDialog, setShowSheetLinkDialog] = useState(false) // For the actual link input modal
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const [showSheetLinkDialog, setShowSheetLinkDialog] = useState(false)
   const [sheetLink, setSheetLink] = useState("")
   const [savedSheetLinks, setSavedSheetLinks] = useState<string[]>([])
   const { toast } = useToast()
-
-  // New state to track if instructions have been seen in this session
   const [hasSeenInstructions, setHasSeenInstructions] = useState(false)
 
-  // Check if we're already authenticated with Google and load session storage flag
   useEffect(() => {
     console.log("Google Sheets Import Component Mounted")
 
-    // Load hasSeenInstructions from sessionStorage
     const seenInstructions = sessionStorage.getItem(SESSION_STORAGE_KEY) === "true"
     setHasSeenInstructions(seenInstructions)
     console.log("Initial hasSeenInstructions from sessionStorage:", seenInstructions)
 
-    // Always show the import button in development mode for testing
     if (process.env.NODE_ENV === "development") {
       console.log("Development mode detected - enabling import button")
       setIsAuthenticated(true)
       return
     }
 
-    // Check URL parameters for connection status or any OAuth-related parameters
     const urlParams = new URLSearchParams(window.location.search)
     const connected = urlParams.get("connected")
     const code = urlParams.get("code")
@@ -46,27 +40,22 @@ export function GoogleSheetsImport() {
 
     console.log("URL Params:", { connected, code, scope })
 
-    // If we have any OAuth-related parameters, consider it authenticated
     if (connected === "true" || code || scope) {
       console.log("OAuth parameters found in URL - considering authenticated")
       setIsAuthenticated(true)
 
-      // Show success toast
       toast({
         title: "Authentication Successful",
         description: "You've successfully connected to Google Sheets",
       })
 
-      // Clean up the URL
       window.history.replaceState({}, document.title, window.location.pathname)
     } else {
       console.log("Checking authentication status from API")
-      // Check authentication status from the API
       fetch("/api/auth/google/status")
         .then((response) => response.json())
         .then((data) => {
           console.log("Auth status response:", data)
-          // Consider authenticated if any token exists
           const isAuth =
             data.isConnected ||
             data.hasAccessToken ||
@@ -79,13 +68,10 @@ export function GoogleSheetsImport() {
         })
         .catch((err) => {
           console.error("Error checking auth status:", err)
-          // In case of error, default to showing the import button
-          // This ensures users can still use the feature
           setIsAuthenticated(true)
         })
     }
 
-    // Load saved sheet links from localStorage
     const savedLinks = localStorage.getItem("googleSheetLinks")
     if (savedLinks) {
       setSavedSheetLinks(JSON.parse(savedLinks))
@@ -96,7 +82,6 @@ export function GoogleSheetsImport() {
     try {
       setIsLoading(true)
 
-      // Make a request to our API to get the Google auth URL
       const response = await fetch("/api/auth/google/sheets-auth")
 
       if (!response.ok) {
@@ -106,7 +91,6 @@ export function GoogleSheetsImport() {
       const data = await response.json()
 
       if (data.url) {
-        // Redirect to Google's OAuth page
         window.location.href = data.url
       } else {
         throw new Error("No authentication URL returned")
@@ -123,26 +107,20 @@ export function GoogleSheetsImport() {
     }
   }
 
-  // This function is called when the "Import Google Sheet" button is clicked
   const handleImportButtonClick = () => {
     if (!hasSeenInstructions) {
-      // If instructions haven't been seen, show the instructions modal
       setShowImportDialog(true)
     } else {
-      // If instructions have been seen, directly show the sheet link input modal
       setShowSheetLinkDialog(true)
     }
   }
 
-  // This function is called when the SheetsImportDialog (instructions modal) is closed
   const handleSheetsImportDialogClose = (open: boolean) => {
-    setShowImportDialog(open) // Update the state for the instructions modal
+    setShowImportDialog(open)
     if (!open) {
-      // If the instructions modal is closing
-      sessionStorage.setItem(SESSION_STORAGE_KEY, "true") // Mark instructions as seen for this session
-      setHasSeenInstructions(true) // Update local state
+      sessionStorage.setItem(SESSION_STORAGE_KEY, "true")
+      setHasSeenInstructions(true)
       console.log("Instructions acknowledged and session storage updated.")
-      // After closing the instructions, automatically open the link input modal
       setShowSheetLinkDialog(true)
     }
   }
@@ -157,7 +135,6 @@ export function GoogleSheetsImport() {
       return
     }
 
-    // Validate the link (basic check)
     if (!sheetLink.includes("docs.google.com/spreadsheets")) {
       toast({
         title: "Invalid Link",
@@ -167,7 +144,6 @@ export function GoogleSheetsImport() {
       return
     }
 
-    // Save the link
     const updatedLinks = [...savedSheetLinks, sheetLink]
     setSavedSheetLinks(updatedLinks)
     localStorage.setItem("googleSheetLinks", JSON.stringify(updatedLinks))
@@ -177,7 +153,6 @@ export function GoogleSheetsImport() {
       description: "Your Google Sheet link has been saved successfully",
     })
 
-    // Close the dialog and reset the input
     setShowSheetLinkDialog(false)
     setSheetLink("")
   }
@@ -223,7 +198,6 @@ export function GoogleSheetsImport() {
 
           <div className="flex flex-col w-full space-y-4">
             <div className="flex justify-between items-center w-full">
-              {/* This button now triggers the new logic */}
               <Button onClick={handleImportButtonClick} variant="outline">
                 <LinkIcon className="mr-2 h-4 w-4" />
                 Import Google Sheet
@@ -295,10 +269,8 @@ export function GoogleSheetsImport() {
         </Button>
       )}
 
-      {/* SheetsImportDialog (instructions modal) */}
       <SheetsImportDialog open={showImportDialog} onOpenChange={handleSheetsImportDialogClose} />
 
-      {/* Dialog for adding sheet link */}
       <Dialog open={showSheetLinkDialog} onOpenChange={setShowSheetLinkDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

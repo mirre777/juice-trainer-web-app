@@ -46,7 +46,7 @@ export function useClientDataAPI(isDemo = false) {
 
         const response = await fetch("/api/clients", {
           method: "GET",
-          credentials: "include", // Include cookies
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
           },

@@ -12,7 +12,6 @@ export function useClientDataHybrid(isDemo = false) {
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
-  // Demo clients data
   const demoClients: Client[] = [
     {
       id: "1",
@@ -42,7 +41,6 @@ export function useClientDataHybrid(isDemo = false) {
     },
   ]
 
-  // Helper function to get initials from name
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -52,7 +50,6 @@ export function useClientDataHybrid(isDemo = false) {
       .substring(0, 2)
   }
 
-  // Helper function to convert Firestore document to Client
   const convertFirestoreToClient = (doc: any): Client => {
     const data = doc.data()
     return {
@@ -79,15 +76,13 @@ export function useClientDataHybrid(isDemo = false) {
     }
   }
 
-  // Step 1: Fetch existing clients via API using cookies (same as /api/auth/me)
   const fetchExistingClients = async () => {
     try {
       console.log("🚀 [Hybrid] Step 1: Fetching existing clients via API")
 
-      // Use the same method as your working endpoints - cookies with credentials
       const response = await fetch(`/api/clients`, {
         method: "GET",
-        credentials: "include", // This sends cookies automatically
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -109,7 +104,6 @@ export function useClientDataHybrid(isDemo = false) {
       })
 
       if (data.success && data.clients && Array.isArray(data.clients)) {
-        // Transform the data to match your Client interface
         const transformedClients = data.clients.map((client: any) => ({
           id: client.id,
           name: client.name || "Unnamed Client",
@@ -149,15 +143,12 @@ export function useClientDataHybrid(isDemo = false) {
     }
   }
 
-  // Step 2: Set up real-time listener for new clients
   const setupRealtimeListener = async (userId: string, existingClients: Client[]) => {
     try {
       console.log("🔗 [Hybrid] Step 2: Setting up real-time listener for new clients...")
 
-      // Get the timestamp from when we fetched existing clients
       const fetchTimestamp = lastFetchTime || new Date()
 
-      // Set up listener for clients created after our API fetch
       const clientsRef = collection(db, "users", userId, "clients")
       const newClientsQuery = query(
         clientsRef,
@@ -183,11 +174,9 @@ export function useClientDataHybrid(isDemo = false) {
             const data = doc.data()
             console.log("📄 [Hybrid] Processing new client:", doc.id, data.name)
 
-            // Validate client data and avoid duplicates
             if (data && typeof data === "object" && data.name && !data.name.includes("channel?VER=")) {
               const client = convertFirestoreToClient(doc)
 
-              // Check if client already exists (avoid duplicates)
               const existsInCurrent = existingClients.some((c) => c.id === client.id)
               if (!existsInCurrent) {
                 newClients.push(client)
@@ -200,13 +189,12 @@ export function useClientDataHybrid(isDemo = false) {
 
           if (newClients.length > 0) {
             setClients((prevClients) => {
-              // Merge new clients with existing ones, avoiding duplicates
               const mergedClients = [...prevClients]
 
               newClients.forEach((newClient) => {
                 const exists = mergedClients.some((c) => c.id === newClient.id)
                 if (!exists) {
-                  mergedClients.unshift(newClient) // Add to beginning (newest first)
+                  mergedClients.unshift(newClient)
                 }
               })
 
@@ -243,10 +231,8 @@ export function useClientDataHybrid(isDemo = false) {
 
         console.log("🎬 [Hybrid] Starting hybrid client fetching")
 
-        // Step 1: Fetch existing clients via API using cookies
         const existingClients = await fetchExistingClients()
 
-        // Step 2: Get current user to set up real-time listener
         const userResponse = await fetch("/api/auth/me", {
           credentials: "include",
         })
@@ -256,7 +242,6 @@ export function useClientDataHybrid(isDemo = false) {
           const userId = userData.uid
 
           if (userId) {
-            // Step 3: Set up real-time listener for new clients
             await setupRealtimeListener(userId, existingClients)
           } else {
             console.warn("⚠️ [Hybrid] No user ID found, skipping real-time listener")
@@ -275,7 +260,6 @@ export function useClientDataHybrid(isDemo = false) {
 
     initializeHybridFetch()
 
-    // Cleanup function
     return () => {
       if (unsubscribeRef.current) {
         console.log("🧹 [Hybrid] Cleaning up real-time listener")
@@ -285,7 +269,6 @@ export function useClientDataHybrid(isDemo = false) {
     }
   }, [isDemo])
 
-  // Manual refetch function (useful for pull-to-refresh)
   const refetch = async () => {
     if (!isDemo) {
       setLoading(true)
