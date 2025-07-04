@@ -1,11 +1,5 @@
 import { initializeApp } from "firebase/app"
 import { getFirestore, doc, getDoc } from "firebase/firestore"
-import dotenv from "dotenv"
-
-// Load environment variables
-dotenv.config()
-
-console.log("🔥 === FIREBASE CONNECTION TEST ===")
 
 // Firebase config from environment variables
 const firebaseConfig = {
@@ -15,94 +9,70 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-console.log("📋 Firebase Config Check:")
-console.log("- Project ID:", firebaseConfig.projectId || "MISSING")
-console.log("- Auth Domain:", firebaseConfig.authDomain || "MISSING")
-console.log("- API Key:", firebaseConfig.apiKey ? "SET" : "MISSING")
+console.log("🔧 === FIREBASE CONNECTION TEST ===")
+console.log("📋 Environment Variables:")
+console.log("  - API Key:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "✅ Set" : "❌ Missing")
+console.log("  - Auth Domain:", process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? "✅ Set" : "❌ Missing")
+console.log("  - Project ID:", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? "✅ Set" : "❌ Missing")
+console.log("")
 
 try {
   // Initialize Firebase
   const app = initializeApp(firebaseConfig)
   const db = getFirestore(app)
   console.log("✅ Firebase initialized successfully")
+  console.log("")
 
-  // Test specific user document
-  const userId = "HN2QjNvnWKQ37nVXCSkhXdCwMEH2"
-  console.log(`\n🔍 Testing user document: ${userId}`)
+  // Test specific document access
+  console.log("🔍 Testing document access...")
 
-  const userRef = doc(db, "users", userId)
-  const userDoc = await getDoc(userRef)
+  const testCases = [
+    {
+      name: "Client Document",
+      path: "users/5tVdK6LXCifZgjxD7rml3nEOXmh1/clients/CGLJmpv59IngpsYpW7PZ",
+      expectedFields: ["name", "email", "status", "userId"],
+    },
+    {
+      name: "User Document",
+      path: "users/HN2QjNvnWKQ37nVXCSkhXdCwMEH2",
+      expectedFields: ["name", "email", "status", "trainers"],
+    },
+  ]
 
-  if (userDoc.exists()) {
-    const userData = userDoc.data()
-    console.log("✅ User document EXISTS")
-    console.log("📊 User data:", {
-      name: userData.name,
-      email: userData.email,
-      status: userData.status,
-      hasFirebaseAuth: userData.hasFirebaseAuth,
-      approvedAt: userData.approvedAt?.toDate?.() || userData.approvedAt,
-      trainers: userData.trainers,
-    })
-  } else {
-    console.log("❌ User document does NOT exist")
-  }
+  for (const testCase of testCases) {
+    console.log(`\n📄 Testing ${testCase.name}:`)
+    console.log(`   Path: ${testCase.path}`)
 
-  // Test client document
-  const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1"
-  const clientId = "CGLJmpv59IngpsYpW7PZ"
-  console.log(`\n🔍 Testing client document: ${clientId}`)
+    try {
+      const docRef = doc(db, testCase.path)
+      const docSnap = await getDoc(docRef)
 
-  const clientRef = doc(db, "users", trainerId, "clients", clientId)
-  const clientDoc = await getDoc(clientRef)
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        console.log(`   ✅ Document exists`)
+        console.log(`   📊 Fields found:`)
 
-  if (clientDoc.exists()) {
-    const clientData = clientDoc.data()
-    console.log("✅ Client document EXISTS")
-    console.log("📊 Client data:", {
-      name: clientData.name,
-      email: clientData.email,
-      status: clientData.status,
-      userId: clientData.userId,
-      isTemporary: clientData.isTemporary,
-    })
-
-    // Check if client's userId matches our test user
-    if (clientData.userId === userId) {
-      console.log("✅ Client userId MATCHES test user")
-    } else {
-      console.log("❌ Client userId does NOT match test user")
-      console.log(`   Client userId: ${clientData.userId}`)
-      console.log(`   Test userId: ${userId}`)
-    }
-  } else {
-    console.log("❌ Client document does NOT exist")
-  }
-
-  console.log("\n🎯 === STATUS ANALYSIS ===")
-  if (userDoc.exists() && clientDoc.exists()) {
-    const userData = userDoc.data()
-    const clientData = clientDoc.data()
-
-    console.log("User status:", userData.status)
-    console.log("Client status:", clientData.status)
-
-    if (userData.status === "pending_approval") {
-      console.log('🚨 ISSUE FOUND: User status is "pending_approval"')
-      console.log("💡 This might be blocking program sending")
-    }
-
-    if (clientData.status === "Active" && userData.status !== "active") {
-      console.log("⚠️  STATUS MISMATCH: Client is Active but User is not")
+        testCase.expectedFields.forEach((field) => {
+          const value = data[field]
+          if (value !== undefined) {
+            console.log(`     - ${field}: ${typeof value === "object" ? JSON.stringify(value) : value}`)
+          } else {
+            console.log(`     - ${field}: ❌ Missing`)
+          }
+        })
+      } else {
+        console.log(`   ❌ Document does not exist`)
+      }
+    } catch (error) {
+      console.log(`   ❌ Error accessing document:`, error.message)
     }
   }
+
+  console.log("")
+  console.log("🎯 === TEST COMPLETE ===")
 } catch (error) {
-  console.error("❌ Firebase test failed:", error)
-  console.error("Error details:", {
-    code: error.code,
-    message: error.message,
-  })
+  console.error("❌ Firebase initialization failed:", error.message)
+  console.error("🔧 Check your environment variables and Firebase config")
 }
