@@ -1,68 +1,34 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, Plus } from "lucide-react"
+import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
 import { ClientsList } from "@/components/clients/clients-list"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
+import { AuthDebug } from "@/components/debug/auth-debug"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { useToast } from "@/hooks/use-toast"
-import type { Client } from "@/types/client"
 
 export default function ClientPage() {
-  const [clients, setClients] = useState<Client[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("All")
   const [expandFilter, setExpandFilter] = useState("All")
   const [collapseFilter, setCollapseFilter] = useState("All")
   const { toast } = useToast()
 
-  // Fetch clients
-  const fetchClients = async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  // Use the hybrid approach for client data
+  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid(false)
 
-      console.log("[ClientPage] Fetching clients...")
-
-      const response = await fetch("/api/clients", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      console.log("[ClientPage] API response status:", response.status)
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("[ClientPage] API response data:", data)
-
-      if (data.success && data.clients) {
-        setClients(data.clients)
-        console.log(`[ClientPage] Successfully loaded ${data.clients.length} clients`)
-      } else {
-        throw new Error(data.error || "Failed to fetch clients")
-      }
-    } catch (err) {
-      console.error("[ClientPage] Error fetching clients:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch clients")
-      setClients([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchClients()
-  }, [])
+  console.log("[ClientPage] Render state:", {
+    clientsCount: clients.length,
+    loading,
+    error,
+    lastFetchTime: lastFetchTime?.toISOString(),
+  })
 
   // Filter clients based on search and status
   const filteredClients = clients.filter((client) => {
@@ -84,8 +50,7 @@ export default function ClientPage() {
   }
 
   const handleClientAdded = () => {
-    console.log("[ClientPage] Client added - refreshing list")
-    fetchClients() // Refresh the client list
+    console.log("[ClientPage] Client added - real-time listener should pick it up")
     toast({
       title: "Client added",
       description: "The new client has been added successfully.",
@@ -93,7 +58,7 @@ export default function ClientPage() {
   }
 
   const handleClientDeleted = () => {
-    fetchClients() // Refresh the client list
+    refetch()
     toast({
       title: "Client deleted",
       description: "The client has been deleted successfully.",
@@ -110,7 +75,12 @@ export default function ClientPage() {
                 <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
                 <p className="text-gray-500">Loading your coaching clients...</p>
               </div>
+              <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+                {showDebug ? "Hide" : "Show"} Debug
+              </Button>
             </div>
+
+            {showDebug && <AuthDebug />}
 
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
@@ -131,7 +101,12 @@ export default function ClientPage() {
                 <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
                 <p className="text-gray-500">Manage your coaching clients</p>
               </div>
+              <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+                {showDebug ? "Hide" : "Show"} Debug
+              </Button>
             </div>
+
+            {showDebug && <AuthDebug />}
 
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
@@ -139,7 +114,7 @@ export default function ClientPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Clients</h3>
                 <p className="text-gray-500 mb-4">{error}</p>
                 <div className="space-y-2">
-                  <Button onClick={fetchClients} variant="outline">
+                  <Button onClick={() => refetch()} variant="outline">
                     Try Again
                   </Button>
                 </div>
@@ -160,9 +135,15 @@ export default function ClientPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
               <p className="text-gray-500">Manage your coaching clients</p>
+              {lastFetchTime && (
+                <p className="text-sm text-gray-400 mt-1">Last updated: {lastFetchTime.toLocaleTimeString()}</p>
+              )}
             </div>
             <div className="flex gap-2">
-              <Button onClick={fetchClients} variant="outline" size="sm">
+              <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+                {showDebug ? "Hide" : "Show"} Debug
+              </Button>
+              <Button onClick={() => refetch()} variant="outline" size="sm">
                 Refresh
               </Button>
               <Button
@@ -175,6 +156,31 @@ export default function ClientPage() {
               </Button>
             </div>
           </div>
+
+          {/* Debug Panel */}
+          {showDebug && (
+            <Card className="border-yellow-200 bg-yellow-50">
+              <CardHeader>
+                <CardTitle className="text-sm text-yellow-800">Debug Information</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <strong>Showing Clients:</strong> {clients.length}
+                  </div>
+                  <div>
+                    <strong>Loading:</strong> {loading ? "Yes" : "No"}
+                  </div>
+                  <div>
+                    <strong>Error:</strong> {error || "None"}
+                  </div>
+                  <div>
+                    <strong>Last Updated:</strong> {lastFetchTime?.toLocaleTimeString() || "Never"}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Filters */}
           <ClientsFilterBar
@@ -199,11 +205,7 @@ export default function ClientPage() {
           />
 
           {/* Add Client Modal */}
-          <AddClientModal
-            isOpen={showAddModal}
-            onClose={() => setShowAddModal(false)}
-            onAddClient={handleClientAdded}
-          />
+          <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
         </div>
       </div>
     </div>
