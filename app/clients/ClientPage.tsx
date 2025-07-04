@@ -1,104 +1,121 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ClientList } from "@/components/clients/ClientList"
-import { AddClientModal } from "@/components/clients/add-client-modal"
-import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Users, Plus } from "lucide-react"
+import { ClientsList } from "@/components/clients/clients-list"
+import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
+import { AddClientModal } from "@/components/clients/add-client-modal"
+import { useToast } from "@/hooks/use-toast"
 import type { Client } from "@/types/client"
-import LoadingSpinner from "@/components/shared/loading-spinner"
 
 export default function ClientPage() {
   const [clients, setClients] = useState<Client[]>([])
-  const [filteredClients, setFilteredClients] = useState<Client[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("All")
+  const [expandFilter, setExpandFilter] = useState("All")
+  const [collapseFilter, setCollapseFilter] = useState("All")
+  const { toast } = useToast()
 
-  // Fetch clients data
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
+  // Fetch clients
+  const fetchClients = async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-        console.log("[ClientPage] Fetching clients...")
+      console.log("[ClientPage] Fetching clients...")
 
-        const response = await fetch("/api/clients", {
-          method: "GET",
-          credentials: "include",
-        })
+      const response = await fetch("/api/clients", {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch clients: ${response.status}`)
-        }
+      console.log("[ClientPage] API response status:", response.status)
 
-        const data = await response.json()
-
-        if (data.success) {
-          console.log(`[ClientPage] Successfully loaded ${data.clients.length} clients`)
-          setClients(data.clients || [])
-        } else {
-          throw new Error(data.error || "Failed to fetch clients")
-        }
-      } catch (err) {
-        console.error("[ClientPage] Error fetching clients:", err)
-        setError(err instanceof Error ? err.message : "Failed to load clients")
-        setClients([])
-      } finally {
-        setIsLoading(false)
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`)
       }
-    }
 
+      const data = await response.json()
+      console.log("[ClientPage] API response data:", data)
+
+      if (data.success && data.clients) {
+        setClients(data.clients)
+        console.log(`[ClientPage] Successfully loaded ${data.clients.length} clients`)
+      } else {
+        throw new Error(data.error || "Failed to fetch clients")
+      }
+    } catch (err) {
+      console.error("[ClientPage] Error fetching clients:", err)
+      setError(err instanceof Error ? err.message : "Failed to fetch clients")
+      setClients([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchClients()
   }, [])
 
-  // Filter clients based on search term and status
-  useEffect(() => {
-    let filtered = clients
-
-    // Apply search filter
-    if (searchTerm.trim()) {
-      filtered = filtered.filter(
-        (client) =>
-          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.email.toLowerCase().includes(searchTerm.toLowerCase()),
+  // Filter clients based on search and status
+  const filteredClients = clients.filter((client) => {
+    // Search filter - check multiple fields
+    const matchesSearch =
+      searchTerm === "" ||
+      [client.name, client.email, client.goal, client.program, client.notes].some(
+        (field) => field && field.toLowerCase().includes(searchTerm.toLowerCase()),
       )
-    }
 
-    // Apply status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((client) => client.status.toLowerCase() === statusFilter.toLowerCase())
-    }
+    // Status filter
+    const matchesStatus = statusFilter === "All" || client.status === statusFilter
 
-    setFilteredClients(filtered)
-  }, [clients, searchTerm, statusFilter])
+    return matchesSearch && matchesStatus
+  })
 
-  const handleClientAdded = (newClient: Client) => {
-    console.log("[ClientPage] New client added:", newClient)
-    setClients((prev) => [newClient, ...prev])
-    setIsAddModalOpen(false)
+  const handleAddClient = () => {
+    setShowAddModal(true)
   }
 
-  const handleClientUpdated = (updatedClient: Client) => {
-    console.log("[ClientPage] Client updated:", updatedClient)
-    setClients((prev) => prev.map((client) => (client.id === updatedClient.id ? updatedClient : client)))
+  const handleClientAdded = () => {
+    console.log("[ClientPage] Client added - refreshing list")
+    fetchClients() // Refresh the client list
+    toast({
+      title: "Client added",
+      description: "The new client has been added successfully.",
+    })
   }
 
-  const handleClientDeleted = (clientId: string) => {
-    console.log("[ClientPage] Client deleted:", clientId)
-    setClients((prev) => prev.filter((client) => client.id !== clientId))
+  const handleClientDeleted = () => {
+    fetchClients() // Refresh the client list
+    toast({
+      title: "Client deleted",
+      description: "The client has been deleted successfully.",
+    })
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="mt-4 text-gray-600">Loading clients...</p>
+      <div className="px-4 sm:px-6 md:px-8 lg:px-20">
+        <div className="max-w-[1280px] mx-auto pt-4">
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+                <p className="text-gray-500">Loading your coaching clients...</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -106,50 +123,89 @@ export default function ClientPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Error: {error}</p>
-          <Button onClick={() => window.location.reload()} variant="outline">
-            Retry
-          </Button>
+      <div className="px-4 sm:px-6 md:px-8 lg:px-20">
+        <div className="max-w-[1280px] mx-auto pt-4">
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+                <p className="text-gray-500">Manage your coaching clients</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Clients</h3>
+                <p className="text-gray-500 mb-4">{error}</p>
+                <div className="space-y-2">
+                  <Button onClick={fetchClients} variant="outline">
+                    Try Again
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
-          <p className="text-gray-600 mt-1">Manage your coaching clients ({clients.length} total)</p>
+    <div className="px-4 sm:px-6 md:px-8 lg:px-20">
+      <div className="max-w-[1280px] mx-auto pt-4">
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+              <p className="text-gray-500">Manage your coaching clients</p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={fetchClients} variant="outline" size="sm">
+                Refresh
+              </Button>
+              <Button
+                onClick={handleAddClient}
+                className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+                data-add-client-button="true"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Client
+              </Button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <ClientsFilterBar
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            expandFilter={expandFilter}
+            onExpandFilterChange={setExpandFilter}
+            collapseFilter={collapseFilter}
+            onCollapseFilterChange={setCollapseFilter}
+            clientCount={filteredClients.length}
+            totalCount={clients.length}
+          />
+
+          {/* Clients List */}
+          <ClientsList
+            clients={filteredClients}
+            allClientsExpanded={expandFilter === "All"}
+            loading={loading}
+            onClientDeleted={handleClientDeleted}
+          />
+
+          {/* Add Client Modal */}
+          <AddClientModal
+            isOpen={showAddModal}
+            onClose={() => setShowAddModal(false)}
+            onAddClient={handleClientAdded}
+          />
         </div>
-        <Button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Add Client
-        </Button>
       </div>
-
-      <ClientsFilterBar
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        clientCount={filteredClients.length}
-        totalCount={clients.length}
-      />
-
-      <ClientList
-        clients={filteredClients}
-        onClientUpdated={handleClientUpdated}
-        onClientDeleted={handleClientDeleted}
-      />
-
-      <AddClientModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onClientAdded={handleClientAdded}
-      />
     </div>
   )
 }

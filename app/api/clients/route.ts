@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCookie } from "cookies-next"
-import { subscribeToClients } from "@/lib/firebase/client-service"
+import { fetchClients } from "@/lib/firebase/client-service"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("[API] /api/clients - Starting request")
+    console.log("[API] /api/clients - Starting GET request")
 
     // Get user ID from cookies (same method as other working routes)
     const userId = getCookie("user_id", { req: request }) || getCookie("userId", { req: request })
@@ -18,39 +18,34 @@ export async function GET(request: NextRequest) {
 
     console.log("[API] /api/clients - User ID found:", userId)
 
-    // Get all clients for this trainer - NO FILTERING
-    return new Promise((resolve) => {
-      const unsubscribe = subscribeToClients(userId as string, (clients, error) => {
-        unsubscribe() // Clean up the subscription immediately
+    // Use the existing fetchClients function directly
+    console.log("[API] /api/clients - Calling fetchClients...")
+    const clients = await fetchClients(userId as string)
 
-        if (error) {
-          console.error("[API] /api/clients - Error fetching clients:", error)
-          resolve(NextResponse.json({ success: false, error: error.message }, { status: 500 }))
-          return
-        }
+    console.log(`[API] /api/clients - Successfully fetched ${clients.length} clients`)
 
-        console.log(`[API] /api/clients - Successfully fetched ${clients.length} clients`)
-
-        // Return ALL clients without any filtering
-        resolve(
-          NextResponse.json({
-            success: true,
-            clients: clients,
-            clientCount: clients.length,
-            totalClients: clients.length,
-          }),
-        )
-      })
+    return NextResponse.json({
+      success: true,
+      clients: clients,
+      clientCount: clients.length,
+      totalClients: clients.length,
     })
   } catch (error) {
     console.error("[API] /api/clients - Unexpected error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("[API] /api/clients - POST Starting request")
+    console.log("[API] /api/clients - Starting POST request")
 
     // Get user ID from cookies (same method as GET)
     const userId = getCookie("user_id", { req: request }) || getCookie("userId", { req: request })
@@ -110,6 +105,13 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[API] /api/clients - POST Error:", error)
-    return NextResponse.json({ success: false, error: "Failed to create client" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to create client",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
