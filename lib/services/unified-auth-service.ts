@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 import { signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { auth, db } from "@/lib/firebase/firebase"
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
 export interface AuthUser {
@@ -89,6 +89,57 @@ export class UnifiedAuthService {
   }
 
   /**
+   * Get user by email from Firestore
+   */
+  private static async getUserByEmail(email: string): Promise<{ user?: AuthUser; error?: any }> {
+    try {
+      console.log(`[UnifiedAuth] Looking up user by email: ${email}`)
+
+      const usersRef = collection(db, "users")
+      const q = query(usersRef, where("email", "==", email.toLowerCase().trim()))
+
+      const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+        function: "getUserByEmail",
+        email,
+      })
+
+      if (queryError || !querySnapshot) {
+        return { error: queryError }
+      }
+
+      if (querySnapshot.empty) {
+        console.log(`[UnifiedAuth] No user found with email: ${email}`)
+        return { user: undefined }
+      }
+
+      const userDoc = querySnapshot.docs[0]
+      const userData = userDoc.data()
+
+      const user: AuthUser = {
+        uid: userDoc.id,
+        email: userData.email || "",
+        name: userData.name || "",
+        role: userData.role,
+        user_type: userData.user_type,
+        universalInviteCode: userData.universalInviteCode || "",
+        inviteCode: userData.inviteCode || "",
+      }
+
+      console.log(`[UnifiedAuth] Found user:`, { uid: user.uid, email: user.email, role: user.role })
+      return { user }
+    } catch (error) {
+      const appError = createError(
+        ErrorType.UNKNOWN_ERROR,
+        error,
+        { function: "getUserByEmail", email },
+        "Error looking up user by email",
+      )
+      logError(appError)
+      return { error: appError }
+    }
+  }
+
+  /**
    * Sign in with email and password
    */
   static async signIn(email: string, password: string, invitationCode?: string): Promise<AuthResult> {
@@ -108,7 +159,11 @@ export class UnifiedAuthService {
       }
 
       // Check if user exists in Firestore first
-      const { user: existingUser } = await this.getUserByEmail(email)
+      const { user: existingUser, error: lookupError } = await this.getUserByEmail(email)
+
+      if (lookupError) {
+        return { success: false, error: lookupError }
+      }
 
       if (!existingUser) {
         console.log(`[UnifiedAuth] ❌ User not found in Firestore: ${email}`)
@@ -217,19 +272,6 @@ export class UnifiedAuthService {
       )
       logError(appError)
       return { success: false, error: appError }
-    }
-  }
-
-  /**
-   * Get user by email
-   */
-  private static async getUserByEmail(email: string): Promise<{ user?: AuthUser; error?: any }> {
-    try {
-      // This would need to be implemented based on your existing getUserByEmail function
-      // For now, returning a placeholder
-      return { user: undefined }
-    } catch (error) {
-      return { error }
     }
   }
 

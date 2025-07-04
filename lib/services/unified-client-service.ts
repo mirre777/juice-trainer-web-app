@@ -2,7 +2,7 @@
  * Unified Client Service
  *
  * Single source of truth for all client operations across the app.
- * Uses API with cookies for authentication consistently.
+ * Uses UnifiedAuthService for consistent authentication.
  */
 
 import type { Client } from "@/types/client"
