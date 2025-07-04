@@ -1,19 +1,27 @@
 "use client"
 
-import { Search, ChevronDown, Users } from "lucide-react"
+import { useState } from "react"
+import { Search, Filter, ExpandIcon, ShrinkIcon } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface ClientsFilterBarProps {
   searchTerm: string
-  onSearchChange: (term: string) => void
+  onSearchChange: (value: string) => void
   statusFilter: string
   onStatusFilterChange: (status: string) => void
-  expandFilter: string
-  onExpandFilterChange: (filter: string) => void
-  collapseFilter: string
-  onCollapseFilterChange: (filter: string) => void
-  clientCount: number
-  totalCount: number
+  onExpandAll: () => void
+  onCollapseAll: () => void
+  clientCounts: {
+    total: number
+    active: number
+    pending: number
+    inactive: number
+    invited: number
+    paused: number
+  }
+  filteredCount: number
 }
 
 export function ClientsFilterBar({
@@ -21,64 +29,72 @@ export function ClientsFilterBar({
   onSearchChange,
   statusFilter,
   onStatusFilterChange,
-  expandFilter,
-  onExpandFilterChange,
-  collapseFilter,
-  onCollapseFilterChange,
-  clientCount,
-  totalCount,
+  onExpandAll,
+  onCollapseAll,
+  clientCounts,
+  filteredCount,
 }: ClientsFilterBarProps) {
-  const statusOptions = ["All", "Active", "Inactive", "Pending", "On Hold", "Invited", "Accepted Invitation"]
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  const statusOptions = [
+    { value: "All", label: "All", count: clientCounts.total },
+    { value: "Active", label: "Active", count: clientCounts.active },
+    { value: "Pending", label: "Pending", count: clientCounts.pending },
+    { value: "Inactive", label: "Inactive", count: clientCounts.inactive },
+    { value: "Invited", label: "Invited", count: clientCounts.invited },
+    { value: "Paused", label: "Paused", count: clientCounts.paused },
+  ]
 
   return (
     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-      {/* Search */}
+      {/* Search Input */}
       <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Input
           placeholder="Search clients by name, email, goal, program..."
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent"
+          className="pl-10"
         />
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
+      {/* Filter Controls */}
+      <div className="flex items-center gap-2">
         {/* Status Filter */}
-        <div className="relative">
-          <select
-            value={statusFilter}
-            onChange={(e) => onStatusFilterChange(e.target.value)}
-            className="appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent"
-          >
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                Status: {status}
-              </option>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="gap-2 bg-transparent">
+              <Filter className="h-4 w-4" />
+              Status: {statusFilter}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {statusOptions.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => onStatusFilterChange(option.value)}
+                className="flex justify-between items-center"
+              >
+                <span>{option.label}</span>
+                <span className="text-sm text-gray-500 ml-2">({option.count})</span>
+              </DropdownMenuItem>
             ))}
-          </select>
-          <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-        </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Expand/Collapse Controls */}
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onExpandFilterChange(expandFilter === "All" ? "None" : "All")}
-          >
-            {expandFilter === "All" ? "Collapse All" : "Expand All"}
-          </Button>
-        </div>
+        <Button variant="outline" onClick={onExpandAll} className="gap-2 bg-transparent">
+          <ExpandIcon className="h-4 w-4" />
+          Expand All
+        </Button>
+        <Button variant="outline" onClick={onCollapseAll} className="gap-2 bg-transparent">
+          <ShrinkIcon className="h-4 w-4" />
+          Collapse All
+        </Button>
 
         {/* Results Count */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
-          <Users className="h-4 w-4" />
-          <span>
-            Showing {clientCount} of {totalCount}
-          </span>
+        <div className="text-sm text-gray-600 whitespace-nowrap">
+          Showing {filteredCount} of {clientCounts.total}
         </div>
       </div>
     </div>

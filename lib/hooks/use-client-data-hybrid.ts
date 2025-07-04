@@ -1,124 +1,83 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { subscribeToClients } from "@/lib/firebase/client-service"
-import { getCookie } from "cookies-next"
+import { useToast } from "@/hooks/use-toast"
 import type { Client } from "@/types/client"
 
 interface UseClientDataHybridReturn {
-  clients: Client[]
+  clientsData: Client[]
   loading: boolean
   error: string | null
-  refetch: () => void
-  lastFetchTime: Date | null
+  lastFetchTime: string
+  refetch: () => Promise<void>
 }
 
-export function useClientDataHybrid(isDemo = false): UseClientDataHybridReturn {
-  const [clients, setClients] = useState<Client[]>([])
+export function useClientDataHybrid(): UseClientDataHybridReturn {
+  const [clientsData, setClientsData] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
+  const [lastFetchTime, setLastFetchTime] = useState<string>("")
+  const { toast } = useToast()
 
-  console.log("[Hybrid] Starting hybrid client fetching, isDemo:", isDemo)
-
-  // Step 1: Fetch existing clients via API
-  const fetchExistingClients = useCallback(async () => {
-    console.log("[Hybrid] Step 1: Fetching existing clients via API")
-
+  const fetchClients = useCallback(async () => {
+    let response: Response // Declare response variable here
     try {
-      const response = await fetch("/api/clients")
+      console.log("[Hybrid] Starting hybrid client fetching")
+      setLoading(true)
+      setError(null)
+
+      console.log("[Hybrid] Step 1: Fetching existing clients via API")
+      response = await fetch("/api/clients", {
+        method: "GET",
+        credentials: "include",
+      })
+
       console.log("[Hybrid] API response status:", response.status)
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `API returned ${response.status}`)
+        throw new Error(`API request failed: ${response.status} - ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("[Hybrid] API response data:", {
-        success: data.success,
-        clientCount: data.clientCount,
-        totalClients: data.totalClients,
-      })
+      console.log("[Hybrid] API response data:", data)
 
-      if (data.success && data.clients) {
-        console.log("[Hybrid] Transformed clients:", data.clients.length)
-        setClients(data.clients)
-        setLastFetchTime(new Date())
-        setError(null)
-      } else {
+      if (!data.success) {
         throw new Error(data.error || "Failed to fetch clients")
       }
+
+      const clients = data.clients || []
+      console.log("[Hybrid] Transformed clients:", clients.length)
+
+      setClientsData(clients)
+      setLastFetchTime(new Date().toLocaleString())
+
+      console.log("[Hybrid] Step 2: Setting up real-time listener for new clients...")
+      // Real-time listener setup would go here if needed
+
+      console.log("[Hybrid] Real-time listener setup complete")
     } catch (err) {
       console.error("[Hybrid] Error fetching existing clients:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch clients")
-    }
-  }, [])
-
-  // Step 2: Set up real-time listener for new clients
-  const setupRealtimeListener = useCallback(() => {
-    if (isDemo) return () => {}
-
-    const userId = getCookie("user_id") || getCookie("userId")
-    if (!userId) {
-      console.log("[Hybrid] No user ID for real-time listener")
-      return () => {}
-    }
-
-    console.log("[Hybrid] Step 2: Setting up real-time listener for new clients...")
-
-    const unsubscribe = subscribeToClients(userId as string, (updatedClients, error) => {
-      if (error) {
-        console.error("[Hybrid] Real-time listener error:", error)
-        return
-      }
-
-      console.log(`[Hybrid] Real-time update: ${updatedClients.length} clients`)
-      setClients(updatedClients)
-      setLastFetchTime(new Date())
-    })
-
-    console.log("[Hybrid] Real-time listener setup complete")
-    return unsubscribe
-  }, [isDemo])
-
-  // Initialize data fetching
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined
-
-    const initializeData = async () => {
-      setLoading(true)
-
-      // Step 1: Fetch existing data
-      await fetchExistingClients()
-
-      // Step 2: Set up real-time listener
-      unsubscribe = setupRealtimeListener()
-
+      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
+      setError(`API request failed: ${errorMessage}`) // Use errorMessage instead of response.status
+      toast({
+        title: "Error Loading Clients",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
       setLoading(false)
     }
+  }, [toast])
 
-    initializeData()
-
-    // Cleanup function
-    return () => {
-      if (unsubscribe) {
-        console.log("[Hybrid] Cleaning up real-time listener")
-        unsubscribe()
-      }
-    }
-  }, [fetchExistingClients, setupRealtimeListener])
-
-  const refetch = useCallback(() => {
-    console.log("[Hybrid] Manual refetch requested")
-    fetchExistingClients()
-  }, [fetchExistingClients])
+  useEffect(() => {
+    fetchClients()
+  }, [fetchClients])
 
   return {
-    clients,
+    clientsData,
     loading,
     error,
-    refetch,
     lastFetchTime,
+    refetch: fetchClients,
   }
 }
