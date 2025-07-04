@@ -1,13 +1,29 @@
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, collection, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { notFound } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import ReviewProgramClient from "./review-program-client"
-import { clientService } from "@/lib/firebase/client-service"
 
 interface PageProps {
   params: {
     id: string
+  }
+}
+
+async function fetchClients() {
+  try {
+    const clientsRef = collection(db, "clients")
+    const snapshot = await getDocs(clientsRef)
+
+    const clients = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+
+    return clients
+  } catch (error) {
+    console.error("Error fetching clients:", error)
+    return []
   }
 }
 
@@ -38,14 +54,8 @@ async function ReviewProgramContent({ params }: PageProps) {
     console.log("Program weeks:", importData.program?.weeks)
 
     // Fetch client list for program assignment
-    let clients = []
-    try {
-      clients = await clientService.getClients()
-      console.log("Server-side clients fetched:", clients.length)
-    } catch (error) {
-      console.error("Error fetching clients:", error)
-      // Continue without clients - the component will handle the empty state
-    }
+    const clients = await fetchClients()
+    console.log("Server-side clients fetched:", clients.length)
 
     // Use appropriate component based on periodization
     return <ReviewProgramClient importData={importData} initialClients={clients} />
