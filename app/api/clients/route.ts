@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   console.log("[API /api/clients] === POST REQUEST RECEIVED ===")
 
   try {
-    // Get authentication
+    // Get authentication using the same method as GET
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
     const userIdAlt = cookieStore.get("userId")?.value
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     // Generate a unique invite code
     const inviteCode = Math.random().toString(36).substring(2, 15).toUpperCase()
 
-    // Create client document in trainer's subcollection
+    // Create client document in trainer's subcollection using Firestore directly
     const clientsRef = collection(db, "users", trainerId, "clients")
     const clientData = {
       name: name.trim(),
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       textColor: "#111827",
       lastWorkout: { name: "", date: "", completion: 0 },
       metrics: [],
-      isTemporary: true, // Will be set to false when user accepts invitation
+      isTemporary: true,
     }
 
     const docRef = await addDoc(clientsRef, clientData)
