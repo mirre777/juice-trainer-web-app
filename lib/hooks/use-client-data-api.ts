@@ -1,101 +1,122 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, where, orderBy, limit } from "firebase/firestore"
-import { useAuthState } from "react-firebase-hooks/auth"
-import { db, auth } from "@/lib/firebase/firebase"
+import type { Client } from "@/types/client"
 
-interface DataItem {
-  id: string
-  [key: string]: any
-}
-
-interface ApiResponse<T> {
-  data: T[] | null
-  loading: boolean
-  error: string | null
-}
-
-interface ApiHookOptions {
-  orderByField?: string
-  orderByDirection?: "asc" | "desc"
-  limitResults?: number
-  whereField?: string
-  whereOperator?: "<" | "<=" | "==" | "!=" | ">=" | ">"
-  whereValue?: any
-}
-
-function useClientDataApi<T extends DataItem>(collectionName: string, options: ApiHookOptions = {}): ApiResponse<T> {
-  const [data, setData] = useState<T[] | null>(null)
-  const [loading, setLoading] = useState<boolean>(true)
+export function useClientDataAPI(isDemo = false) {
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [user] = useAuthState(auth)
+
+  // Demo clients data
+  const demoClients = [
+    {
+      id: "1",
+      name: "Salty Snack",
+      initials: "SS",
+      status: "Active",
+      progress: 38,
+      sessions: { completed: 12, total: 30 },
+      completion: 38,
+      notes: "Working on strength training and nutrition plan.",
+      bgColor: "#f3f4f6",
+      textColor: "#111827",
+      lastWorkout: { name: "Upper Body Strength", date: "2 days ago", completion: 85 },
+      metrics: [
+        { name: "Weight", value: "165 lbs", change: "+2 lbs" },
+        { name: "Body Fat", value: "18%", change: "-1.5%" },
+        { name: "Squat 1RM", value: "225 lbs", change: "+15 lbs" },
+      ],
+    },
+  ]
 
   useEffect(() => {
-    if (!user) {
-      setData(null)
+    if (isDemo) {
+      setClients(demoClients)
       setLoading(false)
       return
     }
 
-    const fetchData = async () => {
-      setLoading(true)
-      setError(null)
-
+    const fetchClientsFromAPI = async () => {
       try {
-        let q = collection(db, collectionName)
+        setLoading(true)
+        setError(null)
 
-        // Apply where clause if provided
-        if (options.whereField && options.whereOperator && options.whereValue) {
-          q = query(q, where(options.whereField, options.whereOperator, options.whereValue))
-        }
+        console.log("🚀 [useClientDataAPI] Fetching clients from API...")
 
-        // Apply order by if provided
-        if (options.orderByField && options.orderByDirection) {
-          q = query(q, orderBy(options.orderByField, options.orderByDirection))
-        }
-
-        // Apply limit if provided
-        if (options.limitResults) {
-          q = query(q, limit(options.limitResults))
-        }
-
-        const unsubscribe = onSnapshot(
-          q,
-          (snapshot) => {
-            const newData: T[] = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            })) as T[]
-            setData(newData)
-            setLoading(false)
+        const response = await fetch("/api/clients", {
+          method: "GET",
+          credentials: "include", // Include cookies
+          headers: {
+            "Content-Type": "application/json",
           },
-          (err) => {
-            setError(err.message)
-            setLoading(false)
-          },
-        )
+        })
 
-        return () => unsubscribe()
-      } catch (err: any) {
-        setError(err.message)
+        console.log("📡 [useClientDataAPI] API response status:", response.status)
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log("📊 [useClientDataAPI] API response data:", {
+          clientCount: data.clients?.length || 0,
+          userId: data.userId,
+        })
+
+        if (data.clients && Array.isArray(data.clients)) {
+          setClients(data.clients)
+          console.log("✅ [useClientDataAPI] Successfully set clients:", data.clients.length)
+        } else {
+          console.log("⚠️ [useClientDataAPI] No clients in response")
+          setClients([])
+        }
+      } catch (err) {
+        console.error("❌ [useClientDataAPI] Error fetching clients:", err)
+        setError(err instanceof Error ? err.message : "Failed to fetch clients")
+        setClients([])
+      } finally {
         setLoading(false)
       }
     }
 
-    return fetchData()
-  }, [
-    collectionName,
-    user,
-    options.orderByField,
-    options.orderByDirection,
-    options.limitResults,
-    options.whereField,
-    options.whereOperator,
-    options.whereValue,
-  ])
+    fetchClientsFromAPI()
+  }, [isDemo])
 
-  return { data, loading, error }
+  const refetch = async () => {
+    if (!isDemo) {
+      setLoading(true)
+      const fetchClientsFromAPI = async () => {
+        try {
+          const response = await fetch("/api/clients", {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`)
+          }
+
+          const data = await response.json()
+          if (data.clients && Array.isArray(data.clients)) {
+            setClients(data.clients)
+          } else {
+            setClients([])
+          }
+        } catch (err) {
+          console.error("Error refetching clients:", err)
+          setError(err instanceof Error ? err.message : "Failed to refetch clients")
+        } finally {
+          setLoading(false)
+        }
+      }
+
+      await fetchClientsFromAPI()
+    }
+  }
+
+  return { clients, loading, error, refetch }
 }
-
-export default useClientDataApi
