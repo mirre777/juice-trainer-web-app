@@ -1,80 +1,215 @@
 import { UnifiedAuthService } from "./unified-auth-service"
 import { UnifiedClientService } from "./unified-client-service"
-import type { Client } from "@/types/client"
+import { db } from "@/lib/firebase/firebase"
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore"
+
+export interface ClientUserResult {
+  success: boolean
+  data?: any
+  error?: any
+  message?: string
+}
 
 /**
  * Client User Service
- * Bridges client and user operations
+ * Handles operations that involve both clients and users
  */
 export class ClientUserService {
   private authService = UnifiedAuthService
   private clientService = UnifiedClientService
 
   /**
-   * Get clients for current user
+   * Link a user account to an existing client
    */
-  async getClientsForCurrentUser() {
-    const authResult = await this.authService.getCurrentUser()
-    if (!authResult.success) {
-      return { success: false, error: authResult.error }
-    }
+  async linkUserToClient(clientId: string, userId: string): Promise<ClientUserResult> {
+    try {
+      console.log(`[ClientUserService] Linking user ${userId} to client ${clientId}`)
 
-    return await this.clientService.getClients()
+      // Get current trainer
+      const authResult = await this.authService.getCurrentUser()
+      if (!authResult.success || !authResult.user) {
+        return { success: false, error: "Not authenticated" }
+      }
+
+      const trainerId = authResult.user.uid
+
+      // Update client with user ID
+      const clientResult = await this.clientService.updateClient(clientId, {
+        userId,
+        isTemporary: false,
+        status: "Active",
+      })
+
+      if (!clientResult.success) {
+        return { success: false, error: clientResult.error }
+      }
+
+      // Update user with trainer relationship
+      const userRef = doc(db, "users", userId)
+      await updateDoc(userRef, {
+        trainerId,
+        status: "active",
+        updatedAt: serverTimestamp(),
+      })
+
+      console.log(`[ClientUserService] Successfully linked user to client`)
+      return { success: true, message: "User linked to client successfully" }
+    } catch (error) {
+      console.error("[ClientUserService] Error linking user to client:", error)
+      return { success: false, error }
+    }
   }
 
   /**
-   * Add client for current user
+   * Get client with user information
    */
-  async addClientForCurrentUser(clientData: {
-    name: string
-    email?: string
-    phone?: string
-    goal?: string
-    program?: string
-    notes?: string
-  }) {
-    const authResult = await this.authService.getCurrentUser()
-    if (!authResult.success) {
-      return { success: false, error: authResult.error }
-    }
+  async getClientWithUser(clientId: string): Promise<ClientUserResult> {
+    try {
+      const clientResult = await this.clientService.getClient(clientId)
+      if (!clientResult.success || !clientResult.client) {
+        return { success: false, error: "Client not found" }
+      }
 
-    return await this.clientService.addClient(clientData)
+      const client = clientResult.client
+      let userData = null
+
+      if (client.userId) {
+        const userRef = doc(db, "users", client.userId)
+        const userDoc = await getDoc(userRef)
+        if (userDoc.exists()) {
+          userData = userDoc.data()
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          client,
+          user: userData,
+        },
+      }
+    } catch (error) {
+      console.error("[ClientUserService] Error getting client with user:", error)
+      return { success: false, error }
+    }
   }
 
   /**
-   * Update client for current user
+   * Create client from user invitation
    */
-  async updateClientForCurrentUser(clientId: string, updates: Partial<Client>) {
-    const authResult = await this.authService.getCurrentUser()
-    if (!authResult.success) {
-      return { success: false, error: authResult.error }
-    }
+  async createClientFromInvitation(invitationCode: string, userId: string): Promise<ClientUserResult> {
+    try {
+      console.log(`[ClientUserService] Creating client from invitation: ${invitationCode}`)
 
-    return await this.clientService.updateClient(clientId, updates)
+      // Get user data
+      const userRef = doc(db, "users", userId)
+      const userDoc = await getDoc(userRef)
+
+      if (!userDoc.exists()) {
+        return { success: false, error: "User not found" }
+      }
+
+      const userData = userDoc.data()
+
+      // Find trainer by invitation code
+      const trainersRef = collection(db, "users")
+      const trainerQuery = query(trainersRef, where("universalInviteCode", "==", invitationCode))
+      const trainerSnapshot = await getDocs(trainerQuery)
+
+      if (trainerSnapshot.empty) {
+        return { success: false, error: "Invalid invitation code" }
+      }
+
+      const trainerDoc = trainerSnapshot.docs[0]
+      const trainerId = trainerDoc.id
+
+      // Create client under trainer
+      const clientData = {
+        name: userData.name || "New Client",
+        email: userData.email || "",
+        phone: userData.phone || "",
+        userId,
+        status: "Active",
+        isTemporary: false,
+        inviteCode: invitationCode,
+      }
+
+      const clientResult = await this.clientService.addClient(clientData)
+      if (!clientResult.success) {
+        return { success: false, error: clientResult.error }
+      }
+
+      // Update user with trainer relationship
+      await updateDoc(userRef, {
+        trainerId,
+        status: "active",
+        updatedAt: serverTimestamp(),
+      })
+
+      return {
+        success: true,
+        data: { clientId: clientResult.clientId },
+        message: "Client created from invitation successfully",
+      }
+    } catch (error) {
+      console.error("[ClientUserService] Error creating client from invitation:", error)
+      return { success: false, error }
+    }
   }
 
   /**
-   * Delete client for current user
+   * Get all clients with their user data
    */
-  async deleteClientForCurrentUser(clientId: string) {
-    const authResult = await this.authService.getCurrentUser()
-    if (!authResult.success) {
-      return { success: false, error: authResult.error }
-    }
+  async getClientsWithUsers(): Promise<ClientUserResult> {
+    try {
+      const clientsResult = await this.clientService.getClients()
+      if (!clientsResult.success || !clientsResult.clients) {
+        return { success: false, error: "Failed to get clients" }
+      }
 
-    return await this.clientService.deleteClient(clientId)
+      const clientsWithUsers = await Promise.all(
+        clientsResult.clients.map(async (client) => {
+          let userData = null
+          if (client.userId) {
+            const userRef = doc(db, "users", client.userId)
+            const userDoc = await getDoc(userRef)
+            if (userDoc.exists()) {
+              userData = userDoc.data()
+            }
+          }
+          return { client, user: userData }
+        }),
+      )
+
+      return { success: true, data: clientsWithUsers }
+    } catch (error) {
+      console.error("[ClientUserService] Error getting clients with users:", error)
+      return { success: false, error }
+    }
   }
 
   /**
-   * Get specific client for current user
+   * Unlink user from client
    */
-  async getClientForCurrentUser(clientId: string) {
-    const authResult = await this.authService.getCurrentUser()
-    if (!authResult.success) {
-      return { success: false, error: authResult.error }
-    }
+  async unlinkUserFromClient(clientId: string): Promise<ClientUserResult> {
+    try {
+      console.log(`[ClientUserService] Unlinking user from client ${clientId}`)
 
-    return await this.clientService.getClient(clientId)
+      const clientResult = await this.clientService.updateClient(clientId, {
+        userId: "",
+        isTemporary: true,
+        status: "Pending",
+      })
+
+      if (!clientResult.success) {
+        return { success: false, error: clientResult.error }
+      }
+
+      return { success: true, message: "User unlinked from client successfully" }
+    } catch (error) {
+      console.error("[ClientUserService] Error unlinking user from client:", error)
+      return { success: false, error }
+    }
   }
 }
 
