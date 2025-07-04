@@ -1,7 +1,22 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import type { Client } from "@/types/client"
+
+export interface Client {
+  id: string
+  name: string
+  email?: string
+  status?: string
+  initials?: string
+  progress?: number
+  sessions?: { completed: number; total: number }
+  completion?: number
+  notes?: string
+  bgColor?: string
+  textColor?: string
+  lastWorkout?: { name: string; date: string; completion: number }
+  metrics?: Array<{ name: string; value: string; change: string }>
+}
 
 export function useClientDataAPI(isDemo = false) {
   const [clients, setClients] = useState<Client[]>([])
@@ -9,7 +24,7 @@ export function useClientDataAPI(isDemo = false) {
   const [error, setError] = useState<string | null>(null)
 
   // Demo clients data
-  const demoClients = [
+  const demoClients: Client[] = [
     {
       id: "1",
       name: "Salty Snack",
@@ -61,10 +76,10 @@ export function useClientDataAPI(isDemo = false) {
         const data = await response.json()
         console.log("📊 [useClientDataAPI] API response data:", {
           clientCount: data.clients?.length || 0,
-          userId: data.userId,
+          success: data.success,
         })
 
-        if (data.clients && Array.isArray(data.clients)) {
+        if (data.success && data.clients && Array.isArray(data.clients)) {
           setClients(data.clients)
           console.log("✅ [useClientDataAPI] Successfully set clients:", data.clients.length)
         } else {
@@ -86,35 +101,31 @@ export function useClientDataAPI(isDemo = false) {
   const refetch = async () => {
     if (!isDemo) {
       setLoading(true)
-      const fetchClientsFromAPI = async () => {
-        try {
-          const response = await fetch("/api/clients", {
-            method: "GET",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          })
+      try {
+        const response = await fetch("/api/clients", {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
 
-          if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`)
-          }
-
-          const data = await response.json()
-          if (data.clients && Array.isArray(data.clients)) {
-            setClients(data.clients)
-          } else {
-            setClients([])
-          }
-        } catch (err) {
-          console.error("Error refetching clients:", err)
-          setError(err instanceof Error ? err.message : "Failed to refetch clients")
-        } finally {
-          setLoading(false)
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`)
         }
-      }
 
-      await fetchClientsFromAPI()
+        const data = await response.json()
+        if (data.success && data.clients && Array.isArray(data.clients)) {
+          setClients(data.clients)
+        } else {
+          setClients([])
+        }
+      } catch (err) {
+        console.error("Error refetching clients:", err)
+        setError(err instanceof Error ? err.message : "Failed to refetch clients")
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
