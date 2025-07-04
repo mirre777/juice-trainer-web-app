@@ -1,352 +1,320 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy,
-  serverTimestamp,
-  onSnapshot,
-  where,
-} from "firebase/firestore"
-import type { User } from "firebase/auth"
-import { db } from "@/lib/firebase/firebase"
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 import { UnifiedAuthService } from "@/lib/services/unified-auth-service"
+import { createUserWithEmailAndPassword } from "firebase/auth"
+import { doc, setDoc, getDoc, updateDoc, query, where, getDocs, collection, serverTimestamp } from "firebase/firestore"
+import { auth, db } from "./firebase"
+import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 
-// UPDATED: Use UnifiedAuthService for current user operations
-export async function getCurrentUser(): Promise<User | null> {
-  console.warn("⚠️ DEPRECATED: getCurrentUser from user-service.ts. Use UnifiedAuthService.getCurrentUser() instead.")
+/**
+ * Firebase User Service
+ * Updated to use UnifiedAuthService for authentication operations
+ * Keeps user creation and management functions
+ */
 
+export interface CreateUserData {
+  email: string
+  name: string
+  password: string
+  role?: string
+  provider?: string
+  phone?: string
+}
+
+export interface UserResult {
+  success: boolean
+  userId?: string
+  user?: any
+  error?: any
+  message?: string
+}
+
+/**
+ * Create a new user with email and password
+ */
+export async function createUser(userData: CreateUserData): Promise<UserResult> {
   try {
-    const authResult = await UnifiedAuthService.getCurrentUser()
-    if (authResult.success && authResult.user) {
-      // Return Firebase User-like object for backward compatibility
-      return {
-        uid: authResult.user.uid,
-        email: authResult.user.email,
-        displayName: authResult.user.name,
-      } as User
+    console.log(`[UserService] 🚀 Creating user: ${userData.email}`)
+
+    const { email, password, name, role, provider = "email", phone } = userData
+
+    // Create Firebase Auth account
+    const [userCredential, authError] = await tryCatch(
+      () => createUserWithEmailAndPassword(auth, email, password),
+      ErrorType.AUTH_INVALID_CREDENTIALS,
+      { function: "createUser", email },
+    )
+
+    if (authError || !userCredential) {
+      return { success: false, error: authError }
     }
-    return null
-  } catch (error) {
-    console.error("[getCurrentUser] Error:", error)
-    return null
+
+    const firebaseUser = userCredential.user
+    console.log(`[UserService] ✅ Firebase Auth account created: ${firebaseUser.uid}`)
+
+    // Create user document in Firestore
+    const userDocData = {
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      role: role || "client",
+      user_type: role === "trainer" ? "web_app" : "mobile_app",
+      provider,
+      phone: phone || "",
+      hasFirebaseAuth: true,
+      firebaseUid: firebaseUser.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      status: "active",
+      ...(role === "trainer" && { subscriptionPlan: "trainer_basic" }),
+    }
+
+    const userRef = doc(db, "users", firebaseUser.uid)
+    const [, docError] = await tryCatch(() => setDoc(userRef, userDocData), ErrorType.DB_WRITE_FAILED, {
+      function: "createUser",
+      userId: firebaseUser.uid,
+    })
+
+    if (docError) {
+      // Clean up Firebase Auth account if Firestore creation fails
+      try {
+        await firebaseUser.delete()
+      } catch (cleanupError) {
+        console.error("[UserService] Failed to cleanup Firebase Auth account:", cleanupError)
+      }
+      return { success: false, error: docError }
+    }
+
+    console.log(`[UserService] ✅ User document created successfully`)
+    return {
+      success: true,
+      userId: firebaseUser.uid,
+      message: "User created successfully",
+    }
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "createUser", email: userData.email },
+      "Failed to create user",
+    )
+    logError(appError)
+    return { success: false, error: appError }
   }
 }
 
-// Get user data by ID from Firestore
-export async function getUserById(userId: string): Promise<any> {
+/**
+ * Sign up with universal invite code
+ */
+export async function signupWithUniversalCode(data: {
+  email: string
+  name: string
+  password: string
+  universalInviteCode: string
+}): Promise<UserResult> {
   try {
-    if (!userId) {
-      console.error("[getUserById] No user ID provided")
-      return null
+    console.log(`[UserService] 🎫 Signup with universal code: ${data.universalInviteCode}`)
+
+    // Create user first
+    const createResult = await createUser({
+      email: data.email,
+      name: data.name,
+      password: data.password,
+      role: undefined, // No role assigned initially
+    })
+
+    if (!createResult.success) {
+      return createResult
     }
 
-    console.log(`[getUserById] Fetching user data for ID: ${userId}`)
-    const userRef = doc(db, "users", userId)
-    const userDoc = await getDoc(userRef)
+    // Store the invitation code in user document
+    const userRef = doc(db, "users", createResult.userId!)
+    await updateDoc(userRef, {
+      universalInviteCode: data.universalInviteCode,
+      pendingApproval: true,
+      updatedAt: serverTimestamp(),
+    })
 
-    if (userDoc.exists()) {
-      const userData = userDoc.data()
-      console.log(`[getUserById] Found user data:`, {
-        id: userId,
-        name: userData.name || "NO_NAME",
-        email: userData.email || "NO_EMAIL",
-      })
-      return { id: userId, ...userData }
-    } else {
-      console.log(`[getUserById] User document does not exist for ID: ${userId}`)
-      return null
+    console.log(`[UserService] ✅ User created with universal invite code`)
+    return {
+      success: true,
+      userId: createResult.userId,
+      message: "Account created successfully. Waiting for trainer approval.",
     }
-  } catch (error) {
-    console.error(`[getUserById] Error fetching user data for ${userId}:`, error)
-    return null
+  } catch (error: any) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "signupWithUniversalCode" },
+      "Failed to signup with universal code",
+    )
+    logError(appError)
+    return { success: false, error: appError }
   }
 }
 
-// Get user by email
-export async function getUserByEmail(email: string): Promise<any> {
+/**
+ * Get user by email
+ */
+export async function getUserByEmail(email: string): Promise<{ success: boolean; user?: any; error?: any }> {
   try {
-    if (!email) {
-      console.error("[getUserByEmail] No email provided")
-      return null
-    }
+    console.log(`[UserService] 🔍 Getting user by email: ${email}`)
 
-    console.log(`[getUserByEmail] Searching for user with email: ${email}`)
     const usersRef = collection(db, "users")
     const q = query(usersRef, where("email", "==", email.toLowerCase().trim()))
 
-    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+    const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
       function: "getUserByEmail",
       email,
     })
 
-    if (error || !querySnapshot) {
-      return null
+    if (queryError || !querySnapshot) {
+      return { success: false, error: queryError }
     }
 
-    if (!querySnapshot.empty) {
-      const userDoc = querySnapshot.docs[0]
-      const userData = userDoc.data()
-      console.log(`[getUserByEmail] Found user:`, {
-        id: userDoc.id,
-        name: userData.name || "NO_NAME",
-        email: userData.email || "NO_EMAIL",
-      })
-      return { id: userDoc.id, ...userData }
+    if (querySnapshot.empty) {
+      return {
+        success: false,
+        error: createError(ErrorType.DB_DOCUMENT_NOT_FOUND, null, { email }, "User not found"),
+      }
     }
 
-    console.log(`[getUserByEmail] No user found with email: ${email}`)
-    return null
-  } catch (error) {
-    console.error(`[getUserByEmail] Error searching for user with email ${email}:`, error)
-    return null
-  }
-}
+    const userDoc = querySnapshot.docs[0]
+    const userData = userDoc.data()
 
-// UPDATED: Get current user's Firestore data using unified service
-export async function getCurrentUserData(): Promise<any> {
-  try {
-    const authResult = await UnifiedAuthService.getCurrentUser()
-    if (!authResult.success || !authResult.user) {
-      console.log("[getCurrentUserData] No authenticated user")
-      return null
+    const user = {
+      uid: userDoc.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      user_type: userData.user_type,
+      universalInviteCode: userData.universalInviteCode,
+      inviteCode: userData.inviteCode,
+      ...userData,
     }
 
-    return await getUserById(authResult.user.uid)
-  } catch (error) {
-    console.error("[getCurrentUserData] Error getting current user data:", error)
-    return null
-  }
-}
-
-// Create or update user document
-export async function createOrUpdateUser(userData: any): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!userData.id) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "createOrUpdateUser" },
-        "User ID is required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    const userRef = doc(db, "users", userData.id)
-    const [, updateError] = await tryCatch(
-      () =>
-        updateDoc(userRef, {
-          ...userData,
-          updatedAt: serverTimestamp(),
-        }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "createOrUpdateUser", userId: userData.id },
-    )
-
-    if (updateError) {
-      return { success: false, error: updateError }
-    }
-
-    return { success: true }
-  } catch (error) {
+    console.log(`[UserService] ✅ User found: ${user.email}`)
+    return { success: true, user }
+  } catch (error: any) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "createOrUpdateUser", userId: userData.id },
-      "Unexpected error creating/updating user",
+      { function: "getUserByEmail", email },
+      "Failed to get user by email",
     )
     logError(appError)
     return { success: false, error: appError }
   }
 }
 
-// Update user profile
-export async function updateUserProfile(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
+/**
+ * Get user by ID
+ */
+export async function getUserById(userId: string): Promise<{ success: boolean; user?: any; error?: any }> {
   try {
-    if (!userId) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "updateUserProfile" },
-        "User ID is required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
+    console.log(`[UserService] 🔍 Getting user by ID: ${userId}`)
 
     const userRef = doc(db, "users", userId)
-    const [, updateError] = await tryCatch(
-      () =>
-        updateDoc(userRef, {
-          ...updates,
-          updatedAt: serverTimestamp(),
-        }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "updateUserProfile", userId },
-    )
-
-    if (updateError) {
-      return { success: false, error: updateError }
-    }
-
-    return { success: true }
-  } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "updateUserProfile", userId },
-      "Unexpected error updating user profile",
-    )
-    logError(appError)
-    return { success: false, error: appError }
-  }
-}
-
-// Store invitation code for user
-export async function storeInvitationCode(
-  userId: string,
-  invitationCode: string,
-): Promise<{ success: boolean; error?: any }> {
-  try {
-    console.log(`[storeInvitationCode] Storing invitation code ${invitationCode} for user ${userId}`)
-
-    const result = await updateUserProfile(userId, {
-      inviteCode: invitationCode,
-    })
-
-    if (result.success) {
-      console.log(`[storeInvitationCode] ✅ Successfully stored invitation code`)
-    } else {
-      console.error(`[storeInvitationCode] ❌ Failed to store invitation code:`, result.error)
-    }
-
-    return result
-  } catch (error) {
-    console.error(`[storeInvitationCode] Error storing invitation code:`, error)
-    return { success: false, error }
-  }
-}
-
-// Update user with new data
-export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
-  return updateUserProfile(userId, updates)
-}
-
-// Get all users (admin function)
-export async function getAllUsers(): Promise<any[]> {
-  try {
-    const usersRef = collection(db, "users")
-    const q = query(usersRef, orderBy("createdAt", "desc"))
-
-    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      function: "getAllUsers",
-    })
-
-    if (error || !querySnapshot) {
-      return []
-    }
-
-    const users: any[] = []
-    querySnapshot.forEach((doc) => {
-      users.push({ id: doc.id, ...doc.data() })
-    })
-
-    return users
-  } catch (error) {
-    console.error("Error getting all users:", error)
-    return []
-  }
-}
-
-// Delete user
-export async function deleteUser(userId: string): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!userId) {
-      const error = createError(ErrorType.API_MISSING_PARAMS, null, { function: "deleteUser" }, "User ID is required")
-      logError(error)
-      return { success: false, error }
-    }
-
-    const userRef = doc(db, "users", userId)
-    const [, deleteError] = await tryCatch(() => deleteDoc(userRef), ErrorType.DB_DELETE_FAILED, {
-      function: "deleteUser",
+    const [userDoc, docError] = await tryCatch(() => getDoc(userRef), ErrorType.DB_READ_FAILED, {
+      function: "getUserById",
       userId,
     })
 
-    if (deleteError) {
-      return { success: false, error: deleteError }
+    if (docError || !userDoc) {
+      return { success: false, error: docError }
     }
 
-    return { success: true }
-  } catch (error) {
+    if (!userDoc.exists()) {
+      return {
+        success: false,
+        error: createError(ErrorType.DB_DOCUMENT_NOT_FOUND, null, { userId }, "User not found"),
+      }
+    }
+
+    const userData = userDoc.data()
+    const user = {
+      uid: userId,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      user_type: userData.user_type,
+      universalInviteCode: userData.universalInviteCode,
+      inviteCode: userData.inviteCode,
+      ...userData,
+    }
+
+    console.log(`[UserService] ✅ User retrieved: ${user.email}`)
+    return { success: true, user }
+  } catch (error: any) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "deleteUser", userId },
-      "Unexpected error deleting user",
+      { function: "getUserById", userId },
+      "Failed to get user by ID",
     )
     logError(appError)
     return { success: false, error: appError }
   }
 }
 
-// Subscribe to user changes
-export function subscribeToUser(userId: string, callback: (userData: any, error?: any) => void) {
-  if (!userId) {
-    const error = createError(
-      ErrorType.API_MISSING_PARAMS,
-      null,
-      { function: "subscribeToUser" },
-      "User ID is required for subscription",
-    )
-    logError(error)
-    callback(null, error)
-    return () => {}
-  }
-
+/**
+ * Update user profile
+ */
+export async function updateUserProfile(userId: string, updates: any): Promise<UserResult> {
   try {
+    console.log(`[UserService] 📝 Updating user profile: ${userId}`)
+
     const userRef = doc(db, "users", userId)
+    const updateData = {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    }
 
-    const unsubscribe = onSnapshot(
-      userRef,
-      (doc) => {
-        if (doc.exists()) {
-          const userData = { id: doc.id, ...doc.data() }
-          callback(userData)
-        } else {
-          callback(null)
-        }
-      },
-      (error) => {
-        const appError = createError(
-          ErrorType.DB_READ_FAILED,
-          error,
-          { function: "subscribeToUser", userId },
-          "Error in user subscription",
-        )
-        logError(appError)
-        callback(null, appError)
-      },
-    )
+    const [, updateError] = await tryCatch(() => updateDoc(userRef, updateData), ErrorType.DB_WRITE_FAILED, {
+      function: "updateUserProfile",
+      userId,
+    })
 
-    return unsubscribe
-  } catch (error) {
+    if (updateError) {
+      return { success: false, error: updateError }
+    }
+
+    console.log(`[UserService] ✅ User profile updated successfully`)
+    return { success: true, message: "Profile updated successfully" }
+  } catch (error: any) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "subscribeToUser", userId },
-      "Unexpected error setting up user subscription",
+      { function: "updateUserProfile", userId },
+      "Failed to update user profile",
     )
     logError(appError)
-    callback(null, appError)
-    return () => {}
+    return { success: false, error: appError }
   }
 }
 
-// Export UnifiedAuthService for easy access
-export { UnifiedAuthService }
+/**
+ * @deprecated Use UnifiedAuthService.getCurrentUser() instead
+ */
+export async function getCurrentUser() {
+  console.warn(
+    "⚠️ [DEPRECATED] getCurrentUser() from user-service is deprecated. Use UnifiedAuthService.getCurrentUser() instead.",
+  )
+  return await UnifiedAuthService.getCurrentUser()
+}
+
+/**
+ * @deprecated Use UnifiedAuthService.signIn() instead
+ */
+export async function signIn(email: string, password: string, invitationCode?: string) {
+  console.warn("⚠️ [DEPRECATED] signIn() from user-service is deprecated. Use UnifiedAuthService.signIn() instead.")
+  return await UnifiedAuthService.signIn(email, password, invitationCode)
+}
+
+/**
+ * @deprecated Use UnifiedAuthService.signOut() instead
+ */
+export async function signOut() {
+  console.warn("⚠️ [DEPRECATED] signOut() from user-service is deprecated. Use UnifiedAuthService.signOut() instead.")
+  return await UnifiedAuthService.signOut()
+}
+
+// Re-export UnifiedAuthService functions for backward compatibility
+export const UnifiedAuth = UnifiedAuthService

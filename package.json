@@ -44,6 +44,7 @@
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "bcryptjs": "^2.4.3",
+    "child_process": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
