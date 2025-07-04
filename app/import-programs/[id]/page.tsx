@@ -3,6 +3,7 @@ import { db } from "@/lib/firebase/firebase"
 import { notFound } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import ReviewProgramClient from "./review-program-client"
+import { cookies } from "next/headers"
 
 interface PageProps {
   params: {
@@ -10,14 +11,45 @@ interface PageProps {
   }
 }
 
-async function fetchClients() {
+async function getTrainerIdFromAuth(): Promise<string | null> {
   try {
-    const clientsRef = collection(db, "clients")
+    const cookieStore = cookies()
+    const authToken = cookieStore.get("auth-token")
+
+    if (!authToken) {
+      return null
+    }
+
+    // This is a simplified approach - in a real app you'd verify the JWT token
+    // For now, we'll try to extract trainer ID from the token or make an API call
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/auth/me`, {
+      headers: {
+        Cookie: `auth-token=${authToken.value}`,
+      },
+    })
+
+    if (response.ok) {
+      const userData = await response.json()
+      return userData.uid || userData.id
+    }
+
+    return null
+  } catch (error) {
+    console.error("Error getting trainer ID:", error)
+    return null
+  }
+}
+
+async function fetchClientsForTrainer(trainerId: string) {
+  try {
+    const clientsRef = collection(db, "users", trainerId, "clients")
     const snapshot = await getDocs(clientsRef)
 
     const clients = snapshot.docs.map((doc) => ({
       id: doc.id,
-      ...doc.data(),
+      name: doc.data().name || "Unnamed Client",
+      email: doc.data().email || "",
+      status: doc.data().status || "Active",
     }))
 
     return clients
@@ -54,8 +86,13 @@ async function ReviewProgramContent({ params }: PageProps) {
     console.log("Program weeks:", importData.program?.weeks)
 
     // Fetch client list for program assignment
-    const clients = await fetchClients()
-    console.log("Server-side clients fetched:", clients.length)
+    const trainerId = await getTrainerIdFromAuth()
+    let clients = []
+
+    if (trainerId) {
+      clients = await fetchClientsForTrainer(trainerId)
+      console.log("Server-side clients fetched:", clients.length)
+    }
 
     // Use appropriate component based on periodization
     return <ReviewProgramClient importData={importData} initialClients={clients} />
