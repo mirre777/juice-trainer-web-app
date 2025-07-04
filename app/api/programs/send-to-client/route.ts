@@ -1,69 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { programConversionService } from "@/lib/firebase/program-conversion-service"
-import { getCurrentUser } from "@/lib/auth/auth-service"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("[send-to-client] API endpoint called")
-
-    // Get current user (trainer)
-    const user = await getCurrentUser()
-    if (!user) {
-      console.log("[send-to-client] Unauthorized - no user found")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const trainerId = user.uid
-    console.log(`[send-to-client] Trainer ID: ${trainerId}`)
+    console.log("🚀 API Route: /api/programs/send-to-client called")
 
     const body = await request.json()
-    const { programData, clientId, message } = body
+    console.log("📝 Request body:", JSON.stringify(body, null, 2))
 
-    console.log(`[send-to-client] Request body:`, {
-      programTitle: programData?.program_title,
-      clientId,
-      hasMessage: !!message,
-    })
+    const { clientId, programData, customMessage } = body
 
     // Validate required fields
-    if (!programData) {
-      return NextResponse.json({ error: "Program data is required" }, { status: 400 })
-    }
-
     if (!clientId) {
+      console.error("❌ Missing clientId")
       return NextResponse.json({ error: "Client ID is required" }, { status: 400 })
     }
 
-    // Get the client's actual user ID
-    const clientUserId = await programConversionService.getClientUserId(trainerId, clientId)
-
-    if (!clientUserId) {
-      console.log(`[send-to-client] Client not found or not linked: ${clientId}`)
-      return NextResponse.json(
-        { error: "Client not found or client does not have a linked user account" },
-        { status: 404 },
-      )
+    if (!programData) {
+      console.error("❌ Missing programData")
+      return NextResponse.json({ error: "Program data is required" }, { status: 400 })
     }
 
-    console.log(`[send-to-client] Client user ID: ${clientUserId}`)
+    console.log("✅ Validation passed, calling program conversion service...")
+    console.log("🎯 Client ID:", clientId)
+    console.log("📊 Program name:", programData.name)
+    console.log("📅 Duration:", programData.duration_weeks, "weeks")
+    console.log("🏋️ Routines count:", programData.routines?.length || 0)
 
-    // Convert and send the program
-    const programId = await programConversionService.convertAndSendProgram(programData, clientUserId)
+    // Call the program conversion service
+    const result = await programConversionService.sendProgramToClient(clientId, programData, customMessage)
 
-    console.log(`[send-to-client] ✅ Program sent successfully. Program ID: ${programId}`)
-
-    // TODO: Send notification to client (email/push notification)
-    // if (message) {
-    //   await notificationService.sendProgramNotification(clientUserId, programData.program_title, message)
-    // }
+    console.log("✅ Program conversion service completed successfully")
+    console.log("📋 Result:", JSON.stringify(result, null, 2))
 
     return NextResponse.json({
       success: true,
-      programId,
-      message: "Program sent successfully to client",
+      message: "Program sent to client successfully",
+      data: result,
     })
   } catch (error) {
-    console.error("[send-to-client] Error:", error)
-    return NextResponse.json({ error: "Failed to send program to client", details: error.message }, { status: 500 })
+    console.error("❌ Error in /api/programs/send-to-client:", error)
+    console.error("📍 Error stack:", error instanceof Error ? error.stack : "No stack trace")
+
+    return NextResponse.json(
+      {
+        error: "Failed to send program to client",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
