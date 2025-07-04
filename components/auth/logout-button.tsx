@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
-import { useUnifiedAuth } from "@/hooks/use-unified-auth"
+import { useRouter } from "next/navigation"
 
 interface LogoutButtonProps {
   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
@@ -20,7 +20,7 @@ export function LogoutButton({
   showConfirmation = false,
   showIcon = false,
 }: LogoutButtonProps) {
-  const { logout } = useUnifiedAuth()
+  const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLogout = async () => {
@@ -32,20 +32,69 @@ export function LogoutButton({
     setIsLoggingOut(true)
 
     try {
-      console.log("[LogoutButton] Starting logout process...")
-      const success = await logout()
+      const response = await fetch("/api/auth/logout", {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
 
-      if (success) {
-        console.log("[LogoutButton] Logout successful")
+      if (response.ok) {
+        // Clear any local storage
+        if (typeof window !== "undefined") {
+          localStorage.clear()
+          sessionStorage.clear()
+        }
+
         if (onClick) {
           onClick()
         }
+
+        // Force redirect to login page
+        window.location.href = "/login"
       } else {
-        console.error("[LogoutButton] Logout failed")
+        console.error("[LogoutButton] Error during logout:", response.statusText)
         setIsLoggingOut(false)
       }
     } catch (error) {
-      console.error("[LogoutButton] Logout error:", error)
+      console.error("[LogoutButton] Error during logout:", error)
+      setIsLoggingOut(false)
+    }
+  }
+
+  const performLogout = async () => {
+    console.log("[LogoutButton] performLogout called")
+    setIsLoggingOut(true)
+
+    try {
+      console.log("[LogoutButton] Calling logout API...")
+      const response = await fetch("/api/auth/logout", {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      console.log("[LogoutButton] Logout API response:", response.status)
+
+      if (response.ok) {
+        console.log("[LogoutButton] Logout process finished, isLoggingOut set to false")
+        setIsLoggingOut(false)
+
+        if (onClick) {
+          onClick()
+        }
+
+        // Redirect to login page
+        router.push("/login")
+      } else {
+        console.error("[LogoutButton] Error during logout:", response.statusText)
+        setIsLoggingOut(false)
+      }
+    } catch (error) {
+      console.error("[LogoutButton] Error during logout:", error)
       setIsLoggingOut(false)
     }
   }

@@ -1,59 +1,46 @@
-// Unified Client Service - Single source of truth for all client operations
+/**
+ * Unified Client Service
+ *
+ * Single source of truth for all client operations across the app.
+ * Uses API with cookies for authentication consistently.
+ */
 
 import type { Client } from "@/types/client"
 import { authService } from "./unified-auth-service"
 
-export interface ClientsState {
-  clients: Client[]
-  loading: boolean
-  error: string | null
+export interface ClientResult {
+  success: boolean
+  clients?: Client[]
+  client?: Client
+  clientId?: string
+  error?: string
+}
+
+export interface AddClientData {
+  name: string
+  email?: string
+  phone?: string
+  goal?: string
+  program?: string
+  notes?: string
 }
 
 class UnifiedClientService {
-  private static instance: UnifiedClientService
-  private clients: Client[] = []
-  private loading = false
-  private error: string | null = null
-  private listeners: Set<(state: ClientsState) => void> = new Set()
-  private cache: Map<string, { data: Client[]; timestamp: number }> = new Map()
-  private readonly CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+  private clientsCache: Client[] = []
+  private lastFetchTime: Date | null = null
 
-  private constructor() {}
-
-  public static getInstance(): UnifiedClientService {
-    if (!UnifiedClientService.instance) {
-      UnifiedClientService.instance = new UnifiedClientService()
-    }
-    return UnifiedClientService.instance
-  }
-
-  // Fetch clients using unified auth
-  public async fetchClients(forceRefresh = false): Promise<Client[]> {
+  /**
+   * Fetch all clients for the current user
+   */
+  async fetchClients(): Promise<ClientResult> {
     try {
-      console.log("[UnifiedClientService] Fetching clients...")
+      console.log("[UnifiedClientService] Fetching clients via API")
 
-      // Get current user from auth service
-      const user = await authService.getCurrentUser()
-      if (!user) {
-        throw new Error("User not authenticated")
+      // Ensure user is authenticated
+      const authResult = await authService.getCurrentUser()
+      if (!authResult.success) {
+        return { success: false, error: "Authentication required" }
       }
-
-      const cacheKey = `clients_${user.uid}`
-
-      // Check cache first (unless force refresh)
-      if (!forceRefresh && this.cache.has(cacheKey)) {
-        const cached = this.cache.get(cacheKey)!
-        const isExpired = Date.now() - cached.timestamp > this.CACHE_DURATION
-
-        if (!isExpired) {
-          console.log("[UnifiedClientService] Returning cached clients")
-          this.setClients(cached.data)
-          return cached.data
-        }
-      }
-
-      this.setLoading(true)
-      this.setError(null)
 
       const response = await fetch("/api/clients", {
         method: "GET",
@@ -63,43 +50,62 @@ class UnifiedClientService {
         },
       })
 
+      console.log("[UnifiedClientService] API response status:", response.status)
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch clients: ${response.status} ${response.statusText}`)
+        const errorText = await response.text()
+        console.error("[UnifiedClientService] API error:", errorText)
+        return { success: false, error: `Failed to fetch clients: ${response.status}` }
       }
 
       const data = await response.json()
-      const clients = data.clients || []
-
-      console.log("[UnifiedClientService] Fetched", clients.length, "clients")
-
-      // Update cache
-      this.cache.set(cacheKey, {
-        data: clients,
-        timestamp: Date.now(),
+      console.log("[UnifiedClientService] API response data:", {
+        success: data.success,
+        clientCount: data.clients?.length || 0,
       })
 
-      this.setClients(clients)
-      return clients
+      if (data.success && data.clients && Array.isArray(data.clients)) {
+        this.clientsCache = data.clients
+        this.lastFetchTime = new Date()
+
+        console.log("[UnifiedClientService] Successfully fetched clients:", data.clients.length)
+        return { success: true, clients: data.clients }
+      } else {
+        console.log("[UnifiedClientService] No clients in response")
+        this.clientsCache = []
+        return { success: true, clients: [] }
+      }
     } catch (error) {
       console.error("[UnifiedClientService] Error fetching clients:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch clients"
-      this.setError(errorMessage)
-      return []
-    } finally {
-      this.setLoading(false)
+      return { success: false, error: "Failed to fetch clients" }
     }
   }
 
-  // Add client
-  public async addClient(
-    clientData: Partial<Client>,
-  ): Promise<{ success: boolean; clientId?: string; error?: string }> {
-    try {
-      console.log("[UnifiedClientService] Adding client:", clientData.name)
+  /**
+   * Get cached clients (if available)
+   */
+  getCachedClients(): Client[] {
+    return this.clientsCache
+  }
 
-      const user = await authService.getCurrentUser()
-      if (!user) {
-        throw new Error("User not authenticated")
+  /**
+   * Get last fetch time
+   */
+  getLastFetchTime(): Date | null {
+    return this.lastFetchTime
+  }
+
+  /**
+   * Add a new client
+   */
+  async addClient(clientData: AddClientData): Promise<ClientResult> {
+    try {
+      console.log("[UnifiedClientService] Adding new client:", clientData.name)
+
+      // Ensure user is authenticated
+      const authResult = await authService.getCurrentUser()
+      if (!authResult.success) {
+        return { success: false, error: "Authentication required" }
       }
 
       const response = await fetch("/api/clients", {
@@ -111,34 +117,78 @@ class UnifiedClientService {
         body: JSON.stringify(clientData),
       })
 
+      const data = await response.json()
+      console.log("[UnifiedClientService] Add client response:", data)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Failed to add client: ${response.status}`)
+        console.error("[UnifiedClientService] Failed to add client:", data.error)
+        return { success: false, error: data.error || "Failed to add client" }
       }
 
-      const result = await response.json()
+      if (data.success || data.clientId) {
+        console.log("[UnifiedClientService] Client added successfully:", data.clientId)
 
-      // Refresh clients after adding
-      await this.fetchClients(true)
+        // Refresh clients cache
+        await this.fetchClients()
 
-      console.log("[UnifiedClientService] Client added successfully:", result.clientId)
-      return { success: true, clientId: result.clientId }
+        return { success: true, clientId: data.clientId }
+      } else {
+        return { success: false, error: "Failed to add client" }
+      }
     } catch (error) {
       console.error("[UnifiedClientService] Error adding client:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to add client"
-      return { success: false, error: errorMessage }
+      return { success: false, error: "Failed to add client" }
     }
   }
 
-  // Update client
-  public async updateClient(clientId: string, updates: Partial<Client>): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Get a single client by ID
+   */
+  async getClient(clientId: string): Promise<ClientResult> {
+    try {
+      console.log("[UnifiedClientService] Getting client:", clientId)
+
+      // First check cache
+      const cachedClient = this.clientsCache.find((c) => c.id === clientId)
+      if (cachedClient) {
+        console.log("[UnifiedClientService] Found client in cache")
+        return { success: true, client: cachedClient }
+      }
+
+      // If not in cache, fetch from API
+      const response = await fetch(`/api/clients/${clientId}`, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        console.error("[UnifiedClientService] Failed to get client:", response.status)
+        return { success: false, error: "Client not found" }
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.client) {
+        console.log("[UnifiedClientService] Client fetched successfully")
+        return { success: true, client: data.client }
+      } else {
+        return { success: false, error: "Client not found" }
+      }
+    } catch (error) {
+      console.error("[UnifiedClientService] Error getting client:", error)
+      return { success: false, error: "Failed to get client" }
+    }
+  }
+
+  /**
+   * Update a client
+   */
+  async updateClient(clientId: string, updates: Partial<Client>): Promise<ClientResult> {
     try {
       console.log("[UnifiedClientService] Updating client:", clientId)
-
-      const user = await authService.getCurrentUser()
-      if (!user) {
-        throw new Error("User not authenticated")
-      }
 
       const response = await fetch(`/api/clients/${clientId}`, {
         method: "PUT",
@@ -149,32 +199,35 @@ class UnifiedClientService {
         body: JSON.stringify(updates),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Failed to update client: ${response.status}`)
+        console.error("[UnifiedClientService] Failed to update client:", data.error)
+        return { success: false, error: data.error || "Failed to update client" }
       }
 
-      // Refresh clients after updating
-      await this.fetchClients(true)
+      if (data.success) {
+        console.log("[UnifiedClientService] Client updated successfully")
 
-      console.log("[UnifiedClientService] Client updated successfully")
-      return { success: true }
+        // Refresh clients cache
+        await this.fetchClients()
+
+        return { success: true }
+      } else {
+        return { success: false, error: "Failed to update client" }
+      }
     } catch (error) {
       console.error("[UnifiedClientService] Error updating client:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to update client"
-      return { success: false, error: errorMessage }
+      return { success: false, error: "Failed to update client" }
     }
   }
 
-  // Delete client
-  public async deleteClient(clientId: string): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Delete a client
+   */
+  async deleteClient(clientId: string): Promise<ClientResult> {
     try {
       console.log("[UnifiedClientService] Deleting client:", clientId)
-
-      const user = await authService.getCurrentUser()
-      if (!user) {
-        throw new Error("User not authenticated")
-      }
 
       const response = await fetch(`/api/clients/${clientId}`, {
         method: "DELETE",
@@ -184,87 +237,48 @@ class UnifiedClientService {
         },
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Failed to delete client: ${response.status}`)
+        console.error("[UnifiedClientService] Failed to delete client:", data.error)
+        return { success: false, error: data.error || "Failed to delete client" }
       }
 
-      // Refresh clients after deleting
-      await this.fetchClients(true)
+      if (data.success) {
+        console.log("[UnifiedClientService] Client deleted successfully")
 
-      console.log("[UnifiedClientService] Client deleted successfully")
-      return { success: true }
+        // Remove from cache
+        this.clientsCache = this.clientsCache.filter((c) => c.id !== clientId)
+
+        return { success: true }
+      } else {
+        return { success: false, error: "Failed to delete client" }
+      }
     } catch (error) {
       console.error("[UnifiedClientService] Error deleting client:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete client"
-      return { success: false, error: errorMessage }
+      return { success: false, error: "Failed to delete client" }
     }
   }
 
-  // Get current clients (from local state)
-  public getClients(): Client[] {
-    return this.clients
+  /**
+   * Clear cached data
+   */
+  clearCache(): void {
+    this.clientsCache = []
+    this.lastFetchTime = null
   }
 
-  // Clear cache
-  public clearCache(): void {
-    this.cache.clear()
-    console.log("[UnifiedClientService] Cache cleared")
-  }
-
-  // State management
-  private setClients(clients: Client[]): void {
-    this.clients = clients
-    this.notifyListeners()
-  }
-
-  private setLoading(loading: boolean): void {
-    this.loading = loading
-    this.notifyListeners()
-  }
-
-  private setError(error: string | null): void {
-    this.error = error
-    this.notifyListeners()
-  }
-
-  private notifyListeners(): void {
-    const state: ClientsState = {
-      clients: this.clients,
-      loading: this.loading,
-      error: this.error,
-    }
-    this.listeners.forEach((listener) => listener(state))
-  }
-
-  // Subscription methods for React components
-  public subscribe(listener: (state: ClientsState) => void): () => void {
-    this.listeners.add(listener)
-
-    // Immediately call with current state
-    listener({
-      clients: this.clients,
-      loading: this.loading,
-      error: this.error,
-    })
-
-    // Return unsubscribe function
-    return () => {
-      this.listeners.delete(listener)
-    }
-  }
-
-  public getState(): ClientsState {
-    return {
-      clients: this.clients,
-      loading: this.loading,
-      error: this.error,
-    }
+  /**
+   * Refresh clients data
+   */
+  async refresh(): Promise<ClientResult> {
+    this.clearCache()
+    return await this.fetchClients()
   }
 }
 
 // Export singleton instance
-export const clientService = UnifiedClientService.getInstance()
+export const clientService = new UnifiedClientService()
 
-// Export default for easier importing
-export default clientService
+// Export class for testing
+export { UnifiedClientService }

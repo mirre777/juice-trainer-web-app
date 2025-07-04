@@ -1,4 +1,9 @@
-// Unified Authentication Service - Single source of truth for all auth operations
+/**
+ * Unified Authentication Service
+ *
+ * Single source of truth for all authentication operations across the app.
+ * Uses cookie-based authentication consistently.
+ */
 
 export interface User {
   uid: string
@@ -10,134 +15,125 @@ export interface User {
   inviteCode?: string
 }
 
-export interface AuthState {
-  user: User | null
-  loading: boolean
-  error: string | null
+export interface AuthResult {
+  success: boolean
+  user?: User
+  error?: string
 }
 
 class UnifiedAuthService {
-  private static instance: UnifiedAuthService
   private currentUser: User | null = null
-  private loading = true
-  private error: string | null = null
-  private listeners: Set<(state: AuthState) => void> = new Set()
+  private isInitialized = false
 
-  private constructor() {
-    // Initialize auth state on creation
-    this.initializeAuth()
-  }
-
-  public static getInstance(): UnifiedAuthService {
-    if (!UnifiedAuthService.instance) {
-      UnifiedAuthService.instance = new UnifiedAuthService()
-    }
-    return UnifiedAuthService.instance
-  }
-
-  // Initialize authentication state
-  private async initializeAuth(): Promise<void> {
+  /**
+   * Get current user - always uses API with cookies
+   */
+  async getCurrentUser(): Promise<AuthResult> {
     try {
-      console.log("[UnifiedAuthService] Initializing auth state...")
-      this.setLoading(true)
-
-      const user = await this.fetchCurrentUser()
-      this.setUser(user)
-      this.setError(null)
-    } catch (error) {
-      console.error("[UnifiedAuthService] Failed to initialize auth:", error)
-      this.setError("Failed to initialize authentication")
-      this.setUser(null)
-    } finally {
-      this.setLoading(false)
-    }
-  }
-
-  // Fetch current user from API (single source of truth)
-  private async fetchCurrentUser(): Promise<User | null> {
-    try {
-      console.log("[UnifiedAuthService] Fetching current user from API...")
+      console.log("[UnifiedAuthService] Getting current user via API")
 
       const response = await fetch("/api/auth/me", {
-        method: "GET",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
       })
 
-      if (response.status === 401) {
-        console.log("[UnifiedAuthService] User not authenticated")
-        return null
-      }
-
       if (!response.ok) {
-        console.error("[UnifiedAuthService] API error:", response.status, response.statusText)
-        throw new Error(`Authentication API error: ${response.status}`)
+        console.log("[UnifiedAuthService] User not authenticated")
+        this.currentUser = null
+        return { success: false, error: "Not authenticated" }
       }
 
       const userData = await response.json()
-      console.log("[UnifiedAuthService] User authenticated:", {
-        uid: userData.uid,
-        email: userData.email,
-        name: userData.name,
-        role: userData.role,
-      })
+      console.log("[UnifiedAuthService] User data received:", userData)
 
-      return userData
+      this.currentUser = {
+        uid: userData.uid,
+        email: userData.email || "",
+        name: userData.name || "",
+        role: userData.role,
+        user_type: userData.user_type,
+        universalInviteCode: userData.universalInviteCode || "",
+        inviteCode: userData.inviteCode || "",
+      }
+
+      this.isInitialized = true
+      return { success: true, user: this.currentUser }
     } catch (error) {
-      console.error("[UnifiedAuthService] Error fetching current user:", error)
-      throw error
+      console.error("[UnifiedAuthService] Error getting current user:", error)
+      this.currentUser = null
+      return { success: false, error: "Failed to get user data" }
     }
   }
 
-  // Public methods
-  public async getCurrentUser(): Promise<User | null> {
-    if (this.loading) {
-      // Wait for initialization to complete
-      await new Promise((resolve) => {
-        const checkLoading = () => {
-          if (!this.loading) {
-            resolve(void 0)
-          } else {
-            setTimeout(checkLoading, 50)
-          }
-        }
-        checkLoading()
-      })
-    }
+  /**
+   * Check if user is authenticated
+   */
+  async isAuthenticated(): Promise<boolean> {
+    const result = await this.getCurrentUser()
+    return result.success
+  }
+
+  /**
+   * Check if user has required role
+   */
+  async hasRole(requiredRole: string): Promise<boolean> {
+    const result = await this.getCurrentUser()
+    if (!result.success || !result.user) return false
+
+    return result.user.role === requiredRole
+  }
+
+  /**
+   * Get cached user (if available)
+   */
+  getCachedUser(): User | null {
     return this.currentUser
   }
 
-  public async refreshUser(): Promise<User | null> {
+  /**
+   * Login with email and password
+   */
+  async login(email: string, password: string, invitationCode?: string): Promise<AuthResult> {
     try {
-      this.setLoading(true)
-      const user = await this.fetchCurrentUser()
-      this.setUser(user)
-      this.setError(null)
-      return user
+      console.log("[UnifiedAuthService] Logging in user:", email)
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          invitationCode,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        console.error("[UnifiedAuthService] Login failed:", data.error)
+        return { success: false, error: data.error || "Login failed" }
+      }
+
+      console.log("[UnifiedAuthService] Login successful")
+
+      // Refresh user data after successful login
+      return await this.getCurrentUser()
     } catch (error) {
-      console.error("[UnifiedAuthService] Error refreshing user:", error)
-      this.setError("Failed to refresh user")
-      return null
-    } finally {
-      this.setLoading(false)
+      console.error("[UnifiedAuthService] Login error:", error)
+      return { success: false, error: "Login failed" }
     }
   }
 
-  public async isAuthenticated(): Promise<boolean> {
-    const user = await this.getCurrentUser()
-    return user !== null
-  }
-
-  public async getUserRole(): Promise<string | null> {
-    const user = await this.getCurrentUser()
-    return user?.role || null
-  }
-
-  public async logout(): Promise<boolean> {
+  /**
+   * Logout user
+   */
+  async logout(): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log("[UnifiedAuthService] Logging out...")
+      console.log("[UnifiedAuthService] Logging out user")
 
       const response = await fetch("/api/auth/logout", {
         method: "GET",
@@ -148,81 +144,31 @@ class UnifiedAuthService {
       })
 
       if (response.ok) {
-        // Clear local state
-        this.setUser(null)
-        this.setError(null)
-
-        // Clear browser storage
-        if (typeof window !== "undefined") {
-          localStorage.clear()
-          sessionStorage.clear()
-        }
-
+        this.currentUser = null
+        this.isInitialized = false
         console.log("[UnifiedAuthService] Logout successful")
-        return true
+        return { success: true }
       } else {
         console.error("[UnifiedAuthService] Logout failed:", response.statusText)
-        return false
+        return { success: false, error: "Logout failed" }
       }
     } catch (error) {
       console.error("[UnifiedAuthService] Logout error:", error)
-      return false
+      return { success: false, error: "Logout failed" }
     }
   }
 
-  // State management
-  private setUser(user: User | null): void {
-    this.currentUser = user
-    this.notifyListeners()
-  }
-
-  private setLoading(loading: boolean): void {
-    this.loading = loading
-    this.notifyListeners()
-  }
-
-  private setError(error: string | null): void {
-    this.error = error
-    this.notifyListeners()
-  }
-
-  private notifyListeners(): void {
-    const state: AuthState = {
-      user: this.currentUser,
-      loading: this.loading,
-      error: this.error,
-    }
-    this.listeners.forEach((listener) => listener(state))
-  }
-
-  // Subscription methods for React components
-  public subscribe(listener: (state: AuthState) => void): () => void {
-    this.listeners.add(listener)
-
-    // Immediately call with current state
-    listener({
-      user: this.currentUser,
-      loading: this.loading,
-      error: this.error,
-    })
-
-    // Return unsubscribe function
-    return () => {
-      this.listeners.delete(listener)
-    }
-  }
-
-  public getState(): AuthState {
-    return {
-      user: this.currentUser,
-      loading: this.loading,
-      error: this.error,
-    }
+  /**
+   * Clear cached user data
+   */
+  clearCache(): void {
+    this.currentUser = null
+    this.isInitialized = false
   }
 }
 
 // Export singleton instance
-export const authService = UnifiedAuthService.getInstance()
+export const authService = new UnifiedAuthService()
 
-// Export default for easier importing
-export default authService
+// Export class for testing
+export { UnifiedAuthService }
