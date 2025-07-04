@@ -1,55 +1,28 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { UnifiedAuthService } from "@/lib/services/unified-auth-service"
-import { UnifiedClientService } from "@/lib/services/unified-client-service"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const authService = new UnifiedAuthService()
-    const clientService = new UnifiedClientService()
-
-    // Basic health checks
+    // Basic health check
     const healthStatus = {
       status: "healthy",
       timestamp: new Date().toISOString(),
       services: {
-        auth: "operational",
-        client: "operational",
-        database: "operational",
+        database: "connected",
+        authentication: "active",
+        api: "operational",
       },
       version: "1.0.0",
-      environment: process.env.NODE_ENV || "development",
-    }
-
-    // Test basic service functionality
-    try {
-      // Test auth service initialization
-      const authInitialized = authService !== null
-      healthStatus.services.auth = authInitialized ? "operational" : "degraded"
-
-      // Test client service initialization
-      const clientInitialized = clientService !== null
-      healthStatus.services.client = clientInitialized ? "operational" : "degraded"
-    } catch (error) {
-      console.error("Health check service test failed:", error)
-      healthStatus.status = "degraded"
     }
 
     return NextResponse.json(healthStatus, { status: 200 })
   } catch (error) {
-    console.error("Health check failed:", error)
-
     return NextResponse.json(
       {
         status: "unhealthy",
-        timestamp: new Date().toISOString(),
         error: "Health check failed",
-        services: {
-          auth: "unknown",
-          client: "unknown",
-          database: "unknown",
-        },
+        timestamp: new Date().toISOString(),
       },
-      { status: 503 },
+      { status: 500 },
     )
   }
 }

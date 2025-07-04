@@ -1,117 +1,101 @@
 import { UnifiedAuthService } from "../services/unified-auth-service"
 import { db } from "./firebase"
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore"
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore"
 
-export interface UserProfile {
+export interface UserData {
   uid: string
   email: string
-  displayName?: string
-  role: "trainer" | "client" | "admin"
+  name: string
+  role: string
   createdAt: Date
   updatedAt: Date
-  isApproved?: boolean
-  trainerCode?: string
 }
 
+/**
+ * @deprecated Use UnifiedAuthService for auth operations
+ * Firebase User Service for user document operations
+ */
 export class UserService {
-  private authService = new UnifiedAuthService()
+  private authService = UnifiedAuthService
 
-  async createUserProfile(uid: string, userData: Partial<UserProfile>): Promise<void> {
+  async createUser(uid: string, userData: Partial<UserData>) {
     try {
       const userRef = doc(db, "users", uid)
-      const now = new Date()
-
-      const profile: UserProfile = {
-        uid,
-        email: userData.email || "",
-        displayName: userData.displayName,
-        role: userData.role || "trainer",
-        createdAt: now,
-        updatedAt: now,
-        isApproved: userData.role === "trainer" ? false : true,
+      await setDoc(userRef, {
         ...userData,
-      }
-
-      await setDoc(userRef, profile)
+        uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      return { success: true }
     } catch (error) {
-      console.error("Error creating user profile:", error)
-      throw error
+      console.error("Error creating user:", error)
+      return { success: false, error }
     }
   }
 
-  async getUserProfile(uid: string): Promise<UserProfile | null> {
+  async getUserById(uid: string) {
     try {
       const userRef = doc(db, "users", uid)
-      const userSnap = await getDoc(userRef)
+      const userDoc = await getDoc(userRef)
 
-      if (userSnap.exists()) {
-        const data = userSnap.data()
-        return {
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as UserProfile
+      if (userDoc.exists()) {
+        return { success: true, user: userDoc.data() }
       }
 
-      return null
+      return { success: false, error: "User not found" }
     } catch (error) {
-      console.error("Error getting user profile:", error)
-      return null
+      console.error("Error getting user:", error)
+      return { success: false, error }
     }
   }
 
-  async updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
+  async updateUser(uid: string, updates: Partial<UserData>) {
     try {
       const userRef = doc(db, "users", uid)
       await updateDoc(userRef, {
         ...updates,
-        updatedAt: new Date(),
+        updatedAt: serverTimestamp(),
       })
+      return { success: true }
     } catch (error) {
-      console.error("Error updating user profile:", error)
-      throw error
+      console.error("Error updating user:", error)
+      return { success: false, error }
     }
   }
 
-  async getCurrentUserProfile(): Promise<UserProfile | null> {
-    try {
-      const user = await this.authService.getCurrentUser()
-      if (!user) return null
-
-      return this.getUserProfile(user.uid)
-    } catch (error) {
-      console.error("Error getting current user profile:", error)
-      return null
-    }
-  }
-
-  async getUsersByRole(role: "trainer" | "client" | "admin"): Promise<UserProfile[]> {
+  async getUserByEmail(email: string) {
     try {
       const usersRef = collection(db, "users")
-      const q = query(usersRef, where("role", "==", role))
+      const q = query(usersRef, where("email", "==", email))
       const querySnapshot = await getDocs(q)
 
-      return querySnapshot.docs.map((doc) => {
-        const data = doc.data()
-        return {
-          ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        } as UserProfile
-      })
+      if (!querySnapshot.empty) {
+        const userDoc = querySnapshot.docs[0]
+        return { success: true, user: { id: userDoc.id, ...userDoc.data() } }
+      }
+
+      return { success: false, error: "User not found" }
     } catch (error) {
-      console.error("Error getting users by role:", error)
-      return []
+      console.error("Error getting user by email:", error)
+      return { success: false, error }
     }
   }
 
-  async approveUser(uid: string): Promise<void> {
-    try {
-      await this.updateUserProfile(uid, { isApproved: true })
-    } catch (error) {
-      console.error("Error approving user:", error)
-      throw error
-    }
+  // Deprecated methods that redirect to UnifiedAuthService
+  async getCurrentUser() {
+    console.warn("⚠️ UserService.getCurrentUser is deprecated. Use UnifiedAuthService.getCurrentUser instead.")
+    return await this.authService.getCurrentUser()
+  }
+
+  async signIn(email: string, password: string) {
+    console.warn("⚠️ UserService.signIn is deprecated. Use UnifiedAuthService.signIn instead.")
+    return await this.authService.signIn(email, password)
+  }
+
+  async signOut() {
+    console.warn("⚠️ UserService.signOut is deprecated. Use UnifiedAuthService.signOut instead.")
+    return await this.authService.signOut()
   }
 }
 

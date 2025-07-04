@@ -1,38 +1,40 @@
 import { UnifiedAuthService } from "../services/unified-auth-service"
 
-// Legacy auth service - deprecated, use UnifiedAuthService instead
+/**
+ * @deprecated Use UnifiedAuthService instead
+ * Legacy auth service for backward compatibility
+ */
 export class AuthService {
-  private unifiedService = new UnifiedAuthService()
-
   constructor() {
-    console.warn("AuthService is deprecated. Please use UnifiedAuthService instead.")
+    console.warn("⚠️ AuthService is deprecated. Please use UnifiedAuthService instead.")
   }
 
-  async login(email: string, password: string) {
-    console.warn("AuthService.login is deprecated. Use UnifiedAuthService.signIn instead.")
-    return this.unifiedService.signIn(email, password)
+  async signIn(email: string, password: string, invitationCode?: string) {
+    return await UnifiedAuthService.signIn(email, password, invitationCode)
   }
 
-  async signup(email: string, password: string, userData?: any) {
-    console.warn("AuthService.signup is deprecated. Use UnifiedAuthService.signUp instead.")
-    return this.unifiedService.signUp(email, password, userData)
-  }
-
-  async logout() {
-    console.warn("AuthService.logout is deprecated. Use UnifiedAuthService.signOut instead.")
-    return this.unifiedService.signOut()
+  async signOut() {
+    return await UnifiedAuthService.signOut()
   }
 
   async getCurrentUser() {
-    console.warn("AuthService.getCurrentUser is deprecated. Use UnifiedAuthService.getCurrentUser instead.")
-    return this.unifiedService.getCurrentUser()
+    return await UnifiedAuthService.getCurrentUser()
   }
 
-  onAuthStateChanged(callback: (user: any) => void) {
-    console.warn("AuthService.onAuthStateChanged is deprecated. Use UnifiedAuthService.onAuthStateChanged instead.")
-    return this.unifiedService.onAuthStateChanged(callback)
+  async isAuthenticated() {
+    return await UnifiedAuthService.isAuthenticated()
+  }
+
+  getUserIdFromCookies() {
+    return UnifiedAuthService.getUserIdFromCookies()
   }
 }
 
-// Export singleton instance for backward compatibility
+// Export singleton for backward compatibility
 export const authService = new AuthService()
+
+// Re-export UnifiedAuthService functions
+export const signIn = UnifiedAuthService.signIn.bind(UnifiedAuthService)
+export const signOut = UnifiedAuthService.signOut.bind(UnifiedAuthService)
+export const getCurrentUser = UnifiedAuthService.getCurrentUser.bind(UnifiedAuthService)
+export const isAuthenticated = UnifiedAuthService.isAuthenticated.bind(UnifiedAuthService)

@@ -1,56 +1,81 @@
 import { UnifiedAuthService } from "./unified-auth-service"
 import { UnifiedClientService } from "./unified-client-service"
+import type { Client } from "@/types/client"
 
-export interface ClientUser {
-  id: string
-  email: string
-  name: string
-  role: "trainer" | "client"
-  trainerId?: string
-  createdAt: Date
-  updatedAt: Date
-}
-
+/**
+ * Client User Service
+ * Bridges client and user operations
+ */
 export class ClientUserService {
-  private authService = new UnifiedAuthService()
-  private clientService = new UnifiedClientService()
+  private authService = UnifiedAuthService
+  private clientService = UnifiedClientService
 
-  async getCurrentUser(): Promise<ClientUser | null> {
-    try {
-      const user = await this.authService.getCurrentUser()
-      if (!user) return null
-
-      return {
-        id: user.uid,
-        email: user.email || "",
-        name: user.displayName || user.email?.split("@")[0] || "",
-        role: "trainer", // Default role, can be enhanced later
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }
-    } catch (error) {
-      console.error("Error getting current user:", error)
-      return null
+  /**
+   * Get clients for current user
+   */
+  async getClientsForCurrentUser() {
+    const authResult = await this.authService.getCurrentUser()
+    if (!authResult.success) {
+      return { success: false, error: authResult.error }
     }
+
+    return await this.clientService.getClients()
   }
 
-  async getUserClients(userId: string) {
-    return this.clientService.getClients(userId)
+  /**
+   * Add client for current user
+   */
+  async addClientForCurrentUser(clientData: {
+    name: string
+    email?: string
+    phone?: string
+    goal?: string
+    program?: string
+    notes?: string
+  }) {
+    const authResult = await this.authService.getCurrentUser()
+    if (!authResult.success) {
+      return { success: false, error: authResult.error }
+    }
+
+    return await this.clientService.addClient(clientData)
   }
 
-  async addClientForUser(userId: string, clientData: any) {
-    return this.clientService.addClient(userId, clientData)
+  /**
+   * Update client for current user
+   */
+  async updateClientForCurrentUser(clientId: string, updates: Partial<Client>) {
+    const authResult = await this.authService.getCurrentUser()
+    if (!authResult.success) {
+      return { success: false, error: authResult.error }
+    }
+
+    return await this.clientService.updateClient(clientId, updates)
   }
 
-  async updateClientForUser(userId: string, clientId: string, updates: any) {
-    return this.clientService.updateClient(userId, clientId, updates)
+  /**
+   * Delete client for current user
+   */
+  async deleteClientForCurrentUser(clientId: string) {
+    const authResult = await this.authService.getCurrentUser()
+    if (!authResult.success) {
+      return { success: false, error: authResult.error }
+    }
+
+    return await this.clientService.deleteClient(clientId)
   }
 
-  async deleteClientForUser(userId: string, clientId: string) {
-    return this.clientService.deleteClient(userId, clientId)
-  }
+  /**
+   * Get specific client for current user
+   */
+  async getClientForCurrentUser(clientId: string) {
+    const authResult = await this.authService.getCurrentUser()
+    if (!authResult.success) {
+      return { success: false, error: authResult.error }
+    }
 
-  async getClientById(userId: string, clientId: string) {
-    return this.clientService.getClientById(userId, clientId)
+    return await this.clientService.getClient(clientId)
   }
 }
+
+export const clientUserService = new ClientUserService()
