@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore"
 import { db } from "./firebase"
 import { UnifiedAuthService } from "../services/unified-auth-service"
+import type { User } from "@/types/index"
 
 export interface UserProfile {
   uid: string
@@ -42,6 +43,7 @@ export class UserService {
 
   private constructor() {
     this.authService = UnifiedAuthService.getInstance()
+    console.warn("UserService is deprecated. Use UnifiedAuthService for auth operations.")
   }
 
   public static getInstance(): UserService {
@@ -260,6 +262,65 @@ export class UserService {
       console.log("User reactivated successfully:", userId)
     } catch (error) {
       console.error("Error reactivating user:", error)
+      throw error
+    }
+  }
+
+  async getCurrentUser(): Promise<User | null> {
+    return this.authService.getCurrentUser()
+  }
+
+  async getUserById(userId: string): Promise<User | null> {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId))
+      if (userDoc.exists()) {
+        return { id: userDoc.id, ...userDoc.data() } as User
+      }
+      return null
+    } catch (error) {
+      console.error("Error getting user:", error)
+      throw error
+    }
+  }
+
+  async updateUser(userId: string, updates: Partial<User>): Promise<void> {
+    try {
+      await updateDoc(doc(db, "users", userId), updates)
+    } catch (error) {
+      console.error("Error updating user:", error)
+      throw error
+    }
+  }
+
+  async createUser(userId: string, userData: Partial<User>): Promise<void> {
+    try {
+      await setDoc(doc(db, "users", userId), {
+        ...userData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+    } catch (error) {
+      console.error("Error creating user:", error)
+      throw error
+    }
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, "users", userId))
+    } catch (error) {
+      console.error("Error deleting user:", error)
+      throw error
+    }
+  }
+
+  async getUsersByRole(role: string): Promise<User[]> {
+    try {
+      const q = query(collection(db, "users"), where("role", "==", role))
+      const querySnapshot = await getDocs(q)
+      return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as User)
+    } catch (error) {
+      console.error("Error getting users by role:", error)
       throw error
     }
   }
