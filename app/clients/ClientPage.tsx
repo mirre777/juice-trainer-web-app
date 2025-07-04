@@ -4,22 +4,37 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { RefreshCw, Users, AlertCircle, CheckCircle, Clock } from "lucide-react"
+import { RefreshCw, Users, AlertCircle, CheckCircle, Clock, Plus } from "lucide-react"
 import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
 import LoadingSpinner from "@/components/shared/loading-spinner"
-import type { Client } from "@/types/client"
 
-interface ClientPageProps {
-  isDemo?: boolean
+interface Client {
+  id: string
+  name: string
+  email: string
+  status: string
+  progress: number
+  sessions: { completed: number; total: number }
+  lastWorkout: { name: string; date: string }
+  goal: string
+  initials: string
+  bgColor: string
+  textColor: string
 }
 
-export default function ClientPage({ isDemo = false }: ClientPageProps) {
-  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid(isDemo)
+export default function ClientPage() {
+  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid()
   const [showDebug, setShowDebug] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const handleRefresh = async () => {
     console.log("🔄 Manual refresh triggered")
-    await refetch()
+    setIsRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   if (loading) {
@@ -45,8 +60,8 @@ export default function ClientPage({ isDemo = false }: ClientPageProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-gray-600">{error}</p>
-            <Button onClick={handleRefresh} className="w-full">
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button onClick={handleRefresh} className="w-full" disabled={isRefreshing}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
               Try Again
             </Button>
           </CardContent>
@@ -62,14 +77,21 @@ export default function ClientPage({ isDemo = false }: ClientPageProps) {
         <div>
           <h1 className="text-3xl font-bold">Clients</h1>
           <p className="text-gray-600">Manage your coaching clients</p>
+          {lastFetchTime && (
+            <p className="text-sm text-gray-500 mt-1">Last updated: {lastFetchTime.toLocaleTimeString()}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setShowDebug(!showDebug)}>
-            Show Debug
+            {showDebug ? "Hide" : "Show"} Debug
           </Button>
-          <Button onClick={handleRefresh} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          <Button onClick={handleRefresh} disabled={isRefreshing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
             Refresh
+          </Button>
+          <Button className="bg-lime-400 hover:bg-lime-500 text-gray-800">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Client
           </Button>
         </div>
       </div>
@@ -94,9 +116,6 @@ export default function ClientPage({ isDemo = false }: ClientPageProps) {
               <div>
                 <strong>Last Updated:</strong> {lastFetchTime?.toLocaleTimeString() || "Never"}
               </div>
-            </div>
-            <div>
-              <strong>Demo Mode:</strong> {isDemo ? "Yes" : "No"}
             </div>
           </CardContent>
         </Card>
@@ -152,10 +171,11 @@ export default function ClientPage({ isDemo = false }: ClientPageProps) {
           <CardContent className="p-12 text-center">
             <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No clients found</h3>
-            <p className="text-gray-600 mb-4">
-              {isDemo ? "This is demo mode with no sample clients." : "You haven't added any clients yet."}
-            </p>
-            <Button>Add Your First Client</Button>
+            <p className="text-gray-600 mb-4">You haven't added any clients yet.</p>
+            <Button className="bg-lime-400 hover:bg-lime-500 text-gray-800">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Client
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -164,11 +184,6 @@ export default function ClientPage({ isDemo = false }: ClientPageProps) {
             <ClientCard key={client.id} client={client} />
           ))}
         </div>
-      )}
-
-      {/* Last Updated */}
-      {lastFetchTime && (
-        <div className="text-center text-sm text-gray-500">Last updated: {lastFetchTime.toLocaleString()}</div>
       )}
     </div>
   )
