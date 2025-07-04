@@ -2,11 +2,13 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Plus, Users } from "lucide-react"
 import { ClientsList } from "@/components/clients/clients-list"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
 import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
 import { AuthDebug } from "@/components/debug/auth-debug"
 import { AddClientModal } from "@/components/clients/add-client-modal"
+import { useToast } from "@/hooks/use-toast"
 
 export default function ClientPage() {
   const [showAddModal, setShowAddModal] = useState(false)
@@ -15,6 +17,7 @@ export default function ClientPage() {
   const [statusFilter, setStatusFilter] = useState("All")
   const [expandFilter, setExpandFilter] = useState("All")
   const [collapseFilter, setCollapseFilter] = useState("All")
+  const { toast } = useToast()
 
   // Use the hybrid approach for client data
   const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid()
@@ -42,11 +45,19 @@ export default function ClientPage() {
   const handleClientAdded = () => {
     // The hybrid approach will automatically pick up new clients via real-time listener
     console.log("[ClientPage] Client added - real-time listener should pick it up")
+    toast({
+      title: "Client added",
+      description: "The new client has been added successfully.",
+    })
   }
 
   const handleClientDeleted = () => {
     // Refresh the data when a client is deleted
     refetch()
+    toast({
+      title: "Client deleted",
+      description: "The client has been deleted successfully.",
+    })
   }
 
   if (loading) {
@@ -86,12 +97,17 @@ export default function ClientPage() {
 
         {showDebug && <AuthDebug />}
 
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Clients</h2>
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={refetch} variant="outline">
-            Try Again
-          </Button>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Clients</h3>
+            <p className="text-gray-500 mb-4">{error}</p>
+            <div className="space-y-2">
+              <Button onClick={refetch} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -122,7 +138,8 @@ export default function ClientPage() {
             className="bg-lime-400 hover:bg-lime-500 text-gray-800"
             data-add-client-button="true"
           >
-            + Add Client
+            <Plus className="h-4 w-4 mr-2" />
+            Add Client
           </Button>
         </div>
       </div>

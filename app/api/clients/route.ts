@@ -1,13 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { fetchClients } from "@/lib/firebase/client-service"
 import { cookies } from "next/headers"
 import { decrypt } from "@/lib/crypto"
+import { collection, getDocs, query } from "firebase/firestore"
+import { db } from "@/lib/firebase/firebase"
 
 export async function GET(request: NextRequest) {
   console.log("[API /api/clients] === REQUEST RECEIVED ===")
 
   try {
-    // Get user from encrypted cookie (same method as /api/auth/me)
+    // Get user from encrypted cookie (exact same method as /api/auth/me)
     console.log("[API /api/clients] Getting user from cookies...")
     const cookieStore = await cookies()
     const encryptedUserData = cookieStore.get("user-data")?.value
@@ -39,12 +40,56 @@ export async function GET(request: NextRequest) {
 
     console.log("[API /api/clients] Fetching clients for trainer:", currentUser.uid)
 
-    // Fetch clients for the trainer
-    const clients = await fetchClients(currentUser.uid)
-    console.log("[API /api/clients] Raw clients from fetchClients:", clients.length)
+    // Fetch clients directly from Firestore
+    const clientsRef = collection(db, "users", currentUser.uid, "clients")
+    const clientsQuery = query(clientsRef)
+    const snapshot = await getDocs(clientsQuery)
+
+    console.log("[API /api/clients] Raw Firestore query returned:", snapshot.size, "documents")
+
+    const allClients: any[] = []
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      console.log(`[API /api/clients] Processing client ${doc.id}:`, {
+        name: data.name,
+        status: data.status,
+        hasUserId: !!data.userId,
+        hasLinkedAccount: data.hasLinkedAccount,
+      })
+
+      allClients.push({
+        id: doc.id,
+        name: data.name || "Unnamed Client",
+        email: data.email || "",
+        status: data.status || "Active",
+        userId: data.userId || "",
+        hasLinkedAccount: data.hasLinkedAccount || false,
+        progress: data.progress || 0,
+        sessions: data.sessions || { completed: 0, total: 0 },
+        completion: data.completion || 0,
+        notes: data.notes || "",
+        bgColor: data.bgColor || "#f3f4f6",
+        textColor: data.textColor || "#111827",
+        lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
+        metrics: data.metrics || [],
+        goal: data.goal || "",
+        program: data.program || "",
+        createdAt: data.createdAt?.toDate?.() || new Date(),
+        inviteCode: data.inviteCode || "",
+        phone: data.phone || "",
+        initials: data.name
+          ? data.name
+              .split(" ")
+              .map((part: string) => part[0])
+              .join("")
+              .toUpperCase()
+              .substring(0, 2)
+          : "UC",
+      })
+    })
 
     // Filter clients to only include those with linked accounts and active status
-    const activeLinkedClients = clients.filter((client) => {
+    const activeLinkedClients = allClients.filter((client) => {
       const hasUserId = !!client.userId
       const isActive = client.status === "Active"
       const hasLinkedAccount = client.hasLinkedAccount
@@ -62,12 +107,15 @@ export async function GET(request: NextRequest) {
       return hasUserId && isActive && hasLinkedAccount
     })
 
-    console.log("[API /api/clients] Filtered active linked clients:", activeLinkedClients.length)
+    console.log("[API /api/clients] ✅ Results:", {
+      totalClients: allClients.length,
+      activeLinkedClients: activeLinkedClients.length,
+    })
 
     return NextResponse.json({
       success: true,
       clients: activeLinkedClients,
-      totalClients: clients.length,
+      totalClients: allClients.length,
       activeLinkedClients: activeLinkedClients.length,
     })
   } catch (error) {
