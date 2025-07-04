@@ -1,201 +1,193 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, Plus } from "lucide-react"
-import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
-import { ClientsList } from "@/components/clients/clients-list"
-import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
-import { AuthDebug } from "@/components/debug/auth-debug"
+import { Plus, Search, Users, UserCheck, Clock, AlertCircle } from "lucide-react"
 import { AddClientModal } from "@/components/clients/add-client-modal"
-import { useToast } from "@/hooks/use-toast"
+import { ClientCard } from "@/components/clients/client-card"
+import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
+import { LoadingSpinner } from "@/components/shared/loading-spinner"
+import { EmptyState } from "@/components/shared/empty-state"
+import { useUnifiedClients } from "@/hooks/use-unified-clients"
+import { useUnifiedAuth } from "@/hooks/use-unified-auth"
 
 export default function ClientPage() {
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [showDebug, setShowDebug] = useState(false)
+  const { user, loading: authLoading } = useUnifiedAuth()
+  const { clients, loading: clientsLoading, error, refreshClients } = useUnifiedClients()
+
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("All")
-  const [expandFilter, setExpandFilter] = useState("All")
-  const [collapseFilter, setCollapseFilter] = useState("All")
-  const { toast } = useToast()
-
-  // Use the hybrid approach for client data
-  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid(false)
-
-  console.log("[ClientPage] Render state:", {
-    clientsCount: clients.length,
-    loading,
-    error,
-    lastFetchTime: lastFetchTime?.toISOString(),
-  })
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
   // Filter clients based on search and status
-  const filteredClients = clients.filter((client) => {
-    // Search filter - check multiple fields
-    const matchesSearch =
-      searchTerm === "" ||
-      [client.name, client.email, client.goal, client.program, client.notes].some(
-        (field) => field && field.toLowerCase().includes(searchTerm.toLowerCase()),
-      )
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      const matchesSearch =
+        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.email.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesStatus = statusFilter === "all" || client.status.toLowerCase() === statusFilter.toLowerCase()
+      return matchesSearch && matchesStatus
+    })
+  }, [clients, searchTerm, statusFilter])
 
-    // Status filter
-    const matchesStatus = statusFilter === "All" || client.status === statusFilter
+  // Calculate stats
+  const stats = useMemo(() => {
+    const total = clients.length
+    const active = clients.filter((c) => c.status === "Active").length
+    const pending = clients.filter((c) => c.status === "Pending").length
+    const inactive = clients.filter((c) => c.status === "Inactive").length
 
-    return matchesSearch && matchesStatus
-  })
+    return { total, active, pending, inactive }
+  }, [clients])
 
   const handleAddClient = () => {
-    setShowAddModal(true)
+    setIsAddModalOpen(true)
   }
 
   const handleClientAdded = () => {
-    console.log("[ClientPage] Client added - real-time listener should pick it up")
-    toast({
-      title: "Client added",
-      description: "The new client has been added successfully.",
-    })
+    setIsAddModalOpen(false)
+    refreshClients()
   }
 
-  const handleClientDeleted = () => {
-    refetch()
-    toast({
-      title: "Client deleted",
-      description: "The client has been deleted successfully.",
-    })
-  }
-
-  if (loading) {
+  // Show loading state
+  if (authLoading || clientsLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-            <p className="text-gray-500">Loading your coaching clients...</p>
-          </div>
-          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
-            {showDebug ? "Hide" : "Show"} Debug
-          </Button>
-        </div>
-
-        {showDebug && <AuthDebug />}
-
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <LoadingSpinner size="lg" />
         </div>
       </div>
     )
   }
 
+  // Show error state
   if (error) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-            <p className="text-gray-500">Manage your coaching clients</p>
-          </div>
-          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
-            {showDebug ? "Hide" : "Show"} Debug
-          </Button>
-        </div>
-
-        {showDebug && <AuthDebug />}
-
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Clients</h3>
-            <p className="text-gray-500 mb-4">{error}</p>
-            <div className="space-y-2">
-              <Button onClick={() => refetch()} variant="outline">
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Card className="w-full max-w-md">
+            <CardContent className="flex flex-col items-center gap-4 p-6">
+              <AlertCircle className="h-12 w-12 text-red-500" />
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900">Error Loading Clients</h3>
+                <p className="text-sm text-gray-600 mt-1">{error}</p>
+              </div>
+              <Button onClick={refreshClients} variant="outline">
                 Try Again
               </Button>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-          <p className="text-gray-500">Manage your coaching clients</p>
-          {lastFetchTime && (
-            <p className="text-sm text-gray-400 mt-1">Last updated: {lastFetchTime.toLocaleTimeString()}</p>
-          )}
+          <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
+          <p className="text-gray-600 mt-1">Manage your client relationships and track their progress</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
-            {showDebug ? "Hide" : "Show"} Debug
-          </Button>
-          <Button onClick={() => refetch()} variant="outline" size="sm">
-            Refresh
-          </Button>
-          <Button
-            onClick={handleAddClient}
-            className="bg-lime-400 hover:bg-lime-500 text-gray-800"
-            data-add-client-button="true"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Client
-          </Button>
-        </div>
+        <Button onClick={handleAddClient} className="flex items-center gap-2">
+          <Plus className="h-4 w-4" />
+          Add Client
+        </Button>
       </div>
 
-      {/* Debug Panel */}
-      {showDebug && (
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardHeader>
-            <CardTitle className="text-sm text-yellow-800">Debug Information</CardTitle>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="text-sm space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <strong>Showing Clients:</strong> {clients.length}
-              </div>
-              <div>
-                <strong>Loading:</strong> {loading ? "Yes" : "No"}
-              </div>
-              <div>
-                <strong>Error:</strong> {error || "None"}
-              </div>
-              <div>
-                <strong>Last Updated:</strong> {lastFetchTime?.toLocaleTimeString() || "Never"}
-              </div>
-            </div>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Filters */}
-      <ClientsFilterBar
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        expandFilter={expandFilter}
-        onExpandFilterChange={setExpandFilter}
-        collapseFilter={collapseFilter}
-        onCollapseFilterChange={setCollapseFilter}
-        clientCount={filteredClients.length}
-        totalCount={clients.length}
-      />
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
+            <UserCheck className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Inactive</CardTitle>
+            <Users className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-600">{stats.inactive}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search clients by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <ClientsFilterBar statusFilter={statusFilter} onStatusFilterChange={setStatusFilter} />
+      </div>
 
       {/* Clients List */}
-      <ClientsList
-        clients={filteredClients}
-        allClientsExpanded={expandFilter === "All"}
-        loading={loading}
-        onClientDeleted={handleClientDeleted}
-      />
+      {filteredClients.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title={searchTerm || statusFilter !== "all" ? "No clients found" : "No clients yet"}
+          description={
+            searchTerm || statusFilter !== "all"
+              ? "Try adjusting your search or filter criteria"
+              : "Get started by adding your first client"
+          }
+          action={
+            searchTerm || statusFilter !== "all" ? undefined : (
+              <Button onClick={handleAddClient} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Add Your First Client
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredClients.map((client) => (
+            <ClientCard key={client.id} client={client} />
+          ))}
+        </div>
+      )}
 
       {/* Add Client Modal */}
-      <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+      <AddClientModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onClientAdded={handleClientAdded}
+      />
     </div>
   )
 }
