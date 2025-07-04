@@ -1,72 +1,18 @@
 // Authentication service for handling login, signup, and session management
 
 import { db } from "@/lib/firebase/firebase"
-import { doc, getDoc, setDoc } from "firebase/firestore"
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-} from "firebase/auth"
+import { doc, setDoc } from "firebase/firestore"
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth"
 import { cookies } from "next/headers"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { UnifiedAuthService } from "@/lib/services/unified-auth-service"
+
+console.warn("⚠️ DEPRECATED: lib/auth/auth-service.ts is deprecated. Please use UnifiedAuthService instead.")
 
 // Sign in with email and password
-export async function signIn(email: string, password: string) {
-  try {
-    // Validate input
-    if (!email || !password) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "signIn" },
-        "Email and password are required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    const auth = getAuth()
-    const [userCredential, authError] = await tryCatch(
-      () => signInWithEmailAndPassword(auth, email, password),
-      ErrorType.AUTH_INVALID_CREDENTIALS,
-      { function: "signIn", email },
-    )
-
-    if (authError || !userCredential) {
-      return { success: false, error: authError }
-    }
-
-    const user = userCredential.user
-
-    // Set auth cookie
-    const [token, tokenError] = await tryCatch(() => user.getIdToken(), ErrorType.AUTH_TOKEN_EXPIRED, {
-      function: "signIn",
-      uid: user.uid,
-    })
-
-    if (tokenError || !token) {
-      return { success: false, error: tokenError }
-    }
-
-    cookies().set("auth_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: "/",
-    })
-
-    return { success: true, user }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "signIn", email },
-      "Unexpected error during sign in",
-    )
-    logError(appError)
-    return { success: false, error: appError }
-  }
+export async function signIn(email: string, password: string, invitationCode?: string) {
+  console.warn("⚠️ DEPRECATED: signIn from auth-service.ts. Use UnifiedAuthService.signIn() instead.")
+  return UnifiedAuthService.signIn(email, password, invitationCode)
 }
 
 // Sign up with email and password
@@ -149,90 +95,18 @@ export async function signUp(email: string, password: string, userData: any) {
 
 // Sign out
 export async function signOut() {
-  try {
-    const auth = getAuth()
-    const [, authError] = await tryCatch(() => firebaseSignOut(auth), ErrorType.AUTH_UNAUTHORIZED, {
-      function: "signOut",
-    })
-
-    if (authError) {
-      // Log but continue with cookie removal
-      logError(authError)
-    }
-
-    // Remove auth cookie - update this to be more explicit
-    cookies().delete("auth_token", {
-      path: "/",
-      // Make sure we're using the same cookie settings as when we set it
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-    })
-
-    return { success: true }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "signOut" },
-      "Unexpected error during sign out",
-    )
-    logError(appError)
-    return { success: false, error: appError }
-  }
+  console.warn("⚠️ DEPRECATED: signOut from auth-service.ts. Use UnifiedAuthService.signOut() instead.")
+  return UnifiedAuthService.signOut()
 }
 
 // Get current user
 export async function getCurrentUser() {
-  try {
-    const auth = getAuth()
-    const user = auth.currentUser
+  console.warn("⚠️ DEPRECATED: getCurrentUser from auth-service.ts. Use UnifiedAuthService.getCurrentUser() instead.")
+  return UnifiedAuthService.getCurrentUser()
+}
 
-    if (!user) {
-      const error = createError(
-        ErrorType.AUTH_UNAUTHORIZED,
-        null,
-        { function: "getCurrentUser" },
-        "No user is signed in",
-      )
-      return { success: false, error }
-    }
-
-    // Get user data from Firestore
-    const [userDoc, docError] = await tryCatch(() => getDoc(doc(db, "users", user.uid)), ErrorType.DB_READ_FAILED, {
-      function: "getCurrentUser",
-      uid: user.uid,
-    })
-
-    if (docError || !userDoc) {
-      return { success: false, error: docError }
-    }
-
-    if (!userDoc.exists()) {
-      const error = createError(
-        ErrorType.DB_DOCUMENT_NOT_FOUND,
-        null,
-        { function: "getCurrentUser", uid: user.uid },
-        "User document not found",
-      )
-      return { success: false, error }
-    }
-
-    return {
-      success: true,
-      user: {
-        uid: user.uid,
-        email: user.email,
-        ...userDoc.data(),
-      },
-    }
-  } catch (error: any) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "getCurrentUser" },
-      "Unexpected error getting current user",
-    )
-    logError(appError)
-    return { success: false, error: appError }
-  }
+// Check if user is authenticated
+export const isAuthenticated = async () => {
+  console.warn("⚠️ DEPRECATED: isAuthenticated from auth-service.ts. Use UnifiedAuthService.isAuthenticated() instead.")
+  return UnifiedAuthService.isAuthenticated()
 }

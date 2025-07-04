@@ -1,46 +1,38 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/firebase/firebase"
+import { UnifiedAuthService } from "@/lib/services/unified-auth-service"
 
-export async function GET() {
+export async function POST() {
   try {
-    // Clear all cookies
-    const cookieStore = cookies()
-    const allCookies = cookieStore.getAll()
+    console.log("🚪 [API:logout] Processing logout request")
 
-    for (const cookie of allCookies) {
-      cookieStore.delete(cookie.name)
+    // Use unified auth service for sign out
+    const authResult = await UnifiedAuthService.signOut()
+
+    if (!authResult.success) {
+      console.log("❌ [API:logout] Logout failed:", authResult.error?.message)
+      return NextResponse.json(
+        {
+          error: authResult.error?.message || "Logout failed",
+          success: false,
+        },
+        { status: 500 },
+      )
     }
 
-    // Try to sign out from Firebase
-    try {
-      await auth.signOut()
-    } catch (error) {
-      console.error("Error signing out from Firebase:", error)
-      // Continue with logout even if Firebase signOut fails
-    }
+    console.log("✅ [API:logout] Logout successful")
 
-    // Return success response with cleared cookies
-    return new NextResponse(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        // Set cookie to expire in the past to ensure it's deleted
-        "Set-Cookie": [
-          `token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `user_id=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `refresh_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-        ],
+    return NextResponse.json({
+      success: true,
+      message: authResult.message || "Logged out successfully",
+    })
+  } catch (error: any) {
+    console.error("💥 [API:logout] Unexpected error:", error)
+    return NextResponse.json(
+      {
+        error: "An unexpected error occurred during logout",
+        success: false,
       },
-    })
-  } catch (error) {
-    console.error("Error during logout:", error)
-    return new NextResponse(JSON.stringify({ error: "Failed to logout" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
+      { status: 500 },
+    )
   }
 }

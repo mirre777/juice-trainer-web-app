@@ -1,122 +1,99 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { UnifiedClientService } from "@/lib/services/unified-client-service"
 import type { Client } from "@/types/client"
+import { ErrorType, handleClientError } from "@/lib/utils/error-handler"
 
 export function useClientDataAPI(isDemo = false) {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
 
   // Demo clients data
-  const demoClients = [
+  const demoClients: Client[] = [
     {
-      id: "1",
-      name: "Salty Snack",
-      initials: "SS",
+      id: "demo-1",
+      name: "Demo Client",
+      initials: "DC",
       status: "Active",
-      progress: 38,
-      sessions: { completed: 12, total: 30 },
-      completion: 38,
-      notes: "Working on strength training and nutrition plan.",
+      progress: 75,
+      sessions: { completed: 15, total: 20 },
+      completion: 75,
+      notes: "This is a demo client for testing purposes.",
       bgColor: "#f3f4f6",
       textColor: "#111827",
-      lastWorkout: { name: "Upper Body Strength", date: "2 days ago", completion: 85 },
-      metrics: [
-        { name: "Weight", value: "165 lbs", change: "+2 lbs" },
-        { name: "Body Fat", value: "18%", change: "-1.5%" },
-        { name: "Squat 1RM", value: "225 lbs", change: "+15 lbs" },
-      ],
+      lastWorkout: { name: "Demo Workout", date: "1 day ago", completion: 90 },
+      metrics: [],
+      email: "demo@example.com",
+      goal: "Demo goal",
+      program: "Demo program",
+      createdAt: new Date(),
+      inviteCode: "DEMO123",
+      userId: "demo-user-1",
+      phone: "+1234567890",
     },
   ]
 
-  useEffect(() => {
-    if (isDemo) {
-      setClients(demoClients)
-      setLoading(false)
-      return
-    }
+  const fetchClients = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-    const fetchClientsFromAPI = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        console.log("🚀 [useClientDataAPI] Fetching clients from API...")
-
-        const response = await fetch("/api/clients", {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        })
-
-        console.log("📡 [useClientDataAPI] API response status:", response.status)
-
-        if (!response.ok) {
-          throw new Error(`API request failed: ${response.status}`)
-        }
-
-        const data = await response.json()
-        console.log("📊 [useClientDataAPI] API response data:", {
-          clientCount: data.clients?.length || 0,
-          userId: data.userId,
-        })
-
-        if (data.clients && Array.isArray(data.clients)) {
-          setClients(data.clients)
-          console.log("✅ [useClientDataAPI] Successfully set clients:", data.clients.length)
-        } else {
-          console.log("⚠️ [useClientDataAPI] No clients in response")
-          setClients([])
-        }
-      } catch (err) {
-        console.error("❌ [useClientDataAPI] Error fetching clients:", err)
-        setError(err instanceof Error ? err.message : "Failed to fetch clients")
-        setClients([])
-      } finally {
+      if (isDemo) {
+        console.log("🎭 [useClientDataAPI] Demo mode - using demo clients")
+        setClients(demoClients)
+        setLastFetchTime(new Date())
         setLoading(false)
+        return
       }
-    }
 
-    fetchClientsFromAPI()
+      console.log("🚀 [useClientDataAPI] Fetching clients with unified service")
+
+      // Use unified client service
+      const clientResult = await UnifiedClientService.getClients()
+
+      if (clientResult.success && clientResult.clients) {
+        console.log(`✅ [useClientDataAPI] Successfully fetched ${clientResult.clients.length} clients`)
+        setClients(clientResult.clients)
+        setLastFetchTime(new Date())
+        setError(null)
+      } else {
+        console.error("❌ [useClientDataAPI] Failed to fetch clients:", clientResult.error?.message)
+        setError(clientResult.error?.message || "Failed to load clients")
+        setClients([])
+      }
+    } catch (err) {
+      const appError = handleClientError(err, {
+        component: "useClientDataAPI",
+        operation: "fetchClients",
+        message: "Failed to load clients",
+        errorType: ErrorType.DATA_FETCH_ERROR,
+      })
+
+      console.error("❌ [useClientDataAPI] Error:", appError)
+      setError(appError.message)
+      setClients([])
+    } finally {
+      setLoading(false)
+    }
   }, [isDemo])
 
-  const refetch = async () => {
-    if (!isDemo) {
-      setLoading(true)
-      const fetchClientsFromAPI = async () => {
-        try {
-          const response = await fetch("/api/clients", {
-            method: "GET",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          })
+  useEffect(() => {
+    fetchClients()
+  }, [fetchClients])
 
-          if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`)
-          }
+  const refetch = useCallback(() => {
+    console.log("🔄 [useClientDataAPI] Manual refetch requested")
+    fetchClients()
+  }, [fetchClients])
 
-          const data = await response.json()
-          if (data.clients && Array.isArray(data.clients)) {
-            setClients(data.clients)
-          } else {
-            setClients([])
-          }
-        } catch (err) {
-          console.error("Error refetching clients:", err)
-          setError(err instanceof Error ? err.message : "Failed to refetch clients")
-        } finally {
-          setLoading(false)
-        }
-      }
-
-      await fetchClientsFromAPI()
-    }
+  return {
+    clients,
+    loading,
+    error,
+    refetch,
+    lastFetchTime,
   }
-
-  return { clients, loading, error, refetch }
 }

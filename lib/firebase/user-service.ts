@@ -9,30 +9,32 @@ import {
   orderBy,
   serverTimestamp,
   onSnapshot,
+  where,
 } from "firebase/firestore"
-import { getAuth, onAuthStateChanged, type User } from "firebase/auth"
+import type { User } from "firebase/auth"
 import { db } from "@/lib/firebase/firebase"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { UnifiedAuthService } from "@/lib/services/unified-auth-service"
 
-// Get current authenticated user
+// UPDATED: Use UnifiedAuthService for current user operations
 export async function getCurrentUser(): Promise<User | null> {
-  return new Promise((resolve) => {
-    const auth = getAuth()
+  console.warn("⚠️ DEPRECATED: getCurrentUser from user-service.ts. Use UnifiedAuthService.getCurrentUser() instead.")
 
-    // If user is already available, return immediately
-    if (auth.currentUser) {
-      console.log("[getCurrentUser] User already available:", auth.currentUser.uid)
-      resolve(auth.currentUser)
-      return
+  try {
+    const authResult = await UnifiedAuthService.getCurrentUser()
+    if (authResult.success && authResult.user) {
+      // Return Firebase User-like object for backward compatibility
+      return {
+        uid: authResult.user.uid,
+        email: authResult.user.email,
+        displayName: authResult.user.name,
+      } as User
     }
-
-    // Otherwise, wait for auth state to be determined
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("[getCurrentUser] Auth state changed:", user?.uid || "null")
-      unsubscribe() // Clean up the listener
-      resolve(user)
-    })
-  })
+    return null
+  } catch (error) {
+    console.error("[getCurrentUser] Error:", error)
+    return null
+  }
 }
 
 // Get user data by ID from Firestore
@@ -65,16 +67,56 @@ export async function getUserById(userId: string): Promise<any> {
   }
 }
 
-// Get current user's Firestore data
+// Get user by email
+export async function getUserByEmail(email: string): Promise<any> {
+  try {
+    if (!email) {
+      console.error("[getUserByEmail] No email provided")
+      return null
+    }
+
+    console.log(`[getUserByEmail] Searching for user with email: ${email}`)
+    const usersRef = collection(db, "users")
+    const q = query(usersRef, where("email", "==", email.toLowerCase().trim()))
+
+    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+      function: "getUserByEmail",
+      email,
+    })
+
+    if (error || !querySnapshot) {
+      return null
+    }
+
+    if (!querySnapshot.empty) {
+      const userDoc = querySnapshot.docs[0]
+      const userData = userDoc.data()
+      console.log(`[getUserByEmail] Found user:`, {
+        id: userDoc.id,
+        name: userData.name || "NO_NAME",
+        email: userData.email || "NO_EMAIL",
+      })
+      return { id: userDoc.id, ...userData }
+    }
+
+    console.log(`[getUserByEmail] No user found with email: ${email}`)
+    return null
+  } catch (error) {
+    console.error(`[getUserByEmail] Error searching for user with email ${email}:`, error)
+    return null
+  }
+}
+
+// UPDATED: Get current user's Firestore data using unified service
 export async function getCurrentUserData(): Promise<any> {
   try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
+    const authResult = await UnifiedAuthService.getCurrentUser()
+    if (!authResult.success || !authResult.user) {
       console.log("[getCurrentUserData] No authenticated user")
       return null
     }
 
-    return await getUserById(currentUser.uid)
+    return await getUserById(authResult.user.uid)
   } catch (error) {
     console.error("[getCurrentUserData] Error getting current user data:", error)
     return null
@@ -163,6 +205,36 @@ export async function updateUserProfile(userId: string, updates: any): Promise<{
     logError(appError)
     return { success: false, error: appError }
   }
+}
+
+// Store invitation code for user
+export async function storeInvitationCode(
+  userId: string,
+  invitationCode: string,
+): Promise<{ success: boolean; error?: any }> {
+  try {
+    console.log(`[storeInvitationCode] Storing invitation code ${invitationCode} for user ${userId}`)
+
+    const result = await updateUserProfile(userId, {
+      inviteCode: invitationCode,
+    })
+
+    if (result.success) {
+      console.log(`[storeInvitationCode] ✅ Successfully stored invitation code`)
+    } else {
+      console.error(`[storeInvitationCode] ❌ Failed to store invitation code:`, result.error)
+    }
+
+    return result
+  } catch (error) {
+    console.error(`[storeInvitationCode] Error storing invitation code:`, error)
+    return { success: false, error }
+  }
+}
+
+// Update user with new data
+export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
+  return updateUserProfile(userId, updates)
 }
 
 // Get all users (admin function)
@@ -275,3 +347,6 @@ export function subscribeToUser(userId: string, callback: (userData: any, error?
     return () => {}
   }
 }
+
+// Export UnifiedAuthService for easy access
+export { UnifiedAuthService }

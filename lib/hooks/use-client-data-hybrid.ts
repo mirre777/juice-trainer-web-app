@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { collection, onSnapshot, query, where, orderBy, Timestamp } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { UnifiedClientService, type ClientResult } from "@/lib/services/unified-client-service"
 import type { Client } from "@/types/client"
+import { ErrorType, handleClientError } from "@/lib/utils/error-handler"
 
 export function useClientDataHybrid(isDemo = false) {
   const [clients, setClients] = useState<Client[]>([])
@@ -12,275 +12,137 @@ export function useClientDataHybrid(isDemo = false) {
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
+  // Demo clients data
   const demoClients: Client[] = [
     {
-      id: "1",
-      name: "Salty Snack",
-      initials: "SS",
+      id: "demo-1",
+      name: "Demo Client",
+      initials: "DC",
       status: "Active",
-      progress: 38,
-      sessions: { completed: 12, total: 30 },
-      completion: 38,
-      notes: "Working on strength training and nutrition plan.",
+      progress: 75,
+      sessions: { completed: 15, total: 20 },
+      completion: 75,
+      notes: "This is a demo client for testing purposes.",
       bgColor: "#f3f4f6",
       textColor: "#111827",
-      lastWorkout: { name: "Upper Body Strength", date: "2 days ago", completion: 85 },
-      metrics: [
-        { name: "Weight", value: "165 lbs", change: "+2 lbs" },
-        { name: "Body Fat", value: "18%", change: "-1.5%" },
-        { name: "Squat 1RM", value: "225 lbs", change: "+15 lbs" },
-      ],
-      email: "salty@example.com",
-      goal: "Build muscle",
-      program: "Strength Training",
+      lastWorkout: { name: "Demo Workout", date: "1 day ago", completion: 90 },
+      metrics: [],
+      email: "demo@example.com",
+      goal: "Demo goal",
+      program: "Demo program",
       createdAt: new Date(),
-      inviteCode: "",
+      inviteCode: "DEMO123",
       userId: "demo-user-1",
-      phone: "",
-      hasLinkedAccount: true,
+      phone: "+1234567890",
     },
   ]
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2)
-  }
-
-  const convertFirestoreToClient = (doc: any): Client => {
-    const data = doc.data()
-    return {
-      id: doc.id,
-      name: data.name || "Unnamed Client",
-      initials: getInitials(data.name || "UC"),
-      status: data.status || "Active",
-      progress: data.progress || 0,
-      sessions: data.sessions || { completed: 0, total: 0 },
-      completion: data.completion || 0,
-      notes: data.notes || "",
-      bgColor: data.bgColor || "#f3f4f6",
-      textColor: data.textColor || "#111827",
-      lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
-      metrics: data.metrics || [],
-      email: data.email || "",
-      goal: data.goal || "",
-      program: data.program || "",
-      createdAt: data.createdAt?.toDate?.() || new Date(),
-      inviteCode: data.inviteCode || "",
-      userId: data.userId || "",
-      phone: data.phone || "",
-      hasLinkedAccount: data.hasLinkedAccount || false,
+  const handleClientResult = useCallback((result: ClientResult) => {
+    if (result.success && result.clients) {
+      console.log(`✅ [useClientDataHybrid] Received ${result.clients.length} clients via real-time`)
+      setClients(result.clients)
+      setLastFetchTime(new Date())
+      setError(null)
+    } else if (result.error) {
+      console.error("❌ [useClientDataHybrid] Real-time error:", result.error.message)
+      setError(result.error.message)
     }
-  }
-
-  const fetchExistingClients = async () => {
-    try {
-      console.log("🚀 [Hybrid] Step 1: Fetching existing clients via API")
-
-      const response = await fetch(`/api/clients`, {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      console.log("📡 [Hybrid] API response status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("❌ [Hybrid] API error response:", errorText)
-        throw new Error(`API request failed: ${response.status} - ${errorText}`)
-      }
-
-      const data = await response.json()
-      console.log("📊 [Hybrid] API response data:", {
-        success: data.success,
-        clientCount: data.clients?.length || 0,
-        totalClients: data.totalClients,
-      })
-
-      if (data.success && data.clients && Array.isArray(data.clients)) {
-        const transformedClients = data.clients.map((client: any) => ({
-          id: client.id,
-          name: client.name || "Unnamed Client",
-          initials: client.initials || getInitials(client.name || "UC"),
-          status: client.status || "Active",
-          progress: client.progress || 0,
-          sessions: client.sessions || { completed: 0, total: 0 },
-          completion: client.completion || 0,
-          notes: client.notes || "",
-          bgColor: client.bgColor || "#f3f4f6",
-          textColor: client.textColor || "#111827",
-          lastWorkout: client.lastWorkout || { name: "", date: "", completion: 0 },
-          metrics: client.metrics || [],
-          email: client.email || "",
-          goal: client.goal || "",
-          program: client.program || "",
-          createdAt: client.createdAt ? new Date(client.createdAt) : new Date(),
-          inviteCode: client.inviteCode || "",
-          userId: client.userId || "",
-          phone: client.phone || "",
-          hasLinkedAccount: client.hasLinkedAccount || false,
-        }))
-
-        console.log("✅ [Hybrid] Transformed clients:", transformedClients.length)
-        setClients(transformedClients)
-        setLastFetchTime(new Date())
-        return transformedClients
-      } else {
-        console.log("⚠️ [Hybrid] No clients in API response or API failed")
-        setClients([])
-        setLastFetchTime(new Date())
-        return []
-      }
-    } catch (err) {
-      console.error("❌ [Hybrid] Error fetching existing clients:", err)
-      throw err
-    }
-  }
-
-  const setupRealtimeListener = async (userId: string, existingClients: Client[]) => {
-    try {
-      console.log("🔗 [Hybrid] Step 2: Setting up real-time listener for new clients...")
-
-      const fetchTimestamp = lastFetchTime || new Date()
-
-      const clientsRef = collection(db, "users", userId, "clients")
-      const newClientsQuery = query(
-        clientsRef,
-        where("createdAt", ">", Timestamp.fromDate(fetchTimestamp)),
-        orderBy("createdAt", "desc"),
-      )
-
-      console.log("📍 [Hybrid] Listening for new clients created after:", fetchTimestamp.toISOString())
-
-      const unsubscribe = onSnapshot(
-        newClientsQuery,
-        (snapshot) => {
-          console.log("📊 [Hybrid] Real-time update: received", snapshot.size, "new documents")
-
-          if (snapshot.empty) {
-            console.log("ℹ️ [Hybrid] No new clients detected")
-            return
-          }
-
-          const newClients: Client[] = []
-
-          snapshot.forEach((doc) => {
-            const data = doc.data()
-            console.log("📄 [Hybrid] Processing new client:", doc.id, data.name)
-
-            if (data && typeof data === "object" && data.name && !data.name.includes("channel?VER=")) {
-              const client = convertFirestoreToClient(doc)
-
-              const existsInCurrent = existingClients.some((c) => c.id === client.id)
-              if (!existsInCurrent) {
-                newClients.push(client)
-                console.log("✅ [Hybrid] Added new client:", client.name)
-              } else {
-                console.log("⚠️ [Hybrid] Skipped duplicate client:", client.name)
-              }
-            }
-          })
-
-          if (newClients.length > 0) {
-            setClients((prevClients) => {
-              const mergedClients = [...prevClients]
-
-              newClients.forEach((newClient) => {
-                const exists = mergedClients.some((c) => c.id === newClient.id)
-                if (!exists) {
-                  mergedClients.unshift(newClient)
-                }
-              })
-
-              console.log("🎯 [Hybrid] Updated clients list:", mergedClients.length, "total clients")
-              return mergedClients
-            })
-          }
-        },
-        (error) => {
-          console.error("❌ [Hybrid] Real-time listener error:", error)
-          setError(`Real-time updates failed: ${error.message}`)
-        },
-      )
-
-      unsubscribeRef.current = unsubscribe
-      console.log("✅ [Hybrid] Real-time listener setup complete")
-    } catch (err) {
-      console.error("❌ [Hybrid] Error setting up real-time listener:", err)
-      setError(`Failed to setup live updates: ${err instanceof Error ? err.message : "Unknown error"}`)
-    }
-  }
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
     if (isDemo) {
+      console.log("🎭 [useClientDataHybrid] Demo mode")
       setClients(demoClients)
+      setLastFetchTime(new Date())
       setLoading(false)
       return
     }
 
-    const initializeHybridFetch = async () => {
+    const setupHybridData = async () => {
       try {
         setLoading(true)
         setError(null)
 
-        console.log("🎬 [Hybrid] Starting hybrid client fetching")
+        console.log("🚀 [useClientDataHybrid] Setting up hybrid data fetching")
 
-        const existingClients = await fetchExistingClients()
+        // Step 1: Initial fetch with unified service
+        console.log("📊 [useClientDataHybrid] Initial fetch...")
+        const initialResult = await UnifiedClientService.getClients()
 
-        const userResponse = await fetch("/api/auth/me", {
-          credentials: "include",
+        if (initialResult.success && initialResult.clients) {
+          console.log(`✅ [useClientDataHybrid] Initial fetch: ${initialResult.clients.length} clients`)
+          setClients(initialResult.clients)
+          setLastFetchTime(new Date())
+          setError(null)
+        } else {
+          console.error("❌ [useClientDataHybrid] Initial fetch failed:", initialResult.error?.message)
+          setError(initialResult.error?.message || "Failed to load clients")
+        }
+
+        // Step 2: Set up real-time subscription
+        console.log("🔗 [useClientDataHybrid] Setting up real-time subscription...")
+        const unsubscribe = UnifiedClientService.subscribeToClients(handleClientResult)
+        unsubscribeRef.current = unsubscribe
+
+        setLoading(false)
+      } catch (err) {
+        const appError = handleClientError(err, {
+          component: "useClientDataHybrid",
+          operation: "setupHybridData",
+          message: "Failed to setup client data",
+          errorType: ErrorType.DATA_FETCH_ERROR,
         })
 
-        if (userResponse.ok) {
-          const userData = await userResponse.json()
-          const userId = userData.uid
-
-          if (userId) {
-            await setupRealtimeListener(userId, existingClients)
-          } else {
-            console.warn("⚠️ [Hybrid] No user ID found, skipping real-time listener")
-          }
-        } else {
-          console.warn("⚠️ [Hybrid] Failed to get user data, skipping real-time listener")
-        }
-      } catch (err) {
-        console.error("❌ [Hybrid] Initialization error:", err)
-        setError(err instanceof Error ? err.message : "Failed to load clients")
+        console.error("❌ [useClientDataHybrid] Setup error:", appError)
+        setError(appError.message)
         setClients([])
-      } finally {
         setLoading(false)
       }
     }
 
-    initializeHybridFetch()
+    setupHybridData()
 
+    // Cleanup function
     return () => {
       if (unsubscribeRef.current) {
-        console.log("🧹 [Hybrid] Cleaning up real-time listener")
+        console.log("🧹 [useClientDataHybrid] Cleaning up real-time subscription")
         unsubscribeRef.current()
         unsubscribeRef.current = null
       }
     }
-  }, [isDemo])
+  }, [isDemo, handleClientResult])
 
-  const refetch = async () => {
-    if (!isDemo) {
+  const refetch = useCallback(async () => {
+    if (isDemo) return
+
+    try {
       setLoading(true)
-      try {
-        await fetchExistingClients()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to refetch clients")
-      } finally {
-        setLoading(false)
+      setError(null)
+
+      console.log("🔄 [useClientDataHybrid] Manual refetch requested")
+      const result = await UnifiedClientService.getClients()
+
+      if (result.success && result.clients) {
+        setClients(result.clients)
+        setLastFetchTime(new Date())
+        setError(null)
+      } else {
+        setError(result.error?.message || "Failed to refetch clients")
       }
+    } catch (err) {
+      const appError = handleClientError(err, {
+        component: "useClientDataHybrid",
+        operation: "refetch",
+        message: "Failed to refetch clients",
+        errorType: ErrorType.DATA_FETCH_ERROR,
+      })
+
+      setError(appError.message)
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [isDemo])
 
   return {
     clients,

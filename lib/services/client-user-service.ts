@@ -1,4 +1,6 @@
-// Client-side user service that uses API endpoints instead of direct Firebase calls
+// Client-side user service that uses UnifiedAuthService for consistency
+
+import { UnifiedAuthService } from "./unified-auth-service"
 
 export interface User {
   uid: string
@@ -10,54 +12,53 @@ export interface User {
   inviteCode?: string
 }
 
-// Get current user from API endpoint
+// Get current user using unified auth service
 export async function getCurrentUserFromAPI(): Promise<User | null> {
   try {
-    console.log("[getCurrentUserFromAPI] Fetching user from /api/auth/me")
+    console.log("[getCurrentUserFromAPI] Getting user via UnifiedAuthService")
 
-    const response = await fetch("/api/auth/me", {
-      method: "GET",
-      credentials: "include", // Include cookies
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
+    const authResult = await UnifiedAuthService.getCurrentUser()
 
-    console.log("[getCurrentUserFromAPI] Response status:", response.status)
+    if (authResult.success && authResult.user) {
+      console.log("[getCurrentUserFromAPI] User retrieved successfully:", {
+        uid: authResult.user.uid,
+        email: authResult.user.email,
+        role: authResult.user.role,
+      })
 
-    if (response.status === 401) {
-      console.log("[getCurrentUserFromAPI] User not authenticated")
+      // Convert AuthUser to User format for backward compatibility
+      return {
+        uid: authResult.user.uid,
+        email: authResult.user.email,
+        name: authResult.user.name || "",
+        role: authResult.user.role,
+        user_type: authResult.user.user_type,
+        universalInviteCode: authResult.user.universalInviteCode,
+        inviteCode: authResult.user.inviteCode,
+      }
+    } else {
+      console.log("[getCurrentUserFromAPI] No authenticated user found")
       return null
     }
-
-    if (!response.ok) {
-      console.error("[getCurrentUserFromAPI] API error:", response.status, response.statusText)
-      return null
-    }
-
-    const userData = await response.json()
-    console.log("[getCurrentUserFromAPI] User data received:", {
-      uid: userData.uid,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role,
-    })
-
-    return userData
   } catch (error) {
-    console.error("[getCurrentUserFromAPI] Error fetching user:", error)
+    console.error("[getCurrentUserFromAPI] Error:", error)
     return null
   }
 }
 
-// Check if user is authenticated
+// Check if user is authenticated using unified service
 export async function isAuthenticated(): Promise<boolean> {
-  const user = await getCurrentUserFromAPI()
-  return user !== null
+  const result = await UnifiedAuthService.isAuthenticated()
+  return result
 }
 
-// Get user role
+// Get user role using unified service
 export async function getUserRole(): Promise<string | null> {
-  const user = await getCurrentUserFromAPI()
-  return user?.role || null
+  try {
+    const authResult = await UnifiedAuthService.getCurrentUser()
+    return authResult.success && authResult.user ? authResult.user.role || null : null
+  } catch (error) {
+    console.error("[getUserRole] Error:", error)
+    return null
+  }
 }
