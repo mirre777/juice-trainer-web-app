@@ -121,11 +121,29 @@ export class ProgramConversionService {
     for (const exercise of routineData.exercises || []) {
       const exerciseId = await this.ensureExerciseExists(userId, exercise.name)
 
-      // Get the sets for this specific week
+      // Get the sets for this specific week - with better error handling
       const weekData = exercise.weeks?.find((w: any) => w.week_number === weekNumber)
-      const sets = weekData?.sets || exercise.sets || []
+      let sets = weekData?.sets || exercise.sets || []
+
+      // Ensure sets is always an array
+      if (!Array.isArray(sets)) {
+        console.log(`[createRoutine] Warning: sets is not an array for exercise ${exercise.name}:`, sets)
+        sets = []
+      }
 
       const mobileSets = sets.map((set: any) => {
+        // Ensure set is an object
+        if (!set || typeof set !== "object") {
+          console.log(`[createRoutine] Warning: invalid set data for exercise ${exercise.name}:`, set)
+          return {
+            id: uuidv4(),
+            type: "normal",
+            weight: "",
+            reps: "",
+            notes: undefined,
+          }
+        }
+
         // Combine RPE, rest, and notes into a single notes field like your example
         const notesParts = []
         if (set.rpe) notesParts.push(`RPE: ${set.rpe}`)
@@ -137,7 +155,7 @@ export class ProgramConversionService {
           type: set.warmup ? "warmup" : set.set_type || "normal",
           weight: set.weight?.toString() || "",
           reps: set.reps?.toString() || "",
-          notes: notesParts.join(" | ") || undefined,
+          notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
         }
       })
 
