@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { collection, onSnapshot, query, where, orderBy, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
+import { useAuth } from "@/context/AuthContext"
 import type { Client } from "@/types/client"
 
 export function useClientDataHybrid(isDemo = false) {
@@ -11,6 +12,7 @@ export function useClientDataHybrid(isDemo = false) {
   const [error, setError] = useState<string | null>(null)
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const { user } = useAuth() // Use your existing auth context
 
   // Demo clients data
   const demoClients: Client[] = [
@@ -41,12 +43,6 @@ export function useClientDataHybrid(isDemo = false) {
       hasLinkedAccount: true,
     },
   ]
-
-  // Helper function to get auth token from localStorage
-  const getAuthToken = () => {
-    if (typeof window === "undefined") return null
-    return localStorage.getItem("auth_token")
-  }
 
   // Helper function to get initials from name
   const getInitials = (name: string) => {
@@ -85,23 +81,17 @@ export function useClientDataHybrid(isDemo = false) {
     }
   }
 
-  // Step 1: Fetch existing clients via API with auth token
+  // Step 1: Fetch existing clients via API using cookies (same as /api/auth/me)
   const fetchExistingClients = async () => {
     try {
       console.log("🚀 [Hybrid] Step 1: Fetching existing clients via API...")
 
-      const authToken = getAuthToken()
-      if (!authToken) {
-        throw new Error("No auth token found in localStorage")
-      }
-
-      console.log("🔑 [Hybrid] Auth token found, length:", authToken.length)
-
+      // Use the same method as your working endpoints - cookies with credentials
       const response = await fetch("/api/clients", {
         method: "GET",
+        credentials: "include", // This sends cookies automatically
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
         },
       })
 
@@ -232,26 +222,16 @@ export function useClientDataHybrid(isDemo = false) {
 
         console.log("🎬 [Hybrid] Starting hybrid client fetching...")
 
-        // Step 1: Fetch existing clients via API with auth token
+        // Step 1: Fetch existing clients via API using cookies
         const existingClients = await fetchExistingClients()
 
-        // Step 2: Get current user to set up real-time listener
-        const userResponse = await fetch("/api/auth/me", {
-          credentials: "include",
-        })
-
-        if (userResponse.ok) {
-          const userData = await userResponse.json()
-          const userId = userData.uid
-
-          if (userId) {
-            // Step 3: Set up real-time listener for new clients
-            await setupRealtimeListener(userId, existingClients)
-          } else {
-            console.warn("⚠️ [Hybrid] No user ID found, skipping real-time listener")
-          }
+        // Step 2: Set up real-time listener if we have a user
+        if (user && user.uid) {
+          console.log("👤 [Hybrid] User found from context:", user.uid)
+          // Step 3: Set up real-time listener for new clients
+          await setupRealtimeListener(user.uid, existingClients)
         } else {
-          console.warn("⚠️ [Hybrid] Failed to get user data, skipping real-time listener")
+          console.warn("⚠️ [Hybrid] No user found in context, skipping real-time listener")
         }
       } catch (err) {
         console.error("❌ [Hybrid] Initialization error:", err)
@@ -272,7 +252,7 @@ export function useClientDataHybrid(isDemo = false) {
         unsubscribeRef.current = null
       }
     }
-  }, [isDemo])
+  }, [isDemo, user])
 
   // Manual refetch function (useful for pull-to-refresh)
   const refetch = async () => {
