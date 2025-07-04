@@ -114,11 +114,30 @@ export class ProgramConversionService {
     const routineId = uuidv4()
     const timestamp = Timestamp.now()
 
-    console.log(`[createRoutine] Creating routine: ${routineData.routine_name} for week ${weekNumber}`)
+    // Validate routine data
+    if (!routineData) {
+      throw new Error("Routine data is required")
+    }
+
+    const routineName = routineData.routine_name || routineData.name || "Unnamed Routine"
+    console.log(`[createRoutine] Creating routine: ${routineName} for week ${weekNumber}`)
+    console.log(`[createRoutine] Routine data:`, JSON.stringify(routineData, null, 2))
 
     // Process exercises and ensure they exist
     const exercises = []
-    for (const exercise of routineData.exercises || []) {
+    const exercisesArray = routineData.exercises || []
+
+    if (!Array.isArray(exercisesArray)) {
+      console.log(`[createRoutine] Warning: exercises is not an array for routine ${routineName}:`, exercisesArray)
+      throw new Error(`Exercises must be an array for routine: ${routineName}`)
+    }
+
+    for (const exercise of exercisesArray) {
+      if (!exercise || !exercise.name) {
+        console.log(`[createRoutine] Warning: skipping exercise with no name:`, exercise)
+        continue
+      }
+
       const exerciseId = await this.ensureExerciseExists(userId, exercise.name)
 
       // Get the sets for this specific week - with better error handling
@@ -168,7 +187,7 @@ export class ProgramConversionService {
 
     const routineDoc: MobileRoutine = {
       id: routineId,
-      name: routineData.routine_name,
+      name: routineName,
       notes: routineData.notes || "",
       createdAt: timestamp.toDate().toISOString(),
       updatedAt: timestamp.toDate().toISOString(),
@@ -177,11 +196,19 @@ export class ProgramConversionService {
       exercises,
     }
 
+    // Log the routine document before saving to debug any undefined values
+    console.log(`[createRoutine] Routine document to save:`, JSON.stringify(routineDoc, null, 2))
+
+    // Validate that no fields are undefined before saving
+    if (routineDoc.name === undefined || routineDoc.name === null) {
+      throw new Error(`Routine name cannot be undefined or null`)
+    }
+
     // Save routine to Firestore
     const routinesRef = collection(db, "users", userId, "routines")
     await setDoc(doc(routinesRef, routineId), routineDoc)
 
-    console.log(`[createRoutine] ✅ Created routine: ${routineData.routine_name} with ID: ${routineId}`)
+    console.log(`[createRoutine] ✅ Created routine: ${routineName} with ID: ${routineId}`)
 
     return { routineId, routineDoc }
   }
