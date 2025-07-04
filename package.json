@@ -50,6 +50,7 @@
     "cookies-next": "latest",
     "crypto": "latest",
     "date-fns": "latest",
+    "dotenv": "latest",
     "embla-carousel-react": "latest",
     "firebase": "latest",
     "firebase-admin": "latest",

@@ -268,6 +268,24 @@ export class ProgramConversionService {
         const userId = clientData.userId || null
 
         console.log(`[getClientUserId] Found userId: ${userId}`)
+
+        // ADD THIS: Check if user document exists and log its status
+        if (userId) {
+          const userDoc = await getDoc(doc(db, "users", userId))
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            console.log(`[getClientUserId] User document exists with status: ${userData.status}`)
+            console.log(`[getClientUserId] User data:`, {
+              name: userData.name,
+              email: userData.email,
+              status: userData.status,
+              hasFirebaseAuth: userData.hasFirebaseAuth,
+            })
+          } else {
+            console.log(`[getClientUserId] User document does NOT exist at users/${userId}`)
+          }
+        }
+
         return userId
       }
 
