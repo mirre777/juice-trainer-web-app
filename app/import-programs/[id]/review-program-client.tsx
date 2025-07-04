@@ -1,27 +1,12 @@
 "use client"
 
 import type React from "react"
-import {
-  ChevronLeft,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Trash2,
-  Calendar,
-  RotateCcw,
-  Plus,
-  Check,
-  Info,
-  Save,
-  Send,
-  ChevronUp,
-} from "lucide-react"
+import { ChevronLeft, Calendar, Send, ArrowLeft, Target, CheckCircle } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -30,18 +15,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { User } from "@/components/icons/user"
 import { useToast } from "@/hooks/use-toast"
 import { useClientDataAPI } from "@/lib/hooks/use-client-data-api"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
 import type { Client } from "@/types/client"
 import { updateDoc, doc, db } from "@/firebase/config" // Import updateDoc, doc, and db from firebase/config
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import Link from "next/link"
 
 interface ReviewProgramClientProps {
+  programData: any
+  importId: string
   importData: any
 }
 
-export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
+export default function ReviewProgramClient({ programData, importId, importData }: ReviewProgramClientProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
@@ -59,9 +49,12 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [error, setError] = useState<string | null>(null)
 
   // Client selection state - using API approach like ClientPage
-  const { clients, loading: isLoadingClients, error: clientError } = useClientDataAPI(false)
+  const { clients, loading: isLoadingClients, error: clientError, refetch } = useClientDataAPI()
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isSendingProgram, setIsSendingProgram] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [customMessage, setCustomMessage] = useState("")
+  const [isSending, setIsSending] = useState(false)
 
   // Add logging when hasChanges state changes
   const setHasChangesWithLogging = (value: boolean) => {
@@ -537,7 +530,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   }
 
   // Handle sending program to client
-  const handleSendToClient = async () => {
+  const handleSendToClientOld = async () => {
     if (!selectedClient || !programState) return
 
     setIsSendingProgram(true)
@@ -582,507 +575,302 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
     }
   }
 
+  const handleSendToClient = async () => {
+    if (!selectedClientId) {
+      toast({
+        title: "No Client Selected",
+        description: "Please select a client to send the program to.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const selectedClient = clients.find((c) => c.id === selectedClientId)
+    if (!selectedClient) {
+      toast({
+        title: "Client Not Found",
+        description: "The selected client could not be found.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSending(true)
+
+    try {
+      console.log("[ReviewProgramClient] Sending program to client:", {
+        clientId: selectedClientId,
+        clientName: selectedClient.name,
+        programTitle: programData.program_title,
+        importId,
+      })
+
+      const response = await fetch("/api/programs/send-to-client", {
+        method: "POST",
+        credentials: "include", // Use same cookie-based auth as clients page
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          programData,
+          customMessage,
+          importId,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to send program")
+      }
+
+      const result = await response.json()
+      console.log("[ReviewProgramClient] Program sent successfully:", result)
+
+      toast({
+        title: "Program Sent Successfully!",
+        description: `The program "${programData.program_title}" has been sent to ${selectedClient.name}.`,
+      })
+
+      // Reset form
+      setSelectedClientId("")
+      setCustomMessage("")
+    } catch (error) {
+      console.error("[ReviewProgramClient] Error sending program:", error)
+      toast({
+        title: "Failed to Send Program",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  const getRoutineCount = () => {
+    return programData?.routines?.length || 0
+  }
+
+  const getTotalExercises = () => {
+    if (!programData?.routines) return 0
+    return programData.routines.reduce((total: number, routine: any) => {
+      return total + (routine.exercises?.length || 0)
+    }, 0)
+  }
+
+  const getProgramWeeks = () => {
+    return programData?.program_weeks || 0
+  }
+
+  // Log client loading for debugging
+  const logClientLoading = () => {
+    console.log("[ReviewProgramClient] Client loading state:", {
+      isLoadingClients,
+      clientCount: clients.length,
+      clientError,
+      selectedClientId,
+    })
+  }
+
+  useEffect(() => {
+    logClientLoading()
+  }, [isLoadingClients, clients.length, clientError, selectedClientId])
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={() => {
-            if (hasChanges) {
-              setShowConfirmDialog(true)
-            } else {
-              router.push("/import-programs")
-            }
-          }}
-        >
-          <ChevronLeft className="w-4 h-4 mr-1" />
-          Back
-        </Button>
-      </div>
-
-      <div className="flex justify-between items-center mb-4">
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <Link href="/import-programs">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Import
+          </Button>
+        </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
-          <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={revertChanges}
-            disabled={!hasChanges || isSaving}
-            className="flex items-center gap-2 text-gray-700 hover:bg-gray-100"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Revert
-          </Button>
-          <Button
-            className={
-              justSaved && !hasChanges
-                ? "bg-lime-400 text-gray-800 cursor-not-allowed opacity-75 flex items-center gap-2"
-                : "bg-lime-400 hover:bg-lime-500 text-gray-800 flex items-center gap-2"
-            }
-            onClick={handleSaveChanges}
-            disabled={isSaving || (justSaved && !hasChanges)}
-          >
-            {isSaving ? (
-              "Saving..."
-            ) : justSaved && !hasChanges ? (
-              <>
-                <Check className="h-4 w-4" />
-                Saved
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
-          <Button
-            className={`${
-              hasChanges || isSaving ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-800"
-            } text-white flex items-center gap-2`}
-            onClick={toggleClientSelection}
-            disabled={hasChanges || isSaving}
-            title={hasChanges || isSaving ? "Save changes first before sending to client" : "Send program to client"}
-          >
-            <Send className="h-4 w-4" />
-            Send to Client
-            {(hasChanges || isSaving) && <span className="text-xs ml-1">(Save first)</span>}
-          </Button>
+          <h1 className="text-3xl font-bold">Review & Send Program</h1>
+          <p className="text-gray-600 mt-1">Review the imported program and send it to a client</p>
         </div>
       </div>
 
-      {/* Display Fetched Clients - Debug Section */}
-      <Card className="p-4 mb-6 bg-blue-50 border-blue-200">
-        <h4 className="font-medium text-blue-800 mb-3">
-          API Fetched Clients ({clients.length}) {isLoadingClients && "(Loading...)"}
-        </h4>
-        {isLoadingClients ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-blue-600 text-sm">Loading clients via API...</span>
-          </div>
-        ) : clientError ? (
-          <div className="text-red-700 text-sm">API Error: {clientError}</div>
-        ) : clients.length === 0 ? (
-          <div className="text-blue-700 text-sm">No clients found via API</div>
-        ) : (
-          <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-            {clients.map((client, index) => (
-              <div
-                key={client.id || index}
-                className="bg-white p-2 rounded border border-blue-200"
-                style={{ fontSize: "8px" }}
-              >
-                <div className="font-medium text-gray-900 truncate">{client.name || "No Name"}</div>
-                <div className="text-gray-600 truncate">{client.email || "No Email"}</div>
-                <div className="text-gray-500">Status: {client.status || "No Status"}</div>
-                <div className="text-gray-500">ID: {client.userId || client.id || "No ID"}</div>
-                <div className="text-gray-500">Linked: {client.hasLinkedAccount ? "Yes" : "No"}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Program Settings */}
-      <Card className="p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <label htmlFor="program-title" className="block text-sm font-medium text-gray-700 mb-1">
-              Program Title
-            </label>
-            <Input
-              id="program-title"
-              value={programState.program_title || ""}
-              onChange={handleProgramTitleChange}
-              className="w-full border-transparent focus:border-lime-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="program-weeks" className="block text-sm font-medium text-gray-700 mb-1">
-              Program Weeks
-            </label>
-            <Input
-              id="program-weeks"
-              type="number"
-              value={programState.program_weeks || 1}
-              onChange={handleProgramWeeksChange}
-              className="w-full border-transparent focus:border-lime-500"
-              min={1}
-              disabled={!programState.is_periodized} // Disable if not periodized
-            />
-          </div>
-        </div>
-
-        {/* Program Notes */}
-        <div className="mb-8">
-          <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
-            Program Notes
-          </label>
-          <Textarea
-            id="program-notes"
-            value={programState.program_notes || ""}
-            onChange={handleProgramNotesChange}
-            className="w-full min-h-[100px] border-transparent focus:border-lime-500"
-            placeholder="Add notes about this program..."
-          />
-        </div>
-
-        {/* Periodization Toggle */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Program Overview */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Program Overview
+            </CardTitle>
+            <CardDescription>Summary of the imported workout program</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div>
-              <h3 className="font-medium text-gray-900">Periodization</h3>
-              <p className="text-sm text-gray-500">
-                {programState.is_periodized
-                  ? "Program changes week by week with different training variables"
-                  : "Same routine repeated each week"}
+              <h3 className="font-semibold text-lg">{programData?.program_title || "Untitled Program"}</h3>
+              {programData?.program_notes && <p className="text-gray-600 text-sm mt-1">{programData.program_notes}</p>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium">{getProgramWeeks()} Weeks</p>
+                  <p className="text-xs text-gray-500">Duration</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium">{getRoutineCount()} Routines</p>
+                  <p className="text-xs text-gray-500">Workouts</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">{getTotalExercises()} exercises</span> across all routines
               </p>
             </div>
-            <Button
-              variant={programState.is_periodized ? "default" : "outline"}
-              onClick={togglePeriodization}
-              className="flex items-center gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {programState.is_periodized ? "Switch to Non-Periodized" : "Switch to Periodized"}
-            </Button>
-          </div>
-        </div>
-      </Card>
 
-      {/* Week Navigation (only show if periodized) */}
-      {programState.is_periodized && (
-        <Card className="p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
-              <ChevronLeft className="h-6 w-6" />
-            </Button>
-            <div className="flex-1 text-center">
-              <div className="text-lg font-semibold">
-                Week {currentWeek}/{programState.program_weeks}
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToNextWeek}
-              disabled={currentWeek === programState.program_weeks}
-            >
-              <ChevronRight className="h-6 w-6" />
-            </Button>
-          </div>
-
-          {/* Week selector dots */}
-          <div className="flex justify-center mt-4 gap-1">
-            {Array.from({ length: programState.program_weeks }, (_, i) => i + 1).map((week) => (
-              <button
-                key={week}
-                onClick={() => setCurrentWeek(week)}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  week === currentWeek ? "bg-lime-500" : "bg-gray-300"
-                }`}
-              />
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Routines for Current Week / Non-Periodized Program */}
-      {currentRoutines && currentRoutines.length > 0 ? (
-        <div className="space-y-4">
-          {currentRoutines.map((routine, routineIndex) => (
-            <div key={routineIndex} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div
-                className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
-                onClick={() => toggleRoutine(routineIndex)}
-              >
-                <div className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full ${getRoutineColor(routineIndex)} flex items-center justify-center text-white mr-3`}
-                  >
-                    {routine.routine_name?.charAt(0) || "R"}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">{routine.routine_name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {routine.exercises?.length || 0} exercises
-                      {programState.is_periodized && ` • Week ${currentWeek} view`}
-                    </p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm">
-                  {expandedRoutines[routineIndex] ? (
-                    <ChevronUp className="h-5 w-5" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5" />
-                  )}
-                </Button>
-              </div>
-
-              {expandedRoutines[routineIndex] && (
-                <div className="p-4">
-                  {routine.exercises && routine.exercises.length > 0 ? (
-                    <div>
-                      {/* Header */}
-                      <div className="grid grid-cols-9 gap-4 py-2 px-4 bg-gray-100 rounded-t-lg text-sm font-medium text-gray-600">
-                        <div className="col-span-2">Exercise</div>
-                        <div className="col-span-1 text-center">Set</div>
-                        <div className="col-span-1 text-center">Reps</div>
-                        <div className="col-span-1 text-center">Weight</div>
-                        <div className="col-span-1 text-center">RPE</div>
-                        <div className="col-span-1 text-center">Rest</div>
-                        <div className="col-span-2 text-right">Actions</div>
-                      </div>
-
-                      {routine.exercises.map((exercise, exerciseIndex) => (
-                        <div key={exerciseIndex} className="border-b border-gray-200">
-                          {/* Exercise Name and Notes - displayed once per exercise, outside the set loop */}
-                          <div className="py-3 px-4">
-                            <div className="font-medium text-gray-900">{exercise.name}</div>
-                            {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
-                          </div>
-
-                          {/* Exercise sets */}
-                          {programState.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[
-                            exerciseIndex
-                          ]?.sets?.map((set, setIndex) => (
-                            <div
-                              key={setIndex}
-                              className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
-                            >
-                              {/* Empty div to maintain col-span-2 alignment for the first column */}
-                              <div className="col-span-2"></div>
-
-                              <div className="col-span-1 flex justify-center">
-                                <div className="bg-white border border-gray-300 rounded-xl w-8 h-8 flex items-center justify-center text-center font-medium text-gray-800 text-sm">
-                                  {set.set_number}
-                                </div>
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.reps || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="10"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.weight || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="kg"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.rpe || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="7"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.rest || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="60s"
-                                />
-                              </div>
-
-                              <div className="col-span-2 flex justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
-                                >
-                                  <Copy className="h-4 w-4 text-gray-500" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-gray-500" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-
-                          {/* Add set button */}
-                          <div className="grid grid-cols-9 gap-4 py-2 px-4">
-                            <div className="col-span-7"></div>
-                            <div className="col-span-2 flex justify-end">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => addSet(routineIndex, exerciseIndex)}
-                              >
-                                <Plus className="h-4 w-4 text-gray-400" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">No exercises found in this routine.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-          <div className="text-gray-400 mb-2">
-            <Calendar className="mx-auto h-12 w-12" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No routines found</h3>
-          <p className="text-gray-500 mb-4">
-            {programState.is_periodized
-              ? `Week ${currentWeek} doesn't have any workout routines yet.`
-              : `This program doesn't have any workout routines yet.`}
-          </p>
-          <Button variant="outline">+ Add Routine</Button>
-        </div>
-      )}
-
-      {/* Client Selection Section */}
-      {showClientSelection && (
-        <Card className="mt-6 p-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Send to Client</h3>
-                <p className="text-sm text-gray-500">
-                  Choose a client to send "{programState?.program_title}" to their mobile app.
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => toggleClientSelection()}>
-                <ChevronUp className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Client Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Select Client</label>
-              {isLoadingClients ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-                  <span className="ml-2 text-gray-500">Loading clients...</span>
-                </div>
-              ) : clientError ? (
-                <div className="text-center py-8 text-red-500 bg-red-50 rounded-lg">
-                  <p>Error: {clientError}</p>
-                </div>
-              ) : clients.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                  <User className="mx-auto h-8 w-8 mb-2" />
-                  <p>No clients found.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
-                  {clients.map((client) => (
-                    <div
-                      key={client.id}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                        selectedClient?.id === client.id
-                          ? "border-lime-500 bg-lime-50"
-                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                      }`}
-                      onClick={() => setSelectedClient(client)}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <User className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="font-medium text-gray-900">{client.name}</p>
-                          {client.email && <p className="text-sm text-gray-500">{client.email}</p>}
-                          <p className="text-xs text-gray-400">Status: {client.status}</p>
-                        </div>
-                      </div>
-                    </div>
+            {programData?.routines && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Routines:</h4>
+                <div className="flex flex-wrap gap-1">
+                  {programData.routines.slice(0, 3).map((routine: any, index: number) => (
+                    <Badge key={index} variant="secondary" className="text-xs">
+                      {routine.routine_name}
+                    </Badge>
                   ))}
+                  {programData.routines.length > 3 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{programData.routines.length - 3} more
+                    </Badge>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Message to Client */}
-            {selectedClient && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Message to {selectedClient.name} (Optional)
-                </label>
-                <Textarea
-                  value={messageToClient}
-                  onChange={(e) => setMessageToClient(e.target.value)}
-                  placeholder="Add a personal message about this program..."
-                  className="w-full"
-                  rows={3}
-                />
               </div>
             )}
+          </CardContent>
+        </Card>
 
-            {/* Info Box */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-start space-x-2">
-                <Info className="h-4 w-4 text-blue-600 mt-0.5" />
-                <div className="text-sm text-blue-800">
-                  <p className="font-medium">What happens next:</p>
-                  <ul className="mt-1 space-y-1 text-xs">
-                    <li>• Program will be converted to mobile app format</li>
-                    <li>• Client will receive a notification</li>
-                    <li>• Program will appear in their mobile app</li>
-                    <li>• All exercises will be created if they don't exist</li>
-                  </ul>
+        {/* Send to Client */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-blue-600" />
+              Send to Client
+            </CardTitle>
+            <CardDescription>Choose a client and send this program</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Client Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="client-select">Select Client</Label>
+              {isLoadingClients ? (
+                <div className="flex items-center gap-2 p-3 border rounded-md">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  <span className="text-sm text-gray-600">Loading clients...</span>
                 </div>
-              </div>
+              ) : clientError ? (
+                <div className="p-3 border border-red-200 rounded-md bg-red-50">
+                  <p className="text-sm text-red-600">Error loading clients: {clientError}</p>
+                  <Button variant="outline" size="sm" onClick={refetch} className="mt-2 bg-transparent">
+                    Retry
+                  </Button>
+                </div>
+              ) : clients.length === 0 ? (
+                <div className="p-3 border border-gray-200 rounded-md bg-gray-50">
+                  <p className="text-sm text-gray-600">No clients found. Add clients first to send programs.</p>
+                  <Link href="/clients">
+                    <Button variant="outline" size="sm" className="mt-2 bg-transparent">
+                      Go to Clients
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                  <SelectTrigger id="client-select">
+                    <SelectValue placeholder="Choose a client..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium">
+                            {client.initials}
+                          </div>
+                          <span>{client.name}</span>
+                          <Badge variant="outline" className="ml-auto text-xs">
+                            {client.status}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {/* Custom Message */}
+            <div className="space-y-2">
+              <Label htmlFor="custom-message">Custom Message (Optional)</Label>
+              <Textarea
+                id="custom-message"
+                placeholder="Add a personal message for your client..."
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                rows={3}
+              />
             </div>
 
             {/* Send Button */}
-            {selectedClient && (
-              <div className="flex justify-end pt-4 border-t">
-                <Button
-                  onClick={handleSendToClient}
-                  disabled={isSendingProgram}
-                  className="bg-lime-400 hover:bg-lime-500 text-gray-800"
-                >
-                  {isSendingProgram ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-800 mr-2"></div>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Send Program to {selectedClient.name}
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
+            <Button
+              onClick={handleSendToClient}
+              disabled={!selectedClientId || isSending || isLoadingClients}
+              className="w-full"
+            >
+              {isSending ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                  Sending Program...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Program to Client
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Debug Section - API-based client loading */}
+      {process.env.NODE_ENV === "development" && (
+        <Card className="mt-8 border-dashed">
+          <CardHeader>
+            <CardTitle className="text-sm">Debug: API-based Client Loading</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xs space-y-1">
+              <p>
+                <strong>Loading:</strong> {isLoadingClients ? "Yes" : "No"}
+              </p>
+              <p>
+                <strong>Client Count:</strong> {clients.length}
+              </p>
+              <p>
+                <strong>Error:</strong> {clientError || "None"}
+              </p>
+              <p>
+                <strong>Selected Client:</strong> {selectedClientId || "None"}
+              </p>
+              <p>
+                <strong>Auth Method:</strong> Cookie-based API (same as Clients page)
+              </p>
+              <p>
+                <strong>Data Source:</strong> /api/clients endpoint
+              </p>
+            </div>
+          </CardContent>
         </Card>
       )}
 
