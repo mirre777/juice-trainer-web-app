@@ -5,12 +5,11 @@ import { collection, onSnapshot, query, where, orderBy, Timestamp } from "fireba
 import { db } from "@/lib/firebase/firebase"
 import type { Client } from "@/types/client"
 
-export function useClientDataHybrid(isDemo = false, filterType = "active-linked") {
+export function useClientDataHybrid(isDemo = false) {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
-  const [filterStats, setFilterStats] = useState<any>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
 
   // Demo clients data
@@ -81,12 +80,12 @@ export function useClientDataHybrid(isDemo = false, filterType = "active-linked"
   }
 
   // Step 1: Fetch existing clients via API using cookies (same as /api/auth/me)
-  const fetchExistingClients = async (filter: string = filterType) => {
+  const fetchExistingClients = async () => {
     try {
-      console.log("🚀 [Hybrid] Step 1: Fetching existing clients via API with filter:", filter)
+      console.log("🚀 [Hybrid] Step 1: Fetching existing clients via API")
 
       // Use the same method as your working endpoints - cookies with credentials
-      const response = await fetch(`/api/clients?filter=${filter}`, {
+      const response = await fetch(`/api/clients`, {
         method: "GET",
         credentials: "include", // This sends cookies automatically
         headers: {
@@ -111,9 +110,6 @@ export function useClientDataHybrid(isDemo = false, filterType = "active-linked"
         filterType: data.filterType,
         breakdown: data.breakdown,
       })
-
-      // Store filter stats for debugging
-      setFilterStats(data.breakdown)
 
       if (data.success && data.clients && Array.isArray(data.clients)) {
         // Transform the data to match your Client interface
@@ -248,10 +244,10 @@ export function useClientDataHybrid(isDemo = false, filterType = "active-linked"
         setLoading(true)
         setError(null)
 
-        console.log("🎬 [Hybrid] Starting hybrid client fetching with filter:", filterType)
+        console.log("🎬 [Hybrid] Starting hybrid client fetching")
 
         // Step 1: Fetch existing clients via API using cookies
-        const existingClients = await fetchExistingClients(filterType)
+        const existingClients = await fetchExistingClients()
 
         // Step 2: Get current user to set up real-time listener
         const userResponse = await fetch("/api/auth/me", {
@@ -290,14 +286,14 @@ export function useClientDataHybrid(isDemo = false, filterType = "active-linked"
         unsubscribeRef.current = null
       }
     }
-  }, [isDemo, filterType])
+  }, [isDemo])
 
   // Manual refetch function (useful for pull-to-refresh)
-  const refetch = async (newFilter?: string) => {
+  const refetch = async () => {
     if (!isDemo) {
       setLoading(true)
       try {
-        await fetchExistingClients(newFilter || filterType)
+        await fetchExistingClients()
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to refetch clients")
       } finally {
@@ -312,6 +308,5 @@ export function useClientDataHybrid(isDemo = false, filterType = "active-linked"
     error,
     refetch,
     lastFetchTime,
-    filterStats,
   }
 }

@@ -3,8 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Users, Plus, Filter } from "lucide-react"
+import { Users, Plus } from "lucide-react"
 import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
 import { ClientsList } from "@/components/clients/clients-list"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
@@ -19,26 +18,29 @@ export default function ClientPage() {
   const [statusFilter, setStatusFilter] = useState("All")
   const [expandFilter, setExpandFilter] = useState("All")
   const [collapseFilter, setCollapseFilter] = useState("All")
-  const [clientFilter, setClientFilter] = useState("active-linked") // New filter state
   const { toast } = useToast()
 
   // Use the hybrid approach for client data with filter
-  const { clients, loading, error, refetch, lastFetchTime, filterStats } = useClientDataHybrid(false, clientFilter)
+  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid(false)
 
   console.log("[ClientPage] Render state:", {
     clientsCount: clients.length,
     loading,
     error,
     lastFetchTime: lastFetchTime?.toISOString(),
-    filterStats,
   })
 
-  // Filter clients based on search and status (additional UI filtering)
+  // Filter clients based on search and status
   const filteredClients = clients.filter((client) => {
     const matchesSearch =
+      searchTerm === "" ||
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.goal?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.program?.toLowerCase().includes(searchTerm.toLowerCase())
+
     const matchesStatus = statusFilter === "All" || client.status === statusFilter
+
     return matchesSearch && matchesStatus
   })
 
@@ -60,11 +62,6 @@ export default function ClientPage() {
       title: "Client deleted",
       description: "The client has been deleted successfully.",
     })
-  }
-
-  const handleFilterChange = (newFilter: string) => {
-    console.log("[ClientPage] Changing filter from", clientFilter, "to", newFilter)
-    setClientFilter(newFilter)
   }
 
   if (loading) {
@@ -153,7 +150,7 @@ export default function ClientPage() {
       {showDebug && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardHeader>
-            <CardTitle className="text-sm text-yellow-800">Debug Information & Filter Stats</CardTitle>
+            <CardTitle className="text-sm text-yellow-800">Debug Information</CardTitle>
           </CardHeader>
           <CardContent className="text-sm space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -170,47 +167,9 @@ export default function ClientPage() {
                 <strong>Last Updated:</strong> {lastFetchTime?.toLocaleTimeString() || "Never"}
               </div>
             </div>
-
-            {filterStats && (
-              <div className="border-t pt-4">
-                <strong>Database Breakdown:</strong>
-                <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
-                  <div>Total in DB: {filterStats.total}</div>
-                  <div>Active Status: {filterStats.active}</div>
-                  <div>Linked Accounts: {filterStats.linked}</div>
-                  <div>Active + Linked: {filterStats.activeLinked}</div>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
-
-      {/* Client Filter Selector */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <Filter className="h-4 w-4 text-gray-500" />
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Show:</label>
-              <Select value={clientFilter} onValueChange={handleFilterChange}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active-linked">Active + Linked Only ({filterStats?.activeLinked || 0})</SelectItem>
-                  <SelectItem value="active">All Active Clients ({filterStats?.active || 0})</SelectItem>
-                  <SelectItem value="linked">All Linked Clients ({filterStats?.linked || 0})</SelectItem>
-                  <SelectItem value="all">All Clients ({filterStats?.total || 0})</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="text-sm text-gray-500">
-              Currently showing {clients.length} of {filterStats?.total || 0} total clients
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Filters */}
       <ClientsFilterBar
