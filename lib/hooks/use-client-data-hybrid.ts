@@ -106,9 +106,6 @@ export function useClientDataHybrid(isDemo = false) {
         success: data.success,
         clientCount: data.clients?.length || 0,
         totalClients: data.totalClients,
-        filteredCount: data.filteredCount,
-        filterType: data.filterType,
-        breakdown: data.breakdown,
       })
 
       if (data.success && data.clients && Array.isArray(data.clients)) {

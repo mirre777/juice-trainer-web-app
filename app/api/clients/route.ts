@@ -1,38 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { collection, getDocs, query, orderBy } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
+import { cookies } from "next/headers"
+import { fetchClients } from "@/lib/firebase/client-service"
 
 export async function GET(request: NextRequest) {
-  try {
-    // Use the SAME authentication method as other working routes
-    const userId = request.cookies.get("user_id")?.value || request.cookies.get("userId")?.value
+  console.log("[API /api/clients] === REQUEST RECEIVED ===")
 
-    if (!userId) {
-      return NextResponse.json({ success: false, error: "No authentication token" }, { status: 401 })
+  try {
+    // Use the SAME authentication method as your existing working routes
+    const cookieStore = cookies()
+    const userId = cookieStore.get("user_id")?.value
+    const userIdAlt = cookieStore.get("userId")?.value // Fallback for inconsistent naming
+    const trainerId = userId || userIdAlt
+
+    console.log("🔍 [API /api/clients] Auth check:", {
+      userId,
+      userIdAlt,
+      trainerId,
+      hasCookies: !!cookieStore,
+    })
+
+    if (!trainerId) {
+      console.log("❌ [API /api/clients] No trainer ID found in cookies")
+      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
     }
 
-    console.log("Fetching clients for user:", userId)
+    console.log("✅ [API /api/clients] Authenticated trainer:", trainerId)
 
-    // Get ALL clients for this user - NO FILTERING
-    const clientsRef = collection(db, "users", userId, "clients")
-    const clientsQuery = query(clientsRef, orderBy("createdAt", "desc"))
-    const clientsSnapshot = await getDocs(clientsQuery)
+    // Use your existing fetchClients function - NO server-side filtering
+    console.log("📊 [API /api/clients] Calling fetchClients...")
+    const allClients = await fetchClients(trainerId)
+    console.log("[API /api/clients] Raw clients from fetchClients:", allClients.length)
 
-    const clients = clientsSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
-
-    console.log(`Found ${clients.length} total clients`)
+    // Return ALL clients - no filtering
+    console.log("[API /api/clients] Returning ALL clients without any filtering")
 
     return NextResponse.json({
       success: true,
-      clients,
-      clientCount: clients.length,
-      totalClients: clients.length,
+      clients: allClients,
+      totalClients: allClients.length,
     })
   } catch (error) {
-    console.error("Error fetching clients:", error)
+    console.error("[API /api/clients] ❌ Error:", error)
     return NextResponse.json({ success: false, error: "Failed to fetch clients" }, { status: 500 })
   }
 }
