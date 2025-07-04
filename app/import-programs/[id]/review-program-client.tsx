@@ -22,8 +22,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { doc, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
 import {
   Dialog,
   DialogContent,
@@ -34,10 +32,10 @@ import {
 } from "@/components/ui/dialog"
 import { User } from "@/components/icons/user"
 import { useToast } from "@/hooks/use-toast"
-import { subscribeToClients } from "@/lib/firebase/client-service"
-import { getCurrentUser } from "@/lib/firebase/user-service"
+import { useClientDataAPI } from "@/lib/hooks/use-client-data-api"
 import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
 import type { Client } from "@/types/client"
+import { updateDoc, doc, db } from "@/firebase/config" // Import updateDoc, doc, and db from firebase/config
 
 interface ReviewProgramClientProps {
   importData: any
@@ -60,11 +58,9 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Client selection state - using the same approach as ClientPage
-  const [clients, setClients] = useState<Client[]>([])
+  // Client selection state - using API approach like ClientPage
+  const { clients, loading: isLoadingClients, error: clientError } = useClientDataAPI(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [isLoadingClients, setIsLoadingClients] = useState(true)
-  const [clientError, setClientError] = useState<string | null>(null)
   const [isSendingProgram, setIsSendingProgram] = useState(false)
 
   // Add logging when hasChanges state changes
@@ -206,61 +202,6 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       setIsLoading(false)
     }
   }, [importData])
-
-  // Set up real-time subscription to clients - SAME AS ClientPage
-  useEffect(() => {
-    console.log("[ReviewProgramClient] Setting up client subscription...")
-    let unsubscribe: (() => void) | null = null
-
-    const setupSubscription = async () => {
-      try {
-        setIsLoadingClients(true)
-        setClientError(null)
-
-        const currentUser = await getCurrentUser()
-        console.log("[ReviewProgramClient] Current user:", currentUser?.uid)
-
-        if (!currentUser) {
-          setClientError("Authentication required")
-          setIsLoadingClients(false)
-          return
-        }
-
-        // Set up real-time subscription - SAME AS ClientPage
-        unsubscribe = subscribeToClients(currentUser.uid, (updatedClients, subscriptionError) => {
-          console.log("[ReviewProgramClient] Received updated clients:", updatedClients.length)
-
-          if (subscriptionError) {
-            console.error("[ReviewProgramClient] Subscription error:", subscriptionError)
-            setClientError("Failed to load clients")
-            toast({
-              title: "Error",
-              description: "Failed to load clients. Please refresh the page.",
-              variant: "destructive",
-            })
-          } else {
-            setClients(updatedClients)
-            setClientError(null)
-          }
-          setIsLoadingClients(false)
-        })
-      } catch (err) {
-        console.error("[ReviewProgramClient] Error setting up subscription:", err)
-        setClientError("Failed to initialize client data")
-        setIsLoadingClients(false)
-      }
-    }
-
-    setupSubscription()
-
-    // Cleanup subscription on unmount
-    return () => {
-      if (unsubscribe) {
-        console.log("[ReviewProgramClient] Cleaning up subscription")
-        unsubscribe()
-      }
-    }
-  }, [toast])
 
   const toggleClientSelection = () => {
     console.log("[toggleClientSelection] Current state:", {
@@ -717,17 +658,17 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
       {/* Display Fetched Clients - Debug Section */}
       <Card className="p-4 mb-6 bg-blue-50 border-blue-200">
         <h4 className="font-medium text-blue-800 mb-3">
-          Fetched Clients ({clients.length}) {isLoadingClients && "(Loading...)"}
+          API Fetched Clients ({clients.length}) {isLoadingClients && "(Loading...)"}
         </h4>
         {isLoadingClients ? (
           <div className="flex items-center justify-center py-4">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-blue-600 text-sm">Loading clients...</span>
+            <span className="ml-2 text-blue-600 text-sm">Loading clients via API...</span>
           </div>
         ) : clientError ? (
-          <div className="text-red-700 text-sm">Error: {clientError}</div>
+          <div className="text-red-700 text-sm">API Error: {clientError}</div>
         ) : clients.length === 0 ? (
-          <div className="text-blue-700 text-sm">No clients found</div>
+          <div className="text-blue-700 text-sm">No clients found via API</div>
         ) : (
           <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto">
             {clients.map((client, index) => (
@@ -739,7 +680,7 @@ export default function ReviewProgramClient({ importData }: ReviewProgramClientP
                 <div className="font-medium text-gray-900 truncate">{client.name || "No Name"}</div>
                 <div className="text-gray-600 truncate">{client.email || "No Email"}</div>
                 <div className="text-gray-500">Status: {client.status || "No Status"}</div>
-                <div className="text-gray-500">ID: {client.userId || "No UserID"}</div>
+                <div className="text-gray-500">ID: {client.userId || client.id || "No ID"}</div>
                 <div className="text-gray-500">Linked: {client.hasLinkedAccount ? "Yes" : "No"}</div>
               </div>
             ))}
