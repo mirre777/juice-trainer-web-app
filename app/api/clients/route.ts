@@ -1,50 +1,45 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCookie } from "cookies-next"
-import { subscribeToClients } from "@/lib/firebase/client-service"
+import { fetchClients } from "@/lib/firebase/client-service"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth/auth-options"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("[API] /api/clients - Starting request")
 
-    // Get user ID from cookies (same method as other working routes)
-    const userId = getCookie("user_id", { req: request }) || getCookie("userId", { req: request })
+    const session = await getServerSession(authOptions)
 
-    if (!userId) {
-      console.log("[API] /api/clients - No user ID found in cookies")
-      return NextResponse.json({ success: false, error: "No authentication token" }, { status: 401 })
+    if (!session?.user?.uid) {
+      console.log("[API] /api/clients - No valid session found")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[API] /api/clients - User ID found:", userId)
+    const trainerId = session.user.uid
+    console.log(`[API] /api/clients - Fetching clients for trainer: ${trainerId}`)
 
-    // Get all clients for this trainer - NO FILTERING
-    return new Promise((resolve) => {
-      const unsubscribe = subscribeToClients(userId as string, (clients, error) => {
-        unsubscribe() // Clean up the subscription immediately
+    const clients = await fetchClients(trainerId)
 
-        if (error) {
-          console.error("[API] /api/clients - Error fetching clients:", error)
-          resolve(NextResponse.json({ success: false, error: error.message }, { status: 500 }))
-          return
-        }
+    // Ensure we always return an array, even if fetchClients returns undefined/null
+    const safeClients = Array.isArray(clients) ? clients : []
 
-        console.log(`[API] /api/clients - Successfully fetched ${clients.length} clients`)
+    console.log(`[API] /api/clients - Returning ${safeClients.length} clients`)
 
-        // Return ALL clients without any filtering
-        resolve(
-          NextResponse.json({
-            success: true,
-            clients: clients,
-            clientCount: clients.length,
-            totalClients: clients.length,
-          }),
-        )
-      })
+    return NextResponse.json({
+      clients: safeClients,
+      success: true,
     })
   } catch (error) {
-    console.error("[API] /api/clients - Unexpected error:", error)
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
+    console.error("[API] /api/clients - Error:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch clients",
+        clients: [], // Always provide empty array as fallback
+        success: false,
+      },
+      { status: 500 },
+    )
   }
 }
 
@@ -52,21 +47,18 @@ export async function POST(request: NextRequest) {
   try {
     console.log("[API] /api/clients - POST Starting request")
 
-    // Get user ID from cookies (same method as GET)
-    const userId = getCookie("user_id", { req: request }) || getCookie("userId", { req: request })
+    const session = await getServerSession(authOptions)
 
-    if (!userId) {
-      console.log("[API] /api/clients - POST No user ID found in cookies")
-      return NextResponse.json({ success: false, error: "No authentication token" }, { status: 401 })
+    if (!session?.user?.uid) {
+      console.log("[API] /api/clients - POST No valid session found")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("[API] /api/clients - POST User ID found:", userId)
-
-    // Parse request body
+    const trainerId = session.user.uid
     const body = await request.json()
     const { name, email, phone } = body
 
-    console.log("[API] /api/clients - POST Creating client:", { name, email, phone, userId })
+    console.log("[API] /api/clients - POST Creating client:", { name, email, phone, trainerId })
 
     if (!name || !name.trim()) {
       return NextResponse.json({ success: false, error: "Name is required" }, { status: 400 })
@@ -76,7 +68,7 @@ export async function POST(request: NextRequest) {
     const inviteCode = Math.random().toString(36).substring(2, 15).toUpperCase()
 
     // Create client document in trainer's subcollection
-    const clientsRef = collection(db, "users", userId as string, "clients")
+    const clientsRef = collection(db, "users", trainerId as string, "clients")
     const clientData = {
       name: name.trim(),
       email: email?.trim() || "",
