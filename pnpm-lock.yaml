@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@emotion/is-prop-valid':
-        specifier: latest
+        specifier: ^1.2.1
         version: 1.3.1
       '@playwright/test':
         specifier: latest
@@ -102,14 +102,14 @@ importers:
         specifier: ^2.2.2
         version: 2.2.2
       '@testing-library/dom':
-        specifier: latest
-        version: 10.4.0
+        specifier: ^9.3.4
+        version: 9.3.4
       '@testing-library/jest-dom':
         specifier: latest
         version: 6.6.3
       '@testing-library/react':
         specifier: latest
-        version: 16.3.0(@testing-library/dom@10.4.0)(@types/react-dom@18.0.0)(@types/react@18.0.0)(react-dom@18.0.0(react@18.0.0))(react@18.0.0)
+        version: 16.3.0(@testing-library/dom@9.3.4)(@types/react-dom@18.0.0)(@types/react@18.0.0)(react-dom@18.0.0(react@18.0.0))(react@18.0.0)
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -167,9 +167,6 @@ importers:
       lucide-react:
         specifier: ^0.454.0
         version: 0.454.0(react@18.0.0)
-      motion-utils:
-        specifier: latest
-        version: 12.19.0
       next:
         specifier: 14.2.16
         version: 14.2.16(@babel/core@7.27.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.53.2)(react-dom@18.0.0(react@18.0.0))(react@18.0.0)
@@ -194,9 +191,6 @@ importers:
       react-dom:
         specifier: ^18
         version: 18.0.0(react@18.0.0)
-      react-firebase-hooks:
-        specifier: latest
-        version: 5.1.1(firebase@11.10.0)(react@18.0.0)
       react-hook-form:
         specifier: latest
         version: 7.59.0(react@18.0.0)
@@ -240,11 +234,14 @@ importers:
       '@types/react-dom':
         specifier: ^18
         version: 18.0.0
+      '@types/uuid':
+        specifier: ^9.0.7
+        version: 9.0.7
       autoprefixer:
-        specifier: ^10.0.1
+        specifier: ^10.4.16
         version: 10.4.16(postcss@8.5.0)
       eslint:
-        specifier: ^8
+        specifier: ^8.56.0
         version: 8.56.0
       eslint-config-next:
         specifier: 14.0.4
@@ -253,7 +250,7 @@ importers:
         specifier: ^8.5
         version: 8.5.0
       tailwindcss:
-        specifier: ^3.3.0
+        specifier: ^3.4.0
         version: 3.4.0
       typescript:
         specifier: ^5
@@ -1688,9 +1685,9 @@ packages:
   '@swc/helpers@0.5.5':
     resolution: {integrity: sha512-KGYxvIOXcceOAbEk4bi/dVLEK9z8sZ0uBB3Il5b1rhfClSpcX0yfRO0KmTkqR2cnQDymwLB+25ZyMzICg/cm/A==}
 
-  '@testing-library/dom@10.4.0':
-    resolution: {integrity: sha512-pemlzrSESWbdAloYml3bAJMEfNh1Z7EduzqPKprCH5S341frlpYnUEW0H72dLxa6IsYr+mPno20GiSm+h9dEdQ==}
-    engines: {node: '>=18'}
+  '@testing-library/dom@9.3.4':
+    resolution: {integrity: sha512-FlS4ZWlp97iiNWig0Muq8p+3rVDjRiYE+YKGbAqXOu9nwJFFOdL00kFpz42M+4huzYi86vAK1sOOfyOG45muIQ==}
+    engines: {node: '>=14'}
 
   '@testing-library/jest-dom@6.6.3':
     resolution: {integrity: sha512-IteBhl4XqYNkM54f4ejhLRJiZNqcSCoXUOG2CPK7qbD322KjQozM4kHQOfkG2oln9b9HTYqs+Sae8vBATubxxA==}
@@ -1843,6 +1840,9 @@ packages:
 
   '@types/use-sync-external-store@0.0.6':
     resolution: {integrity: sha512-zFDAD+tlpf2r4asuHEj0XH6pY6i0g5NeAHPn+15wk3BV6JA69eERFXC1gyGThDkVa1zCyKr5jox1+2LbV/AMLg==}
+
+  '@types/uuid@9.0.7':
+    resolution: {integrity: sha512-WUtIVRUZ9i5dYXefDEAI7sh9/O7jGvHg7Df/5O/gtH3Yabe5odI3UWopVR1qbPXQtvOxWu3mM4XxlYeZtMWF4g==}
 
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
@@ -2048,8 +2048,8 @@ packages:
     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
     engines: {node: '>=10'}
 
-  aria-query@5.3.0:
-    resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
+  aria-query@5.1.3:
+    resolution: {integrity: sha512-R5iJ5lkuHybztUfuOAznmboyjWq8O6sqNqtK7CLOqdydi54VNbORp49mb14KbWgG1QD3JFO9hJdZ+y4KutfdOQ==}
 
   aria-query@5.3.2:
     resolution: {integrity: sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw==}
@@ -2424,6 +2424,10 @@ packages:
       babel-plugin-macros:
         optional: true
 
+  deep-equal@2.2.3:
+    resolution: {integrity: sha512-ZIwpnevOurS8bpT4192sqAowWM76JDKSHYzMLty3BZGSswgq6pBaH3DhCSW5xVAZICZyKdOBPjwww5wfgT/6PA==}
+    engines: {node: '>= 0.4'}
+
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
 
@@ -2442,10 +2446,6 @@ packages:
   delayed-stream@1.0.0:
     resolution: {integrity: sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==}
     engines: {node: '>=0.4.0'}
-
-  dequal@2.0.3:
-    resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
-    engines: {node: '>=6'}
 
   detect-newline@3.1.0:
     resolution: {integrity: sha512-TLz+x/vEXm/Y7P7wn1EJFNLxYpUD4TgMosxY6fAVJUnJMbupHBOncxyWUG9OpTaH9EBD7uFI5LfEgmMOc54DsA==}
@@ -2534,6 +2534,9 @@ packages:
   es-errors@1.3.0:
     resolution: {integrity: sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw==}
     engines: {node: '>= 0.4'}
+
+  es-get-iterator@1.1.3:
+    resolution: {integrity: sha512-sPZmqHBe6JIiTfN5q2pEi//TwxmAFHwj/XEuYjTuse78i8KxaqMTTzxPoFKuzRpDpTJ+0NAbpfenkmH2rePtuw==}
 
   es-iterator-helpers@1.2.1:
     resolution: {integrity: sha512-uDn+FE1yrDzyC0pCo961B2IHbdM8y/ACZsKD4dG6WqrjV53BADjwa7D+1aom2rsNVfLyDgU/eigvlJGJ08OQ4w==}
@@ -3083,6 +3086,10 @@ packages:
   internmap@2.0.3:
     resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
     engines: {node: '>=12'}
+
+  is-arguments@1.2.0:
+    resolution: {integrity: sha512-7bVbi0huj/wrIAOzb8U1aszg9kdi3KN/CyU19CTI7tAoZYEZoL9yCDXpbXN+uPsuWnP02cyug1gleqq+TU+YCA==}
+    engines: {node: '>= 0.4'}
 
   is-array-buffer@3.0.5:
     resolution: {integrity: sha512-DDfANUiiG2wC1qawP66qlTugJeL5HyzMpfr8lLK+jMQirGzNod0B12cFB/9q838Ru27sBwfw78/rdoU7RERz6A==}
@@ -3730,6 +3737,10 @@ packages:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
     engines: {node: '>= 0.4'}
 
+  object-is@1.1.6:
+    resolution: {integrity: sha512-F8cZ+KfGlSGi09lJT7/Nd6KJZ9ygtvYC0/UYYLI9nmQKLMnydpB9yvbv9K1uSkEu7FU9vYPmVwLg328tX+ot3Q==}
+    engines: {node: '>= 0.4'}
+
   object-keys@1.1.1:
     resolution: {integrity: sha512-NuAESUOUMrlIXOfHKzD6bpPu3tYt3xvjNdRIQ+FeT0lNb4K8WR70CaDxhuNguS2XG+GjkyMwOzsN5ZktImfhLA==}
     engines: {node: '>= 0.4'}
@@ -3968,12 +3979,6 @@ packages:
     resolution: {integrity: sha512-XqX7uzmFo0pUceWFCt7Gff6IyIMzFUn7QMZrbrQfGxtaxXZIcGQzoNpRLE3fQLnS4XzLLPMZX2T9TRcSrasicw==}
     peerDependencies:
       react: ^18.0.0
-
-  react-firebase-hooks@5.1.1:
-    resolution: {integrity: sha512-y2UpWs82xs+39q5Rc/wq316ca52QsC0n8m801V+yM4IC4hbfOL4yQPVSh7w+ydstdvjN9F+lvs1WrO2VYxpmdA==}
-    peerDependencies:
-      firebase: '>= 9.0.0'
-      react: '>= 16.8.0'
 
   react-hook-form@7.59.0:
     resolution: {integrity: sha512-kmkek2/8grqarTJExFNjy+RXDIP8yM+QTl3QL6m6Q8b2bih4ltmiXxH7T9n+yXNK477xPh5yZT/6vD8sYGzJTA==}
@@ -6366,12 +6371,12 @@ snapshots:
       '@swc/counter': 0.1.3
       tslib: 2.8.1
 
-  '@testing-library/dom@10.4.0':
+  '@testing-library/dom@9.3.4':
     dependencies:
       '@babel/code-frame': 7.27.1
       '@babel/runtime': 7.27.6
       '@types/aria-query': 5.0.4
-      aria-query: 5.3.0
+      aria-query: 5.1.3
       chalk: 4.1.2
       dom-accessibility-api: 0.5.16
       lz-string: 1.5.0
@@ -6387,10 +6392,10 @@ snapshots:
       lodash: 4.17.21
       redent: 3.0.0
 
-  '@testing-library/react@16.3.0(@testing-library/dom@10.4.0)(@types/react-dom@18.0.0)(@types/react@18.0.0)(react-dom@18.0.0(react@18.0.0))(react@18.0.0)':
+  '@testing-library/react@16.3.0(@testing-library/dom@9.3.4)(@types/react-dom@18.0.0)(@types/react@18.0.0)(react-dom@18.0.0(react@18.0.0))(react@18.0.0)':
     dependencies:
       '@babel/runtime': 7.27.6
-      '@testing-library/dom': 10.4.0
+      '@testing-library/dom': 9.3.4
       react: 18.0.0
       react-dom: 18.0.0(react@18.0.0)
     optionalDependencies:
@@ -6554,6 +6559,8 @@ snapshots:
     optional: true
 
   '@types/use-sync-external-store@0.0.6': {}
+
+  '@types/uuid@9.0.7': {}
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -6724,9 +6731,9 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  aria-query@5.3.0:
+  aria-query@5.1.3:
     dependencies:
-      dequal: 2.0.3
+      deep-equal: 2.2.3
 
   aria-query@5.3.2: {}
 
@@ -7128,6 +7135,27 @@ snapshots:
 
   dedent@1.6.0: {}
 
+  deep-equal@2.2.3:
+    dependencies:
+      array-buffer-byte-length: 1.0.2
+      call-bind: 1.0.8
+      es-get-iterator: 1.1.3
+      get-intrinsic: 1.3.0
+      is-arguments: 1.2.0
+      is-array-buffer: 3.0.5
+      is-date-object: 1.1.0
+      is-regex: 1.2.1
+      is-shared-array-buffer: 1.0.4
+      isarray: 2.0.5
+      object-is: 1.1.6
+      object-keys: 1.1.1
+      object.assign: 4.1.7
+      regexp.prototype.flags: 1.5.4
+      side-channel: 1.1.0
+      which-boxed-primitive: 1.1.1
+      which-collection: 1.0.2
+      which-typed-array: 1.1.19
+
   deep-is@0.1.4: {}
 
   deepmerge@4.3.1: {}
@@ -7146,8 +7174,6 @@ snapshots:
 
   delayed-stream@1.0.0:
     optional: true
-
-  dequal@2.0.3: {}
 
   detect-newline@3.1.0: {}
 
@@ -7283,6 +7309,18 @@ snapshots:
 
   es-errors@1.3.0: {}
 
+  es-get-iterator@1.1.3:
+    dependencies:
+      call-bind: 1.0.8
+      get-intrinsic: 1.3.0
+      has-symbols: 1.1.0
+      is-arguments: 1.2.0
+      is-map: 2.0.3
+      is-set: 2.0.3
+      is-string: 1.1.1
+      isarray: 2.0.5
+      stop-iteration-iterator: 1.1.0
+
   es-iterator-helpers@1.2.1:
     dependencies:
       call-bind: 1.0.8
@@ -7339,7 +7377,7 @@ snapshots:
       eslint: 8.56.0
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.31.0(eslint@8.56.0))(eslint@8.56.0)
-      eslint-plugin-import: 2.31.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.0.2))(eslint-import-resolver-typescript@3.10.1)(eslint@8.56.0)
+      eslint-plugin-import: 2.31.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.0.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.31.0(eslint@8.56.0))(eslint@8.56.0))(eslint@8.56.0)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.56.0)
       eslint-plugin-react: 7.37.5(eslint@8.56.0)
       eslint-plugin-react-hooks: 5.0.0-canary-7118f5dd7-20230705(eslint@8.56.0)
@@ -7369,7 +7407,7 @@ snapshots:
       tinyglobby: 0.2.14
       unrs-resolver: 1.9.0
     optionalDependencies:
-      eslint-plugin-import: 2.31.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.0.2))(eslint-import-resolver-typescript@3.10.1)(eslint@8.56.0)
+      eslint-plugin-import: 2.31.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.0.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.31.0(eslint@8.56.0))(eslint@8.56.0))(eslint@8.56.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -7384,7 +7422,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.31.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.0.2))(eslint-import-resolver-typescript@3.10.1)(eslint@8.56.0):
+  eslint-plugin-import@2.31.0(@typescript-eslint/parser@6.21.0(eslint@8.56.0)(typescript@5.0.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.31.0(eslint@8.56.0))(eslint@8.56.0))(eslint@8.56.0):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -8059,6 +8097,11 @@ snapshots:
       side-channel: 1.1.0
 
   internmap@2.0.3: {}
+
+  is-arguments@1.2.0:
+    dependencies:
+      call-bound: 1.0.4
+      has-tostringtag: 1.0.2
 
   is-array-buffer@3.0.5:
     dependencies:
@@ -8911,6 +8954,11 @@ snapshots:
 
   object-inspect@1.13.4: {}
 
+  object-is@1.1.6:
+    dependencies:
+      call-bind: 1.0.8
+      define-properties: 1.2.1
+
   object-keys@1.1.1: {}
 
   object.assign@4.1.7:
@@ -9163,11 +9211,6 @@ snapshots:
       loose-envify: 1.4.0
       react: 18.0.0
       scheduler: 0.21.0
-
-  react-firebase-hooks@5.1.1(firebase@11.10.0)(react@18.0.0):
-    dependencies:
-      firebase: 11.10.0
-      react: 18.0.0
 
   react-hook-form@7.59.0(react@18.0.0):
     dependencies:
