@@ -298,6 +298,45 @@ export class ProgramConversionService {
   }
 
   /**
+   * Send program to client - main method called by the API
+   */
+  async sendProgramToClient(clientId: string, programData: any, customMessage?: string): Promise<any> {
+    try {
+      console.log(`[sendProgramToClient] Starting program send process...`)
+      console.log(`[sendProgramToClient] Client ID: ${clientId}`)
+      console.log(`[sendProgramToClient] Program: ${programData.name || programData.program_title}`)
+
+      // Get the client's userId from the trainer's client document
+      // We need to determine the trainer ID - this should come from the authenticated user
+      // For now, let's extract it from the client document or use a default
+      const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1" // This should come from auth context
+
+      const clientUserId = await this.getClientUserId(trainerId, clientId)
+
+      if (!clientUserId) {
+        throw new Error("Client not found or client does not have a linked user account")
+      }
+
+      console.log(`[sendProgramToClient] Client user ID: ${clientUserId}`)
+
+      // Convert and send the program using the existing method
+      const programId = await this.convertAndSendProgram(programData, clientUserId)
+
+      console.log(`[sendProgramToClient] ✅ Program sent successfully. Program ID: ${programId}`)
+
+      return {
+        success: true,
+        programId,
+        clientUserId,
+        message: customMessage || "Program sent successfully",
+      }
+    } catch (error) {
+      console.error("[sendProgramToClient] Error:", error)
+      throw error
+    }
+  }
+
+  /**
    * Get all clients for a trainer (for the selection dialog)
    * ENHANCED WITH COMPREHENSIVE PATH LOGGING AND USER DATA FOLLOWING
    */
