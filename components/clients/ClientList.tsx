@@ -1,47 +1,42 @@
 "use client"
 
-import type React from "react"
+import { useState } from "react"
 import { ClientCard } from "./client-card"
 import { EmptyState } from "@/components/shared/empty-state"
-
-interface Client {
-  id: string
-  name: string
-  email: string
-  status: "active" | "pending" | "inactive"
-  sessionsCompleted: number
-  totalSessions: number
-  lastSession?: Date
-  avatar?: string
-}
+import type { Client } from "@/types/client"
 
 interface ClientListProps {
   clients: Client[]
-  loading?: boolean
-  onClientSelect?: (client: Client) => void
+  onClientUpdated?: (client: Client) => void
+  onClientDeleted?: (clientId: string) => void
 }
 
-export const ClientList: React.FC<ClientListProps> = ({ clients, loading = false, onClientSelect }) => {
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="animate-pulse">
-            <div className="bg-gray-200 rounded-lg h-48"></div>
-          </div>
-        ))}
-      </div>
-    )
+export function ClientList({ clients, onClientUpdated, onClientDeleted }: ClientListProps) {
+  const [deletingClientId, setDeletingClientId] = useState<string | null>(null)
+
+  const handleClientUpdate = (updatedClient: Client) => {
+    onClientUpdated?.(updatedClient)
   }
 
-  if (clients.length === 0) {
+  const handleClientDelete = async (clientId: string) => {
+    setDeletingClientId(clientId)
+    try {
+      // Call the delete handler
+      onClientDeleted?.(clientId)
+    } finally {
+      setDeletingClientId(null)
+    }
+  }
+
+  if (!clients || clients.length === 0) {
     return (
       <EmptyState
         title="No clients found"
-        description="Start by adding your first client to begin tracking their progress."
+        description="Start by adding your first client to begin coaching."
         actionLabel="Add Client"
         onAction={() => {
-          /* Handle add client */
+          // This will be handled by the parent component
+          console.log("Add client clicked from empty state")
         }}
       />
     )
@@ -50,10 +45,14 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, loading = false
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {clients.map((client) => (
-        <ClientCard key={client.id} client={client} onClick={() => onClientSelect?.(client)} />
+        <ClientCard
+          key={client.id}
+          client={client}
+          onUpdate={handleClientUpdate}
+          onDelete={handleClientDelete}
+          isDeleting={deletingClientId === client.id}
+        />
       ))}
     </div>
   )
 }
-
-export default ClientList
