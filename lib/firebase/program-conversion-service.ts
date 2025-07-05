@@ -103,6 +103,64 @@ export class ProgramConversionService {
   }
 
   /**
+   * Generate a meaningful routine name based on available data
+   */
+  private generateRoutineName(routineData: any, weekNumber: number, routineIndex: number): string {
+    console.log(`[generateRoutineName] Generating name for routine data:`, {
+      routine_name: routineData.routine_name,
+      name: routineData.name,
+      day: routineData.day,
+      title: routineData.title,
+      weekNumber,
+      routineIndex,
+      availableKeys: Object.keys(routineData || {}),
+    })
+
+    // Strategy 1: Use explicit routine name fields
+    if (routineData.routine_name && typeof routineData.routine_name === "string" && routineData.routine_name.trim()) {
+      return routineData.routine_name.trim()
+    }
+
+    if (routineData.name && typeof routineData.name === "string" && routineData.name.trim()) {
+      return routineData.name.trim()
+    }
+
+    if (routineData.title && typeof routineData.title === "string" && routineData.title.trim()) {
+      return routineData.title.trim()
+    }
+
+    // Strategy 2: Use day information if available
+    if (routineData.day && typeof routineData.day === "string" && routineData.day.trim()) {
+      return `Week ${weekNumber} - ${routineData.day.trim()}`
+    }
+
+    // Strategy 3: Generate name from exercise names
+    if (routineData.exercises && Array.isArray(routineData.exercises) && routineData.exercises.length > 0) {
+      const exerciseNames = routineData.exercises
+        .filter((ex) => ex && ex.name && typeof ex.name === "string")
+        .map((ex) => ex.name.trim())
+        .slice(0, 2) // Take first 2 exercises
+
+      if (exerciseNames.length > 0) {
+        const exercisesPart = exerciseNames.join(" + ")
+        return `Week ${weekNumber} - ${exercisesPart}${exerciseNames.length < routineData.exercises.length ? " +more" : ""}`
+      }
+    }
+
+    // Strategy 4: Use workout type or body part if available
+    if (routineData.workout_type && typeof routineData.workout_type === "string" && routineData.workout_type.trim()) {
+      return `Week ${weekNumber} - ${routineData.workout_type.trim()}`
+    }
+
+    if (routineData.body_part && typeof routineData.body_part === "string" && routineData.body_part.trim()) {
+      return `Week ${weekNumber} - ${routineData.body_part.trim()}`
+    }
+
+    // Strategy 5: Generic fallback with meaningful info
+    return `Week ${weekNumber} - Workout ${routineIndex + 1}`
+  }
+
+  /**
    * Creates a routine document in the user's routines collection
    * Based on uploadPeriodizedRoutines.js logic
    */
@@ -110,6 +168,7 @@ export class ProgramConversionService {
     userId: string,
     routineData: any,
     weekNumber: number,
+    routineIndex = 0,
   ): Promise<{ routineId: string; routineDoc: MobileRoutine }> {
     const routineId = uuidv4()
     const timestamp = Timestamp.now()
@@ -119,9 +178,10 @@ export class ProgramConversionService {
       throw new Error("Routine data is required")
     }
 
-    const routineName = routineData.routine_name || routineData.name || "Unnamed Routine"
-    console.log(`[createRoutine] Creating routine: ${routineName} for week ${weekNumber}`)
-    console.log(`[createRoutine] Routine data:`, JSON.stringify(routineData, null, 2))
+    // Generate a meaningful routine name
+    const routineName = this.generateRoutineName(routineData, weekNumber, routineIndex)
+    console.log(`[createRoutine] Creating routine: "${routineName}" for week ${weekNumber}`)
+    console.log(`[createRoutine] Full routine data:`, JSON.stringify(routineData, null, 2))
 
     // Process exercises and ensure they exist
     const exercises = []
@@ -131,6 +191,8 @@ export class ProgramConversionService {
       console.log(`[createRoutine] Warning: exercises is not an array for routine ${routineName}:`, exercisesArray)
       throw new Error(`Exercises must be an array for routine: ${routineName}`)
     }
+
+    console.log(`[createRoutine] Processing ${exercisesArray.length} exercises for routine: ${routineName}`)
 
     for (const exercise of exercisesArray) {
       if (!exercise || !exercise.name) {
@@ -187,8 +249,8 @@ export class ProgramConversionService {
 
     const routineDoc: MobileRoutine = {
       id: routineId,
-      name: routineName,
-      notes: routineData.notes || "",
+      name: routineName, // This is now guaranteed to be a non-empty string
+      notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
       createdAt: timestamp.toDate().toISOString(),
       updatedAt: timestamp.toDate().toISOString(),
       deletedAt: null,
@@ -197,18 +259,24 @@ export class ProgramConversionService {
     }
 
     // Log the routine document before saving to debug any undefined values
-    console.log(`[createRoutine] Routine document to save:`, JSON.stringify(routineDoc, null, 2))
+    console.log(`[createRoutine] Routine document to save:`, {
+      id: routineDoc.id,
+      name: routineDoc.name,
+      notes: routineDoc.notes,
+      exerciseCount: routineDoc.exercises.length,
+      type: routineDoc.type,
+    })
 
-    // Validate that no fields are undefined before saving
-    if (routineDoc.name === undefined || routineDoc.name === null) {
-      throw new Error(`Routine name cannot be undefined or null`)
+    // Final validation that no critical fields are undefined
+    if (!routineDoc.name || typeof routineDoc.name !== "string") {
+      throw new Error(`Routine name must be a non-empty string, got: ${typeof routineDoc.name} - "${routineDoc.name}"`)
     }
 
     // Save routine to Firestore
     const routinesRef = collection(db, "users", userId, "routines")
     await setDoc(doc(routinesRef, routineId), routineDoc)
 
-    console.log(`[createRoutine] ✅ Created routine: ${routineName} with ID: ${routineId}`)
+    console.log(`[createRoutine] ✅ Created routine: "${routineName}" with ID: ${routineId}`)
 
     return { routineId, routineDoc }
   }
@@ -220,7 +288,14 @@ export class ProgramConversionService {
   async convertAndSendProgram(programData: any, clientUserId: string): Promise<string> {
     try {
       console.log(`[convertAndSendProgram] Converting program for client: ${clientUserId}`)
-      console.log(`[convertAndSendProgram] Program data:`, JSON.stringify(programData, null, 2))
+      console.log(`[convertAndSendProgram] Program data structure:`, {
+        hasWeeks: !!programData.weeks,
+        hasRoutines: !!programData.routines,
+        weeksLength: programData.weeks?.length,
+        routinesLength: programData.routines?.length,
+        programTitle: programData.program_title || programData.title || programData.name,
+        availableKeys: Object.keys(programData || {}),
+      })
 
       const timestamp = new Date()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
@@ -236,7 +311,7 @@ export class ProgramConversionService {
             for (let routineIndex = 0; routineIndex < week.routines.length; routineIndex++) {
               const routine = week.routines[routineIndex]
 
-              const { routineId } = await this.createRoutine(clientUserId, routine, weekNumber)
+              const { routineId } = await this.createRoutine(clientUserId, routine, weekNumber, routineIndex)
 
               routineMap.push({
                 routineId,
@@ -258,7 +333,7 @@ export class ProgramConversionService {
           for (let routineIndex = 0; routineIndex < programData.routines.length; routineIndex++) {
             const routine = programData.routines[routineIndex]
 
-            const { routineId } = await this.createRoutine(clientUserId, routine, 1) // Use week 1 data for all weeks
+            const { routineId } = await this.createRoutine(clientUserId, routine, week, routineIndex)
 
             routineMap.push({
               routineId,
