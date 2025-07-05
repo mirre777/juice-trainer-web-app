@@ -344,43 +344,26 @@ export class ProgramConversionService {
         }
       }
 
-      // Create the program document with additional mobile app compatibility fields
+      // Create the program document (based on uploadPeriodizedProgram.js)
       const programId = uuidv4()
-      const program: MobileProgram = {
+      const program = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
-        notes: programData.program_notes || programData.notes || null,
+        notes: programData.program_notes || programData.notes || "",
         startedAt: timestamp.toISOString(),
         duration: programData.program_weeks || programData.weeks?.length || programData.duration || 4,
         createdAt: timestamp.toISOString(),
         updated_at: timestamp.toISOString(),
         routines: routineMap,
+        // Add these additional fields that might be required
+        program_URL: programData.program_URL || "",
+        isActive: true,
+        status: "active",
       }
-
-      // Add additional fields that might be needed for mobile app filtering
-      const programDocWithExtras = {
-        ...program,
-        // Add any additional fields the mobile app might expect
-        status: "active", // Ensure program is marked as active
-        isTemplate: false, // Ensure it's not marked as a template
-        deletedAt: null, // Ensure it's not marked as deleted
-        userId: clientUserId, // Explicit user ownership
-        type: "program", // Explicit type marking
-      }
-
-      console.log(`[convertAndSendProgram] Program document to save:`, {
-        id: programDocWithExtras.id,
-        name: programDocWithExtras.name,
-        duration: programDocWithExtras.duration,
-        routineCount: programDocWithExtras.routines.length,
-        status: programDocWithExtras.status,
-        type: programDocWithExtras.type,
-        userId: programDocWithExtras.userId,
-      })
 
       // Save program to Firestore
       const programsRef = collection(db, "users", clientUserId, "programs")
-      await setDoc(doc(programsRef, programId), programDocWithExtras)
+      await setDoc(doc(programsRef, programId), program)
 
       console.log(`[convertAndSendProgram] ✅ Created program: ${program.name} with ID: ${programId}`)
       console.log(`[convertAndSendProgram] Program structure:`, {
