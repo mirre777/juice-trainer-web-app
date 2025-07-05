@@ -344,7 +344,7 @@ export class ProgramConversionService {
         }
       }
 
-      // Create the program document (based on uploadPeriodizedProgram.js)
+      // Create the program document with additional mobile app compatibility fields
       const programId = uuidv4()
       const program: MobileProgram = {
         id: programId,
@@ -357,9 +357,30 @@ export class ProgramConversionService {
         routines: routineMap,
       }
 
+      // Add additional fields that might be needed for mobile app filtering
+      const programDocWithExtras = {
+        ...program,
+        // Add any additional fields the mobile app might expect
+        status: "active", // Ensure program is marked as active
+        isTemplate: false, // Ensure it's not marked as a template
+        deletedAt: null, // Ensure it's not marked as deleted
+        userId: clientUserId, // Explicit user ownership
+        type: "program", // Explicit type marking
+      }
+
+      console.log(`[convertAndSendProgram] Program document to save:`, {
+        id: programDocWithExtras.id,
+        name: programDocWithExtras.name,
+        duration: programDocWithExtras.duration,
+        routineCount: programDocWithExtras.routines.length,
+        status: programDocWithExtras.status,
+        type: programDocWithExtras.type,
+        userId: programDocWithExtras.userId,
+      })
+
       // Save program to Firestore
       const programsRef = collection(db, "users", clientUserId, "programs")
-      await setDoc(doc(programsRef, programId), program)
+      await setDoc(doc(programsRef, programId), programDocWithExtras)
 
       console.log(`[convertAndSendProgram] ✅ Created program: ${program.name} with ID: ${programId}`)
       console.log(`[convertAndSendProgram] Program structure:`, {
