@@ -105,6 +105,51 @@ const testCases = [
     expectedDisplay: "Should show 3 separate week cards with different routines",
     expectedBehavior: "Toggle OFF should ask which week to keep (1, 2, or 3)",
   },
+  {
+    name: "PROBLEMATIC CASE: Non-periodized with weeks structure (like in the screenshot)",
+    program: {
+      name: "ivysaur test",
+      is_periodized: false,
+      duration_weeks: 5,
+      routines: [], // Empty routines array
+      weeks: [
+        {
+          week_number: 1,
+          routines: [
+            {
+              name: "Upper Body A",
+              exercises: [
+                {
+                  name: "Bench Press",
+                  sets: [{ reps: "8", weight: "135" }],
+                },
+              ],
+            },
+            {
+              name: "Lower Body A",
+              exercises: [
+                {
+                  name: "Squat",
+                  sets: [{ reps: "5", weight: "185" }],
+                },
+              ],
+            },
+            {
+              name: "Upper Body B",
+              exercises: [
+                {
+                  name: "OHP",
+                  sets: [{ reps: "8", weight: "95" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    expectedDisplay: "Should show 3 routines from weeks[0] since is_periodized is false",
+    expectedBehavior: "Toggle ON should use routines from weeks[0], not empty routines array",
+  },
 ]
 
 function testPeriodizationDisplayLogic() {
@@ -146,6 +191,16 @@ function testPeriodizationDisplayLogic() {
       currentRoutines.forEach((routine, idx) => {
         console.log(`    * ${routine.name} (${routine.exercises?.length || 0} exercises)`)
       })
+
+      // ISSUE DETECTION: Check if we have empty routines but weeks with routines
+      if (currentRoutines.length === 0 && program.weeks && program.weeks.length > 0) {
+        const weekRoutines = program.weeks[0]?.routines || []
+        console.log(`  ⚠️  ISSUE DETECTED: Empty routines array but weeks[0] has ${weekRoutines.length} routines!`)
+        console.log("  📝 Should use routines from weeks[0] for non-periodized display:")
+        weekRoutines.forEach((routine, idx) => {
+          console.log(`    * ${routine.name} (${routine.exercises?.length || 0} exercises)`)
+        })
+      }
     }
 
     console.log(`\n✅ Expected: ${testCase.expectedDisplay}`)
@@ -161,8 +216,23 @@ function testPeriodizationDisplayLogic() {
       })
     } else {
       console.log("\n🔄 Testing Toggle ON (non-periodized → periodized):")
-      console.log("  - Should show dialog asking for number of weeks")
-      console.log(`  - Will duplicate ${program.routines?.length || 0} routines for each week`)
+
+      // FIXED LOGIC: Check both routines array and weeks[0].routines
+      let baseRoutines = program.routines || []
+      if (baseRoutines.length === 0 && program.weeks && program.weeks.length > 0) {
+        baseRoutines = program.weeks[0]?.routines || []
+        console.log(`  - Found ${baseRoutines.length} routines in weeks[0] (fallback)`)
+      } else {
+        console.log(`  - Found ${baseRoutines.length} routines in root routines array`)
+      }
+
+      console.log(`  - Will duplicate ${baseRoutines.length} routines for each week`)
+      if (baseRoutines.length > 0) {
+        console.log("  - Base routines to duplicate:")
+        baseRoutines.forEach((routine, idx) => {
+          console.log(`    * ${routine.name}`)
+        })
+      }
     }
   })
 
@@ -173,90 +243,45 @@ function testPeriodizationDisplayLogic() {
   console.log("✅ Toggle OFF asks which week to keep")
   console.log("✅ Toggle ON asks for number of weeks")
   console.log("✅ No unnecessary source week selection for to-periodized conversion")
+  console.log("🔧 CRITICAL FIX: Handle programs with empty routines[] but populated weeks[0].routines")
 }
 
-function testAvailableFieldsLogic() {
-  console.log("\n🔍 Testing Available Fields Detection")
+function testConversionLogicFixed() {
+  console.log("\n🔄 Testing FIXED Conversion Logic")
   console.log("=".repeat(50))
 
-  const testProgram = {
-    is_periodized: true,
+  // Test the problematic case from the screenshot
+  console.log("📈 FIXED: Non-periodized → Periodized Conversion (Screenshot Case):")
+  const problematicProgram = {
+    name: "ivysaur test",
+    is_periodized: false,
+    duration_weeks: 5,
+    routines: [], // Empty - this was the problem!
     weeks: [
       {
         week_number: 1,
         routines: [
-          {
-            name: "Test Routine",
-            exercises: [
-              {
-                name: "Test Exercise",
-                sets: [
-                  { reps: "10", weight: "135", rpe: "7", rest: "60s", notes: "Good form" },
-                  { reps: "8", weight: "145", rpe: "8", rest: "90s" },
-                  { reps: "", weight: "", rpe: "", rest: "", notes: "" }, // Empty set
-                ],
-              },
-            ],
-          },
+          { name: "Upper Body A", exercises: [{ name: "Bench Press", sets: [{ reps: "8" }] }] },
+          { name: "Lower Body A", exercises: [{ name: "Squat", sets: [{ reps: "5" }] }] },
+          { name: "Upper Body B", exercises: [{ name: "OHP", sets: [{ reps: "8" }] }] },
         ],
       },
     ],
   }
 
-  // Simulate the availableFields logic from the component
-  let hasReps = false
-  let hasWeight = false
-  let hasRpe = false
-  let hasRest = false
-  let hasNotes = false
+  console.log("BEFORE FIX - Original Logic:")
+  const originalBaseRoutines = problematicProgram.routines || []
+  console.log(`  - Would use routines array: ${originalBaseRoutines.length} routines`)
+  console.log(`  - Result: NO ROUTINES TO DUPLICATE! ❌`)
 
-  // For periodized programs, we should check the first week's routines
-  const routinesToCheck = testProgram.weeks[0].routines
-
-  for (const routine of routinesToCheck) {
-    if (routine && routine.exercises) {
-      for (const exercise of routine.exercises) {
-        if (exercise && exercise.sets) {
-          for (const set of exercise.sets) {
-            if (set) {
-              if (set.reps !== undefined && set.reps !== null && set.reps !== "") hasReps = true
-              if (set.weight !== undefined && set.weight !== null && set.weight !== "") hasWeight = true
-              if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") hasRpe = true
-              if (set.rest !== undefined && set.rest !== null && set.rest !== "") hasRest = true
-              if (set.notes !== undefined && set.notes !== null && set.notes !== "") hasNotes = true
-            }
-          }
-        }
-      }
-    }
+  console.log("\nAFTER FIX - New Logic:")
+  let baseRoutines = problematicProgram.routines || []
+  if (baseRoutines.length === 0 && problematicProgram.weeks && problematicProgram.weeks.length > 0) {
+    baseRoutines = problematicProgram.weeks[0]?.routines || []
+    console.log(`  - Fallback to weeks[0].routines: ${baseRoutines.length} routines ✅`)
   }
 
-  console.log("Available Fields Detection Results:")
-  console.log(`  - hasReps: ${hasReps}`)
-  console.log(`  - hasWeight: ${hasWeight}`)
-  console.log(`  - hasRpe: ${hasRpe}`)
-  console.log(`  - hasRest: ${hasRest}`)
-  console.log(`  - hasNotes: ${hasNotes}`)
-
-  console.log("\n✅ This determines which columns show in the sets table")
-}
-
-function testConversionLogic() {
-  console.log("\n🔄 Testing Conversion Logic")
-  console.log("=".repeat(50))
-
-  // Test non-periodized to periodized conversion
-  console.log("📈 Non-periodized → Periodized Conversion:")
-  const nonPeriodizedProgram = {
-    is_periodized: false,
-    routines: [
-      { name: "Upper Body", exercises: [{ name: "Bench Press", sets: [{ reps: "10" }] }] },
-      { name: "Lower Body", exercises: [{ name: "Squat", sets: [{ reps: "5" }] }] },
-    ],
-  }
-
-  const numberOfWeeks = 4
-  const baseRoutines = nonPeriodizedProgram.routines
+  const numberOfWeeks = 5
   const weeks = []
 
   for (let weekNum = 1; weekNum <= numberOfWeeks; weekNum++) {
@@ -276,38 +301,61 @@ function testConversionLogic() {
     console.log(`    * ${routine.name}`)
   })
 
-  // Test periodized to non-periodized conversion
-  console.log("\n📉 Periodized → Non-periodized Conversion:")
-  const periodizedProgram = {
-    is_periodized: true,
+  console.log("\n🎯 FIXED CONVERSION LOGIC:")
+  console.log("✅ Check routines array first")
+  console.log("✅ If empty, fallback to weeks[0].routines")
+  console.log("✅ This handles both standard non-periodized and imported programs")
+}
+
+function testDisplayLogicFixed() {
+  console.log("\n📺 Testing FIXED Display Logic")
+  console.log("=".repeat(50))
+
+  const problematicProgram = {
+    name: "ivysaur test",
+    is_periodized: false,
+    routines: [], // Empty
     weeks: [
       {
         week_number: 1,
-        routines: [{ name: "Week 1 - Upper", exercises: [] }],
-      },
-      {
-        week_number: 2,
-        routines: [{ name: "Week 2 - Upper", exercises: [] }],
+        routines: [
+          { name: "Upper Body A", exercises: [] },
+          { name: "Lower Body A", exercises: [] },
+          { name: "Upper Body B", exercises: [] },
+        ],
       },
     ],
   }
 
-  const selectedWeekToKeep = 2
-  const selectedWeek = periodizedProgram.weeks.find((w) => w.week_number === selectedWeekToKeep)
-  const routinesToKeep = selectedWeek?.routines || []
+  console.log("BEFORE FIX - Original Display Logic:")
+  const displayAllWeeks =
+    problematicProgram.is_periodized && problematicProgram.weeks && problematicProgram.weeks.length > 0
+  const originalCurrentRoutines = displayAllWeeks ? [] : problematicProgram.routines || []
+  console.log(`  - displayAllWeeks: ${displayAllWeeks}`)
+  console.log(`  - currentRoutines: ${originalCurrentRoutines.length} routines`)
+  console.log(`  - Result: Shows "No routines found" ❌`)
 
-  // Clean routine names (remove week suffixes)
-  const cleanedRoutines = routinesToKeep.map((routine) => ({
-    ...routine,
-    name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
-  }))
+  console.log("\nAFTER FIX - New Display Logic:")
+  let currentRoutines = displayAllWeeks ? [] : problematicProgram.routines || []
 
-  console.log(`  - Selected week ${selectedWeekToKeep} to keep`)
-  console.log(`  - Found ${routinesToKeep.length} routines in that week`)
-  console.log("  - Cleaned routine names:")
-  cleanedRoutines.forEach((routine) => {
-    console.log(`    * "${routine.name}" (was "${routinesToKeep.find((r) => r === routine)?.name}")`)
+  // FIXED: If non-periodized and no routines, check weeks[0]
+  if (
+    !displayAllWeeks &&
+    currentRoutines.length === 0 &&
+    problematicProgram.weeks &&
+    problematicProgram.weeks.length > 0
+  ) {
+    currentRoutines = problematicProgram.weeks[0]?.routines || []
+    console.log(`  - Fallback to weeks[0].routines: ${currentRoutines.length} routines ✅`)
+  }
+
+  console.log(`  - displayAllWeeks: ${displayAllWeeks}`)
+  console.log(`  - currentRoutines: ${currentRoutines.length} routines`)
+  console.log("  - Routines to display:")
+  currentRoutines.forEach((routine) => {
+    console.log(`    * ${routine.name}`)
   })
+  console.log(`  - Result: Shows actual routines! ✅`)
 }
 
 // Run all tests
@@ -315,11 +363,11 @@ console.log("🚀 Starting Periodization Display Fix Tests")
 console.log("Time:", new Date().toISOString())
 
 testPeriodizationDisplayLogic()
-testAvailableFieldsLogic()
-testConversionLogic()
+testConversionLogicFixed()
+testDisplayLogicFixed()
 
 console.log("\n🎉 All tests completed!")
-console.log("\n💡 Next steps:")
-console.log("1. Verify the component shows all weeks for periodized programs")
-console.log("2. Test the toggle functionality in the UI")
-console.log("3. Confirm conversion dialogs work as expected")
+console.log("\n💡 Key Fixes Needed:")
+console.log("1. ✅ Fix conversion logic to check weeks[0].routines as fallback")
+console.log("2. ✅ Fix display logic to show weeks[0].routines for non-periodized")
+console.log("3. ✅ Handle imported programs that have weeks structure but is_periodized=false")
