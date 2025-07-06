@@ -112,6 +112,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [showPeriodizationDialog, setShowPeriodizationDialog] = useState(false)
   const [periodizationAction, setPeriodizationAction] = useState<"to-periodized" | "to-non-periodized" | null>(null)
   const [selectedWeekToKeep, setSelectedWeekToKeep] = useState<number>(1)
+  const [selectedSourceWeek, setSelectedSourceWeek] = useState<number>(1)
   const [numberOfWeeks, setNumberOfWeeks] = useState<number>(4)
 
   // Analyze available fields in the program data
@@ -376,6 +377,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           debugLog("Converting to periodized")
           setPeriodizationAction("to-periodized")
           setNumberOfWeeks(programState.duration_weeks || 4)
+
+          // If program already has weeks, set default source week to 1
+          if (programState.weeks && programState.weeks.length > 0) {
+            setSelectedSourceWeek(1)
+          }
+
           setShowPeriodizationDialog(true)
         } else if (!checked && programState.is_periodized) {
           debugLog("Converting to non-periodized")
@@ -408,11 +415,14 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         // Get routines from the correct location based on current structure
         let baseRoutines: Routine[] = []
         if (programState.weeks && programState.weeks.length > 0) {
-          // If already has weeks structure, get routines from first week
-          baseRoutines = programState.weeks[0].routines || []
+          // If already has weeks structure, get routines from selected source week
+          const sourceWeek = programState.weeks.find((w) => w.week_number === selectedSourceWeek)
+          baseRoutines = sourceWeek?.routines || []
+          debugLog(`Using routines from week ${selectedSourceWeek}:`, baseRoutines)
         } else {
           // If non-periodized, get from root routines array
           baseRoutines = programState.routines || []
+          debugLog("Using routines from root routines array:", baseRoutines)
         }
 
         debugLog("Base routines for conversion:", baseRoutines)
@@ -421,15 +431,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           weeksLength: programState.weeks?.length,
           hasRootRoutines: !!programState.routines,
           rootRoutinesLength: programState.routines?.length,
-          firstWeekRoutines: programState.weeks?.[0]?.routines?.length,
-          selectedSource: programState.weeks && programState.weeks.length > 0 ? "weeks[0].routines" : "routines",
+          selectedSourceWeek,
+          sourceWeekRoutines: programState.weeks?.find((w) => w.week_number === selectedSourceWeek)?.routines?.length,
+          selectedSource:
+            programState.weeks && programState.weeks.length > 0 ? `weeks[${selectedSourceWeek}].routines` : "routines",
         })
 
         if (baseRoutines.length === 0) {
           debugLog("No routines found for conversion")
           toast({
             title: "No Routines Found",
-            description: "Cannot convert to periodized - no routines found in the program.",
+            description: `Cannot convert to periodized - no routines found in ${programState.weeks && programState.weeks.length > 0 ? `week ${selectedSourceWeek}` : "the program"}.`,
             variant: "destructive",
           })
           setShowPeriodizationDialog(false)
@@ -469,7 +481,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         toast({
           title: "Converted to Periodized",
-          description: `Program converted to ${numberOfWeeks} weeks with different routines per week`,
+          description: `Program converted to ${numberOfWeeks} weeks using routines from ${programState.weeks && programState.weeks.length > 0 ? `week ${selectedSourceWeek}` : "the base template"}`,
         })
       } else if (periodizationAction === "to-non-periodized") {
         debugLog("Converting to non-periodized, keeping week:", selectedWeekToKeep)
@@ -536,7 +548,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setShowPeriodizationDialog(false)
       setPeriodizationAction(null)
     }
-  }, [programState, periodizationAction, numberOfWeeks, selectedWeekToKeep, toast])
+  }, [programState, periodizationAction, numberOfWeeks, selectedWeekToKeep, selectedSourceWeek, toast])
 
   const updateProgramField = useCallback((field: keyof Program, value: any) => {
     debugLog("Updating program field:", field, "with value:", value)
@@ -1173,27 +1185,58 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             </DialogTitle>
             <DialogDescription>
               {periodizationAction === "to-periodized"
-                ? "How many weeks should this program run for? The current routines will be duplicated for each week."
+                ? programState?.weeks && programState.weeks.length > 0
+                  ? "Select which week's routines to use as the template, then specify how many weeks the new program should run for."
+                  : "How many weeks should this program run for? The current routines will be duplicated for each week."
                 : "Which week's routines would you like to keep? This will become your base routine template."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             {periodizationAction === "to-periodized" ? (
-              <div>
-                <Label htmlFor="weeks-count">Number of Weeks</Label>
-                <Input
-                  id="weeks-count"
-                  type="number"
-                  min="1"
-                  max="52"
-                  value={numberOfWeeks}
-                  onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
-                />
-                <p className="text-sm text-gray-600 mt-1">
-                  Current routines will be copied to each week, allowing you to customize them individually later.
-                </p>
-              </div>
+              <>
+                {/* Show source week selector if program already has weeks */}
+                {programState?.weeks && programState.weeks.length > 0 && (
+                  <div>
+                    <Label htmlFor="source-week-select">Source Week</Label>
+                    <Select
+                      value={selectedSourceWeek.toString()}
+                      onValueChange={(value) => setSelectedSourceWeek(Number.parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {programState.weeks.map((week) => (
+                          <SelectItem key={week.week_number} value={week.week_number.toString()}>
+                            Week {week.week_number} ({week.routines?.length || 0} routines)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Which week's routines should be used as the template for all weeks?
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <Label htmlFor="weeks-count">Number of Weeks</Label>
+                  <Input
+                    id="weeks-count"
+                    type="number"
+                    min="1"
+                    max="52"
+                    value={numberOfWeeks}
+                    onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
+                  />
+                  <p className="text-sm text-gray-600 mt-1">
+                    {programState?.weeks && programState.weeks.length > 0
+                      ? `Week ${selectedSourceWeek}'s routines will be copied to each of the ${numberOfWeeks} weeks.`
+                      : "Current routines will be copied to each week, allowing you to customize them individually later."}
+                  </p>
+                </div>
+              </>
             ) : (
               <div>
                 <Label htmlFor="week-select">Select Week to Keep</Label>
