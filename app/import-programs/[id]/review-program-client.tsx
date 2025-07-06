@@ -80,7 +80,22 @@ interface AvailableFields {
   hasNotes: boolean
 }
 
+// Add comprehensive logging utility
+const debugLog = (message: string, data?: any) => {
+  console.log(`[ReviewProgramClient] ${message}`, data || "")
+}
+
+const errorLog = (message: string, error?: any) => {
+  console.error(`[ReviewProgramClient ERROR] ${message}`, error || "")
+}
+
 export default function ReviewProgramClient({ importData, importId, initialClients = [] }: ReviewProgramClientProps) {
+  debugLog("Component initialized with props:", {
+    importData: !!importData,
+    importId,
+    clientCount: initialClients.length,
+  })
+
   const router = useRouter()
   const { toast } = useToast()
   const [programState, setProgramState] = useState<Program | null>(null)
@@ -102,7 +117,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
   // Analyze available fields in the program data
   const availableFields = useMemo((): AvailableFields => {
+    debugLog("Computing available fields for program state:", programState)
+
     if (!programState) {
+      debugLog("No program state, returning default fields")
       return {
         hasReps: false,
         hasWeight: false,
@@ -115,6 +133,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     const currentRoutines =
       programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
 
+    debugLog("Current routines for field analysis:", currentRoutines)
+
     let hasReps = false
     let hasWeight = false
     let hasRpe = false
@@ -122,41 +142,53 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     let hasNotes = false
 
     // Check all exercises and sets to see what fields exist
-    for (const routine of currentRoutines) {
-      if (routine && routine.exercises) {
-        for (const exercise of routine.exercises) {
-          if (exercise && exercise.sets) {
-            for (const set of exercise.sets) {
-              if (set) {
-                if (set.reps !== undefined && set.reps !== null && set.reps !== "") hasReps = true
-                if (set.weight !== undefined && set.weight !== null && set.weight !== "") hasWeight = true
-                if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") hasRpe = true
-                if (set.rest !== undefined && set.rest !== null && set.rest !== "") hasRest = true
-                if (set.notes !== undefined && set.notes !== null && set.notes !== "") hasNotes = true
+    try {
+      for (const routine of currentRoutines) {
+        if (routine && routine.exercises) {
+          for (const exercise of routine.exercises) {
+            if (exercise && exercise.sets) {
+              for (const set of exercise.sets) {
+                if (set) {
+                  if (set.reps !== undefined && set.reps !== null && set.reps !== "") hasReps = true
+                  if (set.weight !== undefined && set.weight !== null && set.weight !== "") hasWeight = true
+                  if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") hasRpe = true
+                  if (set.rest !== undefined && set.rest !== null && set.rest !== "") hasRest = true
+                  if (set.notes !== undefined && set.notes !== null && set.notes !== "") hasNotes = true
+                }
               }
             }
           }
         }
       }
+    } catch (err) {
+      errorLog("Error analyzing available fields:", err)
     }
 
-    return { hasReps, hasWeight, hasRpe, hasRest, hasNotes }
+    const fields = { hasReps, hasWeight, hasRpe, hasRest, hasNotes }
+    debugLog("Computed available fields:", fields)
+    return fields
   }, [programState])
 
   // Initialize program state from import data
   useEffect(() => {
     const initializeProgram = () => {
+      debugLog("Initializing program from import data")
+
       try {
         setIsLoading(true)
         setError(null)
 
         if (!importData) {
+          errorLog("No import data provided")
           setError("No import data provided")
           setIsLoading(false)
           return
         }
 
+        debugLog("Import data structure:", importData)
+
         if (!importData.program) {
+          errorLog("No program data found in import")
           setError("No program data found in import")
           setIsLoading(false)
           return
@@ -164,6 +196,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         // Extract program data with multiple fallback field names
         const program = importData.program
+        debugLog("Program data from import:", program)
 
         // Create program state with proper field mapping
         const programState: Program = {
@@ -177,10 +210,11 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           notes: program.notes || "",
         }
 
+        debugLog("Created program state:", programState)
         setProgramState(programState)
         setIsLoading(false)
       } catch (err) {
-        console.error("Error initializing program state:", err)
+        errorLog("Error initializing program state:", err)
         setError("Failed to load program data")
         setIsLoading(false)
       }
@@ -192,6 +226,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   // Fetch clients if not provided initially
   useEffect(() => {
     const fetchClients = async () => {
+      debugLog("Fetching clients, initial count:", initialClients.length)
+
       if (initialClients.length === 0) {
         try {
           const response = await fetch("/api/clients", {
@@ -200,10 +236,13 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
           if (response.ok) {
             const data = await response.json()
+            debugLog("Fetched clients from API:", data.clients)
             setClients(data.clients || [])
+          } else {
+            debugLog("Failed to fetch clients, status:", response.status)
           }
         } catch (error) {
-          console.error("Error fetching clients:", error)
+          errorLog("Error fetching clients:", error)
         }
       } else {
         setClients(initialClients)
@@ -214,7 +253,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }, [initialClients])
 
   const handleSaveChanges = async () => {
-    if (!programState || !importId) return
+    debugLog("Saving changes for program:", programState?.name)
+
+    if (!programState || !importId) {
+      debugLog("Cannot save - missing program state or import ID")
+      return
+    }
 
     setIsSaving(true)
     try {
@@ -235,13 +279,14 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         throw new Error("Failed to save changes")
       }
 
+      debugLog("Changes saved successfully")
       toast({
         title: "Changes Saved",
         description: "Your program changes have been saved successfully.",
       })
       setHasChanges(false)
     } catch (error) {
-      console.error("Error saving changes:", error)
+      errorLog("Error saving changes:", error)
       toast({
         title: "Save Failed",
         description: "Failed to save your changes. Please try again.",
@@ -253,7 +298,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const handleSendToClient = async () => {
+    debugLog("Sending program to client:", selectedClientId)
+
     if (!selectedClientId || !programState) {
+      debugLog("Cannot send - missing client ID or program state")
       toast({
         title: "Missing Information",
         description: "Please select a client and ensure program data is loaded.",
@@ -264,6 +312,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
     const selectedClient = clients.find((c) => c.id === selectedClientId)
     if (!selectedClient) {
+      debugLog("Selected client not found in clients list")
       toast({
         title: "Client Not Found",
         description: "The selected client could not be found.",
@@ -294,6 +343,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       }
 
       const result = await response.json()
+      debugLog("Program sent successfully:", result)
 
       toast({
         title: "Program Sent Successfully!",
@@ -304,7 +354,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setCustomMessage("")
       setShowSendDialog(false)
     } catch (error) {
-      console.error("Error sending program:", error)
+      errorLog("Error sending program:", error)
       toast({
         title: "Failed to Send Program",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
@@ -316,33 +366,55 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const handleTogglePeriodization = (checked: boolean) => {
-    if (!programState) return
+    debugLog("Toggle periodization called with checked:", checked)
+    debugLog("Current program state:", programState)
 
-    // Determine the action needed
-    if (checked && !programState.is_periodized) {
-      // Converting to periodized - ask how many weeks
-      setPeriodizationAction("to-periodized")
-      setNumberOfWeeks(programState.duration_weeks || 4)
-      setShowPeriodizationDialog(true)
-    } else if (!checked && programState.is_periodized) {
-      // Converting to non-periodized - ask which week to keep
-      setPeriodizationAction("to-non-periodized")
-      setSelectedWeekToKeep(1)
-      setShowPeriodizationDialog(true)
+    if (!programState) {
+      errorLog("Cannot toggle periodization - no program state")
+      return
+    }
+
+    try {
+      // Determine the action needed
+      if (checked && !programState.is_periodized) {
+        debugLog("Converting to periodized")
+        // Converting to periodized - ask how many weeks
+        setPeriodizationAction("to-periodized")
+        setNumberOfWeeks(programState.duration_weeks || 4)
+        setShowPeriodizationDialog(true)
+      } else if (!checked && programState.is_periodized) {
+        debugLog("Converting to non-periodized")
+        // Converting to non-periodized - ask which week to keep
+        setPeriodizationAction("to-non-periodized")
+        setSelectedWeekToKeep(1)
+        setShowPeriodizationDialog(true)
+      } else {
+        debugLog("No action needed for periodization toggle")
+      }
+    } catch (err) {
+      errorLog("Error in handleTogglePeriodization:", err)
     }
   }
 
   const confirmPeriodizationChange = () => {
+    debugLog("Confirming periodization change:", periodizationAction)
+    debugLog("Program state before conversion:", programState)
+
     if (!programState || !periodizationAction) {
+      errorLog("Cannot confirm periodization change - missing state or action")
       return
     }
 
     try {
       if (periodizationAction === "to-periodized") {
+        debugLog("Converting to periodized with weeks:", numberOfWeeks)
+
         // Convert non-periodized to periodized by duplicating routines
         const baseRoutines = programState.routines || []
+        debugLog("Base routines for conversion:", baseRoutines)
 
         if (baseRoutines.length === 0) {
+          debugLog("No routines found for conversion")
           toast({
             title: "No Routines Found",
             description: "Cannot convert to periodized - no routines found in the program.",
@@ -365,15 +437,22 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           })
         }
 
+        debugLog("Created weeks for periodized program:", weeks)
+
         setProgramState((prev) => {
-          if (!prev) return prev
-          return {
+          if (!prev) {
+            debugLog("Previous state is null, cannot update")
+            return prev
+          }
+          const newState = {
             ...prev,
             is_periodized: true,
             weeks,
             routines: undefined,
             duration_weeks: numberOfWeeks,
           }
+          debugLog("New program state after conversion to periodized:", newState)
+          return newState
         })
 
         toast({
@@ -381,11 +460,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           description: `Program converted to ${numberOfWeeks} weeks with different routines per week`,
         })
       } else if (periodizationAction === "to-non-periodized") {
+        debugLog("Converting to non-periodized, keeping week:", selectedWeekToKeep)
+
         // Convert periodized to non-periodized by keeping selected week
         const selectedWeek = programState.weeks?.find((w) => w.week_number === selectedWeekToKeep)
         const routinesToKeep = selectedWeek?.routines || []
 
+        debugLog("Selected week data:", selectedWeek)
+        debugLog("Routines to keep:", routinesToKeep)
+
         if (routinesToKeep.length === 0) {
+          debugLog("No routines found in selected week")
           toast({
             title: "No Routines Found",
             description: `No routines found in week ${selectedWeekToKeep}. Please select a different week.`,
@@ -400,15 +485,22 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
         }))
 
+        debugLog("Cleaned routines:", cleanedRoutines)
+
         setProgramState((prev) => {
-          if (!prev) return prev
-          return {
+          if (!prev) {
+            debugLog("Previous state is null, cannot update")
+            return prev
+          }
+          const newState = {
             ...prev,
             is_periodized: false,
             routines: cleanedRoutines,
             weeks: undefined,
             duration_weeks: 1,
           }
+          debugLog("New program state after conversion to non-periodized:", newState)
+          return newState
         })
 
         toast({
@@ -421,8 +513,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setShowPeriodizationDialog(false)
       setPeriodizationAction(null)
       setExpandedRoutines({ 0: true })
+
+      debugLog("Periodization conversion completed successfully")
     } catch (error) {
-      console.error("Error in periodization conversion:", error)
+      errorLog("Error in periodization conversion:", error)
       toast({
         title: "Conversion Failed",
         description: "An error occurred during the conversion. Please try again.",
@@ -434,18 +528,28 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const updateProgramField = (field: keyof Program, value: any) => {
-    if (!programState) return
+    debugLog("Updating program field:", field, "with value:", value)
+
+    if (!programState) {
+      debugLog("Cannot update field - no program state")
+      return
+    }
+
     setProgramState((prev) => {
       if (!prev) return prev
-      return {
+      const newState = {
         ...prev,
         [field]: value,
       }
+      debugLog("Updated program state:", newState)
+      return newState
     })
     setHasChanges(true)
   }
 
   const toggleRoutineExpansion = (index: number) => {
+    debugLog("Toggling routine expansion for index:", index)
+
     setExpandedRoutines((prev) => ({
       ...prev,
       [index]: !prev[index],
@@ -453,7 +557,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const updateSetField = (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
-    if (!programState) return
+    debugLog("Updating set field:", { routineIndex, exerciseIndex, setIndex, field, value })
+
+    if (!programState) {
+      debugLog("Cannot update set field - no program state")
+      return
+    }
 
     setProgramState((prev) => {
       if (!prev) return prev
@@ -466,10 +575,14 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       if (newState.weeks && newState.weeks.length > 0) {
         // Periodized program - use first week's routines for now
         targetRoutines = newState.weeks[0].routines
+        debugLog("Using periodized routines from first week")
       } else if (newState.routines) {
         // Non-periodized program
         targetRoutines = newState.routines
+        debugLog("Using non-periodized routines")
       }
+
+      debugLog("Target routines for update:", targetRoutines)
 
       if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
         const currentSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
@@ -477,6 +590,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           ...currentSet,
           [field]: value,
         }
+        debugLog("Updated set successfully")
+      } else {
+        debugLog("Could not find target set for update")
       }
 
       return newState
@@ -485,7 +601,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const addSet = (routineIndex: number, exerciseIndex: number) => {
-    if (!programState) return
+    debugLog("Adding set to routine:", routineIndex, "exercise:", exerciseIndex)
+
+    if (!programState) {
+      debugLog("Cannot add set - no program state")
+      return
+    }
 
     setProgramState((prev) => {
       if (!prev) return prev
@@ -514,6 +635,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           notes: "",
           set_number: exercise.sets.length + 1,
         })
+
+        debugLog("Added new set, total sets now:", exercise.sets.length)
       }
 
       return newState
@@ -522,7 +645,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const removeSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    if (!programState) return
+    debugLog("Removing set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+
+    if (!programState) {
+      debugLog("Cannot remove set - no program state")
+      return
+    }
 
     setProgramState((prev) => {
       if (!prev) return prev
@@ -540,6 +668,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
       if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
         targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
+        debugLog("Removed set successfully")
       }
 
       return newState
@@ -548,7 +677,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    if (!programState) return
+    debugLog("Duplicating set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+
+    if (!programState) {
+      debugLog("Cannot duplicate set - no program state")
+      return
+    }
 
     setProgramState((prev) => {
       if (!prev) return prev
@@ -568,6 +702,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
         const duplicatedSet = { ...originalSet }
         targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
+        debugLog("Duplicated set successfully")
       }
 
       return newState
@@ -576,6 +711,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const handleBackClick = () => {
+    debugLog("Back button clicked, has changes:", hasChanges)
+
     if (hasChanges) {
       setShowConfirmDialog(true)
     } else {
@@ -584,8 +721,21 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const confirmLeave = () => {
+    debugLog("Confirmed leaving without saving")
     setShowConfirmDialog(false)
     router.back()
+  }
+
+  // Create safe click handlers to prevent the "j is not a function" error
+  const createSafeClickHandler = (handler: () => void, handlerName: string) => {
+    return () => {
+      try {
+        debugLog(`Executing safe click handler: ${handlerName}`)
+        handler()
+      } catch (err) {
+        errorLog(`Error in ${handlerName}:`, err)
+      }
+    }
   }
 
   if (isLoading) {
@@ -608,7 +758,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Program</h2>
             <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={() => router.back()} variant="outline">
+            <Button onClick={createSafeClickHandler(() => router.back(), "router.back")} variant="outline">
               Go Back
             </Button>
           </div>
@@ -624,7 +774,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-yellow-800 mb-2">No Program Data</h2>
             <p className="text-yellow-600 mb-4">No program data was found to review.</p>
-            <Button onClick={() => router.back()} variant="outline">
+            <Button onClick={createSafeClickHandler(() => router.back(), "router.back")} variant="outline">
               Go Back
             </Button>
           </div>
@@ -637,12 +787,14 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const currentRoutines =
     programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
 
+  debugLog("Rendering component with current routines:", currentRoutines)
+
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={handleBackClick}>
+          <Button variant="ghost" size="sm" onClick={createSafeClickHandler(handleBackClick, "handleBackClick")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
@@ -653,11 +805,18 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         </div>
         <div className="flex gap-2">
           {hasChanges && (
-            <Button onClick={handleSaveChanges} disabled={isSaving} variant="outline">
+            <Button
+              onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
+              disabled={isSaving}
+              variant="outline"
+            >
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>
           )}
-          <Button onClick={() => setShowSendDialog(true)} disabled={!programState}>
+          <Button
+            onClick={createSafeClickHandler(() => setShowSendDialog(true), "setShowSendDialog")}
+            disabled={!programState}
+          >
             Send to Client
           </Button>
         </div>
@@ -739,7 +898,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                 <div className="p-4">
                   <div
                     className="flex items-center justify-between cursor-pointer"
-                    onClick={() => toggleRoutineExpansion(routineIndex)}
+                    onClick={createSafeClickHandler(
+                      () => toggleRoutineExpansion(routineIndex),
+                      `toggleRoutineExpansion-${routineIndex}`,
+                    )}
                   >
                     <div>
                       <h3 className="font-medium">{routine.name || routine.title || `Routine ${routineIndex + 1}`}</h3>
@@ -873,7 +1035,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                           <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
+                                            onClick={createSafeClickHandler(
+                                              () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                              `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
                                             title="Duplicate set"
                                           >
                                             <Copy className="h-3 w-3" />
@@ -881,7 +1046,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                           <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => removeSet(routineIndex, exerciseIndex, setIndex)}
+                                            onClick={createSafeClickHandler(
+                                              () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                              `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
                                             title="Remove set"
                                           >
                                             <Trash2 className="h-3 w-3" />
@@ -893,7 +1061,14 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                 </tbody>
                               </table>
                               <div className="mt-2">
-                                <Button size="sm" variant="outline" onClick={() => addSet(routineIndex, exerciseIndex)}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={createSafeClickHandler(
+                                    () => addSet(routineIndex, exerciseIndex),
+                                    `addSet-${routineIndex}-${exerciseIndex}`,
+                                  )}
+                                >
                                   <Plus className="h-3 w-3 mr-1" />
                                   Add Set
                                 </Button>
@@ -958,10 +1133,16 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={createSafeClickHandler(() => setShowSendDialog(false), "setShowSendDialog-false")}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSendToClient} disabled={!selectedClientId || isSending}>
+            <Button
+              onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")}
+              disabled={!selectedClientId || isSending}
+            >
               {isSending ? "Sending..." : "Send Program"}
             </Button>
           </DialogFooter>
@@ -978,10 +1159,13 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={createSafeClickHandler(() => setShowConfirmDialog(false), "setShowConfirmDialog-false")}
+            >
               Stay and Save
             </Button>
-            <Button variant="destructive" onClick={confirmLeave}>
+            <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
               Leave Without Saving
             </Button>
           </DialogFooter>
@@ -1046,14 +1230,14 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => {
+              onClick={createSafeClickHandler(() => {
                 setShowPeriodizationDialog(false)
                 setPeriodizationAction(null)
-              }}
+              }, "cancelPeriodizationDialog")}
             >
               Cancel
             </Button>
-            <Button onClick={confirmPeriodizationChange}>
+            <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
               {periodizationAction === "to-periodized"
                 ? `Create ${numberOfWeeks} Weeks`
                 : `Keep Week ${selectedWeekToKeep}`}
