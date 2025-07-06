@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { cookies } from "next/headers"
-import ReviewProgramClient from "./review-program-client"
+import PeriodizedReviewClient from "./periodized-review-client"
 import { fetchClients } from "@/lib/firebase/client-service"
 import { db } from "@/lib/firebase/firebase"
 import { doc, getDoc } from "firebase/firestore"
@@ -37,12 +37,14 @@ async function getImportData(id: string): Promise<ImportData | null> {
       return null
     }
 
+    console.log(`[getImportData] Using trainer ID: ${trainerId}`)
+
     // Fetch the actual import document from Firebase
     const importDocRef = doc(db, "users", trainerId, "sheets-imports", id)
     const importDoc = await getDoc(importDocRef)
 
     if (!importDoc.exists()) {
-      console.log(`[getImportData] Import document not found: ${id}`)
+      console.log(`[getImportData] Import document not found at: users/${trainerId}/sheets-imports/${id}`)
       return null
     }
 
@@ -53,15 +55,16 @@ async function getImportData(id: string): Promise<ImportData | null> {
       status: importData.status,
       hasProgram: !!importData.program,
       programKeys: importData.program ? Object.keys(importData.program) : [],
+      programTitle: importData.program?.program_title || importData.program?.name,
     })
 
     return {
       id: importData.id || id,
-      name: importData.name || "Untitled Program",
+      name: importData.name || importData.program?.program_title || importData.program?.name || "Untitled Program",
       program: importData.program || null,
       status: importData.status || "pending",
-      created_at: importData.created_at || new Date(),
-      trainer_id: importData.trainer_id || trainerId,
+      created_at: importData.created_at || importData.createdAt || new Date(),
+      trainer_id: importData.trainer_id || importData.userId || trainerId,
     }
   } catch (error) {
     console.error("[getImportData] Error fetching import data:", error)
@@ -112,12 +115,21 @@ export default async function ReviewProgramPage({
     notFound()
   }
 
+  console.log(`[ReviewProgramPage] Loading page for import ID: ${id}`)
+
   // Fetch import data and clients in parallel
   const [importData, initialClients] = await Promise.all([getImportData(id), getClients()])
 
   if (!importData) {
+    console.log(`[ReviewProgramPage] No import data found for ID: ${id}`)
     notFound()
   }
 
-  return <ReviewProgramClient importData={importData} importId={id} initialClients={initialClients} />
+  console.log(`[ReviewProgramPage] Successfully loaded import data:`, {
+    name: importData.name,
+    hasProgram: !!importData.program,
+    status: importData.status,
+  })
+
+  return <PeriodizedReviewClient importData={importData} importId={id} initialClients={initialClients} />
 }
