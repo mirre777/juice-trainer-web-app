@@ -1,5 +1,5 @@
 import { db } from "./firebase"
-import { collection, doc, setDoc, getDoc, getDocs, query, where, Timestamp } from "firebase/firestore"
+import { collection, doc, setDoc, getDoc, getDocs, query, where, Timestamp, writeBatch } from "firebase/firestore"
 import { fetchClients } from "./client-service" // Import the proper client service
 import { v4 as uuidv4 } from "uuid"
 
@@ -52,7 +52,7 @@ export interface MobileExercise {
   deletedAt: null
 }
 
-export interface ConvertedProgram {
+export interface WorkoutProgram {
   id: string
   name: string
   duration: number
@@ -61,10 +61,27 @@ export interface ConvertedProgram {
     week: number
     order: number
   }>
+  notes: string
   createdAt: Timestamp
   startedAt: Timestamp
   updated_at: Timestamp
-  notes: string
+}
+
+export interface RoutineData {
+  id: string
+  name: string
+  type: string
+  exercises: Array<{
+    id: string
+    name: string
+    sets: number
+    reps: string
+    weight?: string
+    notes?: string
+    restTime?: string
+  }>
+  createdAt: Timestamp
+  updated_at: Timestamp
 }
 
 export class ProgramConversionService {
@@ -593,67 +610,258 @@ export class ProgramConversionService {
       return []
     }
   }
+
+  /**
+   * Converts a Google Sheets program structure to Firebase format and assigns it to a user
+   */
+  async convertAndAssignProgram(
+    userId: string,
+    programData: any,
+    clientId?: string,
+  ): Promise<{ success: boolean; programId?: string; error?: string }> {
+    try {
+      console.log("Starting program conversion for user:", userId)
+      console.log("Program data:", JSON.stringify(programData, null, 2))
+
+      // Generate unique program ID
+      const programId = generateProgramId()
+      const now = Timestamp.now()
+
+      // Convert program structure
+      const program: WorkoutProgram = {
+        id: programId,
+        name: programData.name || "Imported Program",
+        duration: Number(programData.duration) || 4,
+        routines: [],
+        notes: "", // Always empty string, never null
+        createdAt: now,
+        startedAt: now,
+        updated_at: now,
+      }
+
+      // Process routines
+      const batch = writeBatch(db)
+      const routineIds: string[] = []
+
+      if (programData.weeks && Array.isArray(programData.weeks)) {
+        let routineOrder = 1
+
+        for (const week of programData.weeks) {
+          if (week.days && Array.isArray(week.days)) {
+            for (const day of week.days) {
+              if (day.exercises && Array.isArray(day.exercises) && day.exercises.length > 0) {
+                const routineId = generateRoutineId()
+                routineIds.push(routineId)
+
+                // Create routine document
+                const routine: RoutineData = {
+                  id: routineId,
+                  name: day.name || `Day ${routineOrder}`,
+                  type: "workout",
+                  exercises: day.exercises.map((exercise: any, index: number) => ({
+                    id: `exercise_${index + 1}`,
+                    name: exercise.name || "Unknown Exercise",
+                    sets: Number(exercise.sets) || 3,
+                    reps: String(exercise.reps || "10"),
+                    weight: exercise.weight ? String(exercise.weight) : "",
+                    notes: exercise.notes || "",
+                    restTime: exercise.restTime || "60s",
+                  })),
+                  createdAt: now,
+                  updated_at: now,
+                }
+
+                // Add routine to batch
+                const routineRef = doc(db, "users", userId, "routines", routineId)
+                batch.set(routineRef, routine)
+
+                // Add to program routines array
+                program.routines.push({
+                  routineId: routineId,
+                  week: week.week || 1,
+                  order: routineOrder,
+                })
+
+                routineOrder++
+              }
+            }
+          }
+        }
+      }
+
+      // Validate we have routines
+      if (program.routines.length === 0) {
+        throw new Error("No valid routines found in program data")
+      }
+
+      // Add program to batch
+      const programRef = doc(db, "users", userId, "programs", programId)
+      batch.set(programRef, program)
+
+      // Commit all changes
+      await batch.commit()
+
+      console.log("Program conversion completed successfully")
+      console.log("Program ID:", programId)
+      console.log("Routines created:", routineIds.length)
+
+      return {
+        success: true,
+        programId: programId,
+      }
+    } catch (error) {
+      console.error("Error converting program:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+      }
+    }
+  }
+
+  /**
+   * Validates that a program and its routines exist and are properly structured
+   */
+  async validateProgramStructure(userId: string, programId: string): Promise<{ valid: boolean; issues: string[] }> {
+    const issues: string[] = []
+
+    try {
+      // Check program exists
+      const programRef = doc(db, "users", userId, "programs", programId)
+      const programSnap = await getDoc(programRef)
+
+      if (!programSnap.exists()) {
+        issues.push("Program document does not exist")
+        return { valid: false, issues }
+      }
+
+      const programData = programSnap.data() as WorkoutProgram
+
+      // Validate required fields
+      if (!programData.id) issues.push("Missing program id")
+      if (!programData.name) issues.push("Missing program name")
+      if (typeof programData.duration !== "number") issues.push("Duration is not a number")
+      if (!Array.isArray(programData.routines)) issues.push("Routines is not an array")
+      if (typeof programData.notes !== "string") issues.push("Notes is not a string")
+
+      // Validate timestamps are Timestamp objects
+      if (!(programData.createdAt instanceof Timestamp)) issues.push("createdAt is not a Timestamp object")
+      if (!(programData.startedAt instanceof Timestamp)) issues.push("startedAt is not a Timestamp object")
+      if (!(programData.updated_at instanceof Timestamp)) issues.push("updated_at is not a Timestamp object")
+
+      // Check each routine exists
+      for (const routineRef of programData.routines) {
+        const routineDoc = await getDoc(doc(db, "users", userId, "routines", routineRef.routineId))
+        if (!routineDoc.exists()) {
+          issues.push(`Routine ${routineRef.routineId} does not exist`)
+        }
+      }
+
+      return {
+        valid: issues.length === 0,
+        issues,
+      }
+    } catch (error) {
+      issues.push(`Validation error: ${error instanceof Error ? error.message : "Unknown error"}`)
+      return { valid: false, issues }
+    }
+  }
+
+  /**
+   * Fixes common program structure issues
+   */
+  async fixProgramStructure(userId: string, programId: string): Promise<{ success: boolean; fixesApplied: string[] }> {
+    const fixesApplied: string[] = []
+
+    try {
+      const programRef = doc(db, "users", userId, "programs", programId)
+      const programSnap = await getDoc(programRef)
+
+      if (!programSnap.exists()) {
+        throw new Error("Program does not exist")
+      }
+
+      const programData = programSnap.data()
+      const updates: any = {}
+
+      // Fix timestamp fields if they're strings
+      const now = Timestamp.now()
+
+      if (typeof programData.createdAt === "string") {
+        updates.createdAt = now
+        fixesApplied.push("Fixed createdAt timestamp")
+      }
+
+      if (typeof programData.startedAt === "string") {
+        updates.startedAt = now
+        fixesApplied.push("Fixed startedAt timestamp")
+      }
+
+      if (typeof programData.updated_at === "string") {
+        updates.updated_at = now
+        fixesApplied.push("Fixed updated_at timestamp")
+      }
+
+      // Fix notes field
+      if (programData.notes === null || programData.notes === undefined) {
+        updates.notes = ""
+        fixesApplied.push("Fixed notes field")
+      }
+
+      // Remove problematic extra fields
+      const fieldsToRemove = ["program_URL", "isActive", "status"]
+      const batch = writeBatch(db)
+
+      for (const field of fieldsToRemove) {
+        if (programData[field] !== undefined) {
+          // Note: Firestore doesn't have a direct way to remove fields in updates
+          // We'll need to rewrite the document without these fields
+          fixesApplied.push(`Removed ${field} field`)
+        }
+      }
+
+      // Apply updates if any
+      if (Object.keys(updates).length > 0 || fixesApplied.some((fix) => fix.includes("Removed"))) {
+        // Create clean program data
+        const cleanProgramData = {
+          id: programData.id,
+          name: programData.name,
+          duration: Number(programData.duration),
+          routines: programData.routines,
+          notes: updates.notes || programData.notes || "",
+          createdAt: updates.createdAt || programData.createdAt,
+          startedAt: updates.startedAt || programData.startedAt,
+          updated_at: updates.updated_at || programData.updated_at,
+        }
+
+        await setDoc(programRef, cleanProgramData)
+        fixesApplied.push("Applied structure fixes")
+      }
+
+      return {
+        success: true,
+        fixesApplied,
+      }
+    } catch (error) {
+      console.error("Error fixing program structure:", error)
+      return {
+        success: false,
+        fixesApplied: [`Error: ${error instanceof Error ? error.message : "Unknown error"}`],
+      }
+    }
+  }
+}
+
+// Helper functions
+function generateProgramId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+function generateRoutineId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
 // Export singleton instance
 export const programConversionService = new ProgramConversionService()
 
-// Helper function to validate program structure
-export function validateProgramStructure(program: any): { isValid: boolean; errors: string[] } {
-  const errors: string[] = []
-
-  if (!program.id) errors.push("Missing program ID")
-  if (!program.name) errors.push("Missing program name")
-  if (typeof program.duration !== "number") errors.push("Duration must be a number")
-  if (!Array.isArray(program.routines)) errors.push("Routines must be an array")
-  if (!program.createdAt) errors.push("Missing createdAt timestamp")
-  if (!program.startedAt) errors.push("Missing startedAt timestamp")
-  if (!program.updated_at) errors.push("Missing updated_at timestamp")
-  if (typeof program.notes !== "string") errors.push("Notes must be a string")
-
-  // Validate routines structure
-  if (Array.isArray(program.routines)) {
-    program.routines.forEach((routine: any, index: number) => {
-      if (!routine.routineId) errors.push(`Routine ${index}: Missing routineId`)
-      if (typeof routine.week !== "number") errors.push(`Routine ${index}: Week must be a number`)
-      if (typeof routine.order !== "number") errors.push(`Routine ${index}: Order must be a number`)
-    })
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-  }
-}
-
-// Debug function to check existing programs
-export async function debugClientPrograms(clientId: string) {
-  try {
-    const { getDocs, collection: firestoreCollection } = await import("firebase/firestore")
-
-    const programsRef = firestoreCollection(db, "users", clientId, "programs")
-    const snapshot = await getDocs(programsRef)
-
-    console.log(`Found ${snapshot.size} programs for client ${clientId}`)
-
-    snapshot.forEach((doc) => {
-      const data = doc.data()
-      const validation = validateProgramStructure(data)
-
-      console.log(`Program ${doc.id}:`, {
-        name: data.name,
-        duration: data.duration,
-        routinesCount: data.routines?.length || 0,
-        isValid: validation.isValid,
-        errors: validation.errors,
-        timestamps: {
-          createdAt: data.createdAt,
-          startedAt: data.startedAt,
-          updated_at: data.updated_at,
-        },
-      })
-    })
-  } catch (error) {
-    console.error("Error debugging client programs:", error)
-  }
-}
+// Export validation and fix functions for use in API routes
+export { programConversionService as validateProgram, programConversionService as fixProgram }
