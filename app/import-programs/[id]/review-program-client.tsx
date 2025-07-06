@@ -94,8 +94,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
-  const [isSending, setIsSending] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSending, setIsSending] = useState(isSaving)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
@@ -234,7 +234,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           name: importData.name || program.program_title || program.title || program.name || "Untitled Program",
           program_title: program.program_title || program.title || program.name,
           description: program.description || "",
-          duration_weeks: Number(program.program_weeks || program.duration_weeks || program.weeks?.length || 1),
+          duration_weeks: Number(program.duration_weeks || program.program_weeks || program.weeks?.length || 1),
+          program_weeks: Number(program.duration_weeks || program.program_weeks || program.weeks?.length || 1),
           is_periodized: Boolean(program.is_periodized || (program.weeks && program.weeks.length > 1)),
           weeks: program.weeks || [],
           routines: program.routines || [],
@@ -864,8 +865,13 @@ export default function ReviewProgramClient({ importData, importId, initialClien
               type="number"
               min="1"
               max="52"
-              value={programState.duration_weeks || 1}
-              onChange={(e) => updateProgramField("duration_weeks", Number.parseInt(e.target.value) || 1)}
+              value={programState.duration_weeks || programState.program_weeks || 1}
+              onChange={(e) => {
+                const newDuration = Number.parseInt(e.target.value) || 1
+                updateProgramField("duration_weeks", newDuration)
+                // Also update program_weeks to keep them in sync
+                updateProgramField("program_weeks", newDuration)
+              }}
             />
           </div>
           <div className="md:col-span-2">
