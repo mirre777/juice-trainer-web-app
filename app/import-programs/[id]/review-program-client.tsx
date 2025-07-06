@@ -1044,7 +1044,13 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPeriodizationDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPeriodizationDialog(false)
+                setPeriodizationAction(null)
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={confirmPeriodizationChange}>
