@@ -8,18 +8,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 
 interface Exercise {
   name: string
@@ -1313,130 +1304,151 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       </Card>
 
       {/* Send to Client Dialog */}
-      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send Program to Client</DialogTitle>
-            <DialogDescription>Select a client to send this program to.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="client-select">Select Client</Label>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name} {client.email && `(${client.email})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {showSendDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Send Program to Client</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="client-select">Select Client</Label>
+                  <select
+                    id="client-select"
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Choose a client...</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name} {client.email && `(${client.email})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="custom-message">Custom Message (Optional)</Label>
+                  <Textarea
+                    id="custom-message"
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value)}
+                    placeholder="Add a personal message for your client..."
+                    rows={3}
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={createSafeClickHandler(() => setShowSendDialog(false), "setShowSendDialog-false")}
+                    disabled={isSending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")}
+                    disabled={!selectedClientId || isSending}
+                  >
+                    {isSending ? "Sending..." : "Send Program"}
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="custom-message">Custom Message (Optional)</Label>
-              <Textarea
-                id="custom-message"
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                placeholder="Add a personal message for your client..."
-                rows={3}
-              />
+          </Card>
+        </div>
+      )}
+
+      {/* Confirmation Dialog for leaving without saving */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Unsaved Changes</h3>
+              <p className="text-gray-600 mb-4">
+                You have unsaved changes. Are you sure you want to leave without saving?
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={createSafeClickHandler(() => setShowConfirmDialog(false), "setShowConfirmDialog-false")}
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
+                  Leave Without Saving
+                </Button>
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")} disabled={isSending}>
-              {isSending ? "Sending..." : "Send Program"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </Card>
+        </div>
+      )}
 
       {/* Periodization Dialog */}
-      <Dialog open={showPeriodizationDialog} onOpenChange={setShowPeriodizationDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {periodizationAction === "to-periodized" ? "Convert to Periodized" : "Convert to Non-Periodized"}
-            </DialogTitle>
-            <DialogDescription>
-              {periodizationAction === "to-periodized"
-                ? "Select which week's routines to use as the template, then specify how many weeks the new program should run for."
-                : "Select which week's routines to keep for the non-periodized program."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {periodizationAction === "to-periodized" ? (
-              <div>
-                <Label htmlFor="weeks-count">Number of Weeks</Label>
-                <Input
-                  id="weeks-count"
-                  type="number"
-                  min="1"
-                  max="52"
-                  value={numberOfWeeks}
-                  onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
-                />
-                <p className="text-sm text-gray-600 mt-1">
-                  Week 1's routines will be copied to each of the {numberOfWeeks} weeks.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <Label htmlFor="week-select">Select Week to Keep</Label>
-                <Select
-                  value={selectedWeekToKeep.toString()}
-                  onValueChange={(v) => setSelectedWeekToKeep(Number.parseInt(v))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {programState.weeks?.map((week) => (
-                      <SelectItem key={week.week_number} value={week.week_number.toString()}>
-                        Week {week.week_number} ({week.routines?.length || 0} routines)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPeriodizationDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
-              {periodizationAction === "to-periodized" ? `Create ${numberOfWeeks} Weeks` : "Convert"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showPeriodizationDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">
+                {periodizationAction === "to-periodized" ? "Convert to Periodized" : "Convert to Non-Periodized"}
+              </h3>
 
-      {/* Confirm Leave Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Are you sure you want to leave without saving?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Stay
-            </Button>
-            <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
-              Leave Without Saving
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              {periodizationAction === "to-periodized" ? (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    This will create multiple weeks using your current routines as a template.
+                  </p>
+                  <div>
+                    <Label htmlFor="weeks-count">Number of Weeks</Label>
+                    <Input
+                      id="weeks-count"
+                      type="number"
+                      min="2"
+                      max="52"
+                      value={numberOfWeeks}
+                      onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    This will convert to a single routine template. Choose which week to keep:
+                  </p>
+                  <div>
+                    <Label htmlFor="week-select">Week to Keep</Label>
+                    <select
+                      id="week-select"
+                      value={selectedWeekToKeep}
+                      onChange={(e) => setSelectedWeekToKeep(Number.parseInt(e.target.value))}
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                    >
+                      {programState?.weeks?.map((week) => (
+                        <option key={week.week_number} value={week.week_number}>
+                          Week {week.week_number}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end mt-6">
+                <Button
+                  variant="outline"
+                  onClick={createSafeClickHandler(
+                    () => setShowPeriodizationDialog(false),
+                    "setShowPeriodizationDialog-false",
+                  )}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
+                  Convert
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
