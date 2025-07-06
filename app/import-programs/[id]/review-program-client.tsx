@@ -8,18 +8,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 
 interface Exercise {
   name: string
@@ -105,7 +96,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [customMessage, setCustomMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
+  const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -129,10 +120,13 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       }
     }
 
-    const currentRoutines =
-      programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
+    // For periodized programs, check the first week's routines
+    // For non-periodized programs, check the root routines
+    const routinesToCheck = programState.is_periodized && programState.weeks && programState.weeks.length > 0
+      ? programState.weeks[0].routines
+      : programState.routines || []
 
-    debugLog("Current routines for field analysis:", currentRoutines)
+    debugLog("Routines to check for field analysis:", routinesToCheck)
 
     let hasReps = false
     let hasWeight = false
@@ -141,7 +135,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     let hasNotes = false
 
     try {
-      for (const routine of currentRoutines) {
+      for (const routine of routinesToCheck) {
         if (routine && routine.exercises) {
           for (const exercise of routine.exercises) {
             if (exercise && exercise.sets) {
@@ -376,12 +370,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           debugLog("Converting to periodized")
           setPeriodizationAction("to-periodized")
           setNumberOfWeeks(programState.duration_weeks || 4)
-
-          // If program already has weeks, set default source week to 1
-          if (programState.weeks && programState.weeks.length > 0) {
-            //setSelectedSourceWeek(1)
-          }
-
           setShowPeriodizationDialog(true)
         } else if (!checked && programState.is_periodized) {
           debugLog("Converting to non-periodized")
@@ -395,7 +383,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         errorLog("Error in handleTogglePeriodization:", err)
       }
     },
-    [programState, setPeriodizationAction, setShowPeriodizationDialog],
+    [programState],
   )
 
   const confirmPeriodizationChange = useCallback(() => {
@@ -411,36 +399,16 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       if (periodizationAction === "to-periodized") {
         debugLog("Converting to periodized with weeks:", numberOfWeeks)
 
-        // Get routines from the correct location based on current structure
-        let baseRoutines: Routine[] = []
-        if (programState.weeks && programState.weeks.length > 0) {
-          // If already has weeks structure, get routines from selected source week
-          //const sourceWeek = programState.weeks.find((w) => w.week_number === selectedSourceWeek)
-          //baseRoutines = sourceWeek?.routines || []
-          //debugLog(`Using routines from week ${selectedSourceWeek}:`, baseRoutines)
-        } else {
-          // If non-periodized, get from root routines array
-          baseRoutines = programState.routines || []
-          debugLog("Using routines from root routines array:", baseRoutines)
-        }
+        // Get routines from root routines array (only for non-periodized programs)
+        const baseRoutines = programState.routines || []
 
         debugLog("Base routines for conversion:", baseRoutines)
-        debugLog("Program structure check:", {
-          hasWeeks: !!programState.weeks,
-          weeksLength: programState.weeks?.length,
-          hasRootRoutines: !!programState.routines,
-          rootRoutinesLength: programState.routines?.length,
-          //selectedSourceWeek,
-          //sourceWeekRoutines: programState.weeks?.find((w) => w.week_number === selectedSourceWeek)?.routines?.length,
-          //selectedSource:
-          //  programState.weeks && programState.weeks.length > 0 ? `weeks[${selectedSourceWeek}].routines` : "routines",
-        })
 
         if (baseRoutines.length === 0) {
           debugLog("No routines found for conversion")
           toast({
             title: "No Routines Found",
-            description: `Cannot convert to periodized - no routines found in ${programState.weeks && programState.weeks.length > 0 ? `week 1` : "the program"}.`,
+            description: "Cannot convert to periodized - no routines found in the program.",
             variant: "destructive",
           })
           setShowPeriodizationDialog(false)
@@ -480,7 +448,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         toast({
           title: "Converted to Periodized",
-          description: `Program converted to ${numberOfWeeks} weeks using routines from ${programState.weeks && programState.weeks.length > 0 ? `week 1` : "the base template"}`,
+          description: `Program converted to ${numberOfWeeks} weeks with different routines per week`,
         })
       } else if (periodizationAction === "to-non-periodized") {
         debugLog("Converting to non-periodized, keeping week:", selectedWeekToKeep)
@@ -534,7 +502,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setHasChanges(true)
       setShowPeriodizationDialog(false)
       setPeriodizationAction(null)
-      setExpandedRoutines({ 0: true })
+      setExpandedRoutines({ "0": true })
 
       debugLog("Periodization conversion completed successfully")
     } catch (error) {
@@ -567,20 +535,20 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       return newState
     })
     setHasChanges(true)
-  }, [])
+  }, [programState])
 
-  const toggleRoutineExpansion = useCallback((index: number) => {
-    debugLog("Toggling routine expansion for index:", index)
+  const toggleRoutineExpansion = useCallback((key: string) => {
+    debugLog("Toggling routine expansion for key:", key)
 
     setExpandedRoutines((prev) => ({
       ...prev,
-      [index]: !prev[index],
+      [key]: !prev[key],
     }))
   }, [])
 
   const updateSetField = useCallback(
-    (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
-      debugLog("Updating set field:", { routineIndex, exerciseIndex, setIndex, field, value })
+    (weekIndex: number | null, routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
+      debugLog("Updating set field:", { weekIndex, routineIndex, exerciseIndex, setIndex, field, value })
 
       if (!programState) {
         debugLog("Cannot update set field - no program state")
@@ -593,66 +561,81 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         const newState = { ...prev }
 
         // Handle both periodized (weeks) and non-periodized structures
-        let targetRoutines: Routine[] = []
-
-        if (newState.weeks && newState.weeks.length > 0) {
-          targetRoutines = newState.weeks[0].routines
-          debugLog("Using periodized routines from first week")
-        } else if (newState.routines) {
-          targetRoutines = newState.routines
-          debugLog("Using non-periodized routines")
-        }
-
-        debugLog("Target routines for update:", targetRoutines)
-
-        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
-          const currentSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
-          targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex] = {
-            ...currentSet,
-            [field]: value,
+        if (weekIndex !== null && newState.weeks && newState.weeks[weekIndex]) {
+          // Periodized program - update specific week
+          const targetRoutines = newState.weeks[weekIndex].routines
+          if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+            const currentSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+            targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex] = {
+              ...currentSet,
+              [field]: value,
+            }
+            debugLog("Updated set in periodized program successfully")
           }
-          debugLog("Updated set successfully")
-        } else {
-          debugLog("Could not find target set for update")
+        } else if (newState.routines) {
+          // Non-periodized program - update root routines
+          const targetRoutines = newState.routines
+          if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+            const currentSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+            targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex] = {
+              ...currentSet,
+              [field]: value,
+            }
+            debugLog("Updated set in non-periodized program successfully")
+          }
         }
 
         return newState
       })
       setHasChanges(true)
     },
-    [],
+    [programState],
   )
 
-  const addSet = useCallback((routineIndex: number, exerciseIndex: number) => {
-    debugLog("Adding set to routine:", routineIndex, "exercise:", exerciseIndex)
+  const addSet = useCallback((weekIndex: number | null, routineIndex: number, exerciseIndex: number) => {
+    debugLog("Adding set to routine:", { weekIndex, routineIndex, exerciseIndex })
 
     setProgramState((prev) => {
       if (!prev) return prev
 
       const newState = { ...prev }
 
-      let targetRoutines: Routine[] = []
+      if (weekIndex !== null && newState.weeks && newState.weeks[weekIndex]) {
+        // Periodized program
+        const targetRoutines = newState.weeks[weekIndex].routines
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+          const exercise = targetRoutines[routineIndex].exercises[exerciseIndex]
+          if (!exercise.sets) exercise.sets = []
 
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
+          exercise.sets.push({
+            reps: "",
+            weight: "",
+            rpe: "",
+            rest: "",
+            notes: "",
+            set_number: exercise.sets.length + 1,
+          })
+
+          debugLog("Added new set to periodized program, total sets now:", exercise.sets.length)
+        }
       } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
+        // Non-periodized program
+        const targetRoutines = newState.routines
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+          const exercise = targetRoutines[routineIndex].exercises[exerciseIndex]
+          if (!exercise.sets) exercise.sets = []
 
-      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
-        const exercise = targetRoutines[routineIndex].exercises[exerciseIndex]
-        if (!exercise.sets) exercise.sets = []
+          exercise.sets.push({
+            reps: "",
+            weight: "",
+            rpe: "",
+            rest: "",
+            notes: "",
+            set_number: exercise.sets.length + 1,
+          })
 
-        exercise.sets.push({
-          reps: "",
-          weight: "",
-          rpe: "",
-          rest: "",
-          notes: "",
-          set_number: exercise.sets.length + 1,
-        })
-
-        debugLog("Added new set, total sets now:", exercise.sets.length)
+          debugLog("Added new set to non-periodized program, total sets now:", exercise.sets.length)
+        }
       }
 
       return newState
@@ -660,25 +643,28 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     setHasChanges(true)
   }, [])
 
-  const removeSet = useCallback((routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    debugLog("Removing set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+  const removeSet = useCallback((weekIndex: number | null, routineIndex: number, exerciseIndex: number, setIndex: number) => {
+    debugLog("Removing set from routine:", { weekIndex, routineIndex, exerciseIndex, setIndex })
 
     setProgramState((prev) => {
       if (!prev) return prev
 
       const newState = { ...prev }
 
-      let targetRoutines: Routine[] = []
-
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
+      if (weekIndex !== null && newState.weeks && newState.weeks[weekIndex]) {
+        // Periodized program
+        const targetRoutines = newState.weeks[weekIndex].routines
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
+          debugLog("Removed set from periodized program successfully")
+        }
       } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
-
-      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
-        targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
-        debugLog("Removed set successfully")
+        // Non-periodized program
+        const targetRoutines = newState.routines
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
+          debugLog("Removed set from non-periodized program successfully")
+        }
       }
 
       return newState
@@ -686,27 +672,32 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     setHasChanges(true)
   }, [])
 
-  const duplicateSet = useCallback((routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    debugLog("Duplicating set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+  const duplicateSet = useCallback((weekIndex: number | null, routineIndex: number, exerciseIndex: number, setIndex: number) => {
+    debugLog("Duplicating set from routine:", { weekIndex, routineIndex, exerciseIndex, setIndex })
 
     setProgramState((prev) => {
       if (!prev) return prev
 
       const newState = { ...prev }
 
-      let targetRoutines: Routine[] = []
-
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
+      if (weekIndex !== null && newState.weeks && newState.weeks[weekIndex]) {
+        // Periodized program
+        const targetRoutines = newState.weeks[weekIndex].routines
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+          const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+          const duplicatedSet = { ...originalSet }
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
+          debugLog("Duplicated set in periodized program successfully")
+        }
       } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
-
-      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
-        const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
-        const duplicatedSet = { ...originalSet }
-        targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
-        debugLog("Duplicated set successfully")
+        // Non-periodized program
+        const targetRoutines = newState.routines
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+          const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+          const duplicatedSet = { ...originalSet }
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
+          debugLog("Duplicated set in non-periodized program successfully")
+        }
       }
 
       return newState
@@ -787,10 +778,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     )
   }
 
+  // Determine display mode: show all weeks for periodized, show routines for non-periodized
   const displayAllWeeks = programState.is_periodized && programState.weeks && programState.weeks.length > 0
   const currentRoutines = displayAllWeeks ? [] : programState.routines || []
 
-  debugLog("Rendering component with current routines:", currentRoutines)
+  debugLog("Display logic:", {
+    is_periodized: programState.is_periodized,
+    has_weeks: !!(programState.weeks && programState.weeks.length > 0),
+    displayAllWeeks,
+    weeks_count: programState.weeks?.length || 0,
+    routines_count: currentRoutines.length,
+  })
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
@@ -903,200 +901,207 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             {programState.weeks?.map((week, weekIndex) => (
               <Card key={week.week_number} className="border-l-4 border-l-green-500">
                 <div className="p-4">
-                  <h3 className="font-semibold text-lg mb-4">Week {week.week_number}</h3>
+                  <h3 className="font-semibold text-lg mb-4 text-green-700">Week {week.week_number}</h3>
                   <div className="space-y-4">
-                    {week.routines?.map((routine, routineIndex) => (
-                      // Routine display logic here - same as current routine display
-                      <Card key={routineIndex} className="border-l-4 border-l-blue-500">
-                        <div className="p-4">
-                          <div
-                            className="flex items-center justify-between cursor-pointer"
-                            onClick={createSafeClickHandler(
-                              () => toggleRoutineExpansion(routineIndex),
-                              `toggleRoutineExpansion-${routineIndex}`,
-                            )}
-                          >
-                            <div>
-                              <h3 className="font-medium">
-                                {routine.name || routine.title || `Routine ${routineIndex + 1}`}
-                              </h3>
-                              <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                    {week.routines?.map((routine, routineIndex) => {
+                      const routineKey = `week-${weekIndex}-routine-${routineIndex}`
+                      return (
+                        <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                          <div className="p-4">
+                            <div
+                              className="flex items-center justify-between cursor-pointer"
+                              onClick={createSafeClickHandler(
+                                () => toggleRoutineExpansion(routineKey),
+                                `toggleRoutineExpansion-${routineKey}`,
+                              )}
+                            >
+                              <div>
+                                <h4 className="font-medium">
+                                  {routine.name || routine.title || `Routine ${routineIndex + 1}`}
+                                </h4>
+                                <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                              </div>
+                              {expandedRoutines[routineKey] ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
                             </div>
-                            {expandedRoutines[routineIndex] ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
+
+                            {expandedRoutines[routineKey] && (
+                              <div className="mt-4 space-y-4">
+                                {routine.exercises?.map((exercise, exerciseIndex) => (
+                                  <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                                    <h5 className="font-medium mb-3">{exercise.name}</h5>
+                                    {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
+
+                                    {/* Sets Table */}
+                                    {exercise.sets && exercise.sets.length > 0 && (
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                          <thead>
+                                            <tr className="border-b">
+                                              <th className="text-left p-2">Set</th>
+                                              {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                              {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                              {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                              {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                              {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                              <th className="text-left p-2">Actions</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {exercise.sets.map((set, setIndex) => (
+                                              <tr key={setIndex} className="border-b">
+                                                <td className="p-2 font-medium">{setIndex + 1}</td>
+                                                {availableFields.hasReps && (
+                                                  <td className="p-2">
+                                                    <Input
+                                                      value={set.reps || ""}
+                                                      onChange={(e) =>
+                                                        updateSetField(
+                                                          weekIndex,
+                                                          routineIndex,
+                                                          exerciseIndex,
+                                                          setIndex,
+                                                          "reps",
+                                                          e.target.value,
+                                                        )
+                                                      }
+                                                      className="w-20"
+                                                      placeholder="12"
+                                                    />
+                                                  </td>
+                                                )}
+                                                {availableFields.hasWeight && (
+                                                  <td className="p-2">
+                                                    <Input
+                                                      value={set.weight || ""}
+                                                      onChange={(e) =>
+                                                        updateSetField(
+                                                          weekIndex,
+                                                          routineIndex,
+                                                          exerciseIndex,
+                                                          setIndex,
+                                                          "weight",
+                                                          e.target.value,
+                                                        )
+                                                      }
+                                                      className="w-24"
+                                                      placeholder="100"
+                                                    />
+                                                  </td>
+                                                )}
+                                                {availableFields.hasRpe && (
+                                                  <td className="p-2">
+                                                    <Input
+                                                      value={set.rpe || ""}
+                                                      onChange={(e) =>
+                                                        updateSetField(
+                                                          weekIndex,
+                                                          routineIndex,
+                                                          exerciseIndex,
+                                                          setIndex,
+                                                          "rpe",
+                                                          e.target.value,
+                                                        )
+                                                      }
+                                                      className="w-16"
+                                                      placeholder="8"
+                                                    />
+                                                  </td>
+                                                )}
+                                                {availableFields.hasRest && (
+                                                  <td className="p-2">
+                                                    <Input
+                                                      value={set.rest || ""}
+                                                      onChange={(e) =>
+                                                        updateSetField(
+                                                          weekIndex,
+                                                          routineIndex,
+                                                          exerciseIndex,
+                                                          setIndex,
+                                                          "rest",
+                                                          e.target.value,
+                                                        )
+                                                      }
+                                                      className="w-20"
+                                                      placeholder="60s"
+                                                    />
+                                                  </td>
+                                                )}
+                                                {availableFields.hasNotes && (
+                                                  <td className="p-2">
+                                                    <Input
+                                                      value={set.notes || ""}
+                                                      onChange={(e) =>
+                                                        updateSetField(
+                                                          weekIndex,
+                                                          routineIndex,
+                                                          exerciseIndex,
+                                                          setIndex,
+                                                          "notes",
+                                                          e.target.value,
+                                                        )
+                                                      }
+                                                      className="w-32"
+                                                      placeholder="Notes"
+                                                    />
+                                                  </td>
+                                                )}
+                                                <td className="p-2">
+                                                  <div className="flex gap-1">
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={createSafeClickHandler(
+                                                        () => duplicateSet(weekIndex, routineIndex, exerciseIndex, setIndex),
+                                                        `duplicateSet-${weekIndex}-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                      )}
+                                                      title="Duplicate set"
+                                                    >
+                                                      <Copy className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={createSafeClickHandler(
+                                                        () => removeSet(weekIndex, routineIndex, exerciseIndex, setIndex),
+                                                        `removeSet-${weekIndex}-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                      )}
+                                                      title="Remove set"
+                                                    >
+                                                      <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                        <div className="mt-2">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={createSafeClickHandler(
+                                              () => addSet(weekIndex, routineIndex, exerciseIndex),
+                                              `addSet-${weekIndex}-${routineIndex}-${exerciseIndex}`,
+                                            )}
+                                          >
+                                            <Plus className="h-3 w-3 mr-1" />
+                                            Add Set
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
-
-                          {expandedRoutines[routineIndex] && (
-                            <div className="mt-4 space-y-4">
-                              {routine.exercises?.map((exercise, exerciseIndex) => (
-                                <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
-                                  <h4 className="font-medium mb-3">{exercise.name}</h4>
-                                  {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
-
-                                  {/* Sets Table */}
-                                  {exercise.sets && exercise.sets.length > 0 && (
-                                    <div className="overflow-x-auto">
-                                      <table className="w-full text-sm">
-                                        <thead>
-                                          <tr className="border-b">
-                                            <th className="text-left p-2">Set</th>
-                                            {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
-                                            {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
-                                            {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
-                                            {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
-                                            {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
-                                            <th className="text-left p-2">Actions</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {exercise.sets.map((set, setIndex) => (
-                                            <tr key={setIndex} className="border-b">
-                                              <td className="p-2 font-medium">{setIndex + 1}</td>
-                                              {availableFields.hasReps && (
-                                                <td className="p-2">
-                                                  <Input
-                                                    value={set.reps || ""}
-                                                    onChange={(e) =>
-                                                      updateSetField(
-                                                        routineIndex,
-                                                        exerciseIndex,
-                                                        setIndex,
-                                                        "reps",
-                                                        e.target.value,
-                                                      )
-                                                    }
-                                                    className="w-20"
-                                                    placeholder="12"
-                                                  />
-                                                </td>
-                                              )}
-                                              {availableFields.hasWeight && (
-                                                <td className="p-2">
-                                                  <Input
-                                                    value={set.weight || ""}
-                                                    onChange={(e) =>
-                                                      updateSetField(
-                                                        routineIndex,
-                                                        exerciseIndex,
-                                                        setIndex,
-                                                        "weight",
-                                                        e.target.value,
-                                                      )
-                                                    }
-                                                    className="w-24"
-                                                    placeholder="100"
-                                                  />
-                                                </td>
-                                              )}
-                                              {availableFields.hasRpe && (
-                                                <td className="p-2">
-                                                  <Input
-                                                    value={set.rpe || ""}
-                                                    onChange={(e) =>
-                                                      updateSetField(
-                                                        routineIndex,
-                                                        exerciseIndex,
-                                                        setIndex,
-                                                        "rpe",
-                                                        e.target.value,
-                                                      )
-                                                    }
-                                                    className="w-16"
-                                                    placeholder="8"
-                                                  />
-                                                </td>
-                                              )}
-                                              {availableFields.hasRest && (
-                                                <td className="p-2">
-                                                  <Input
-                                                    value={set.rest || ""}
-                                                    onChange={(e) =>
-                                                      updateSetField(
-                                                        routineIndex,
-                                                        exerciseIndex,
-                                                        setIndex,
-                                                        "rest",
-                                                        e.target.value,
-                                                      )
-                                                    }
-                                                    className="w-20"
-                                                    placeholder="60s"
-                                                  />
-                                                </td>
-                                              )}
-                                              {availableFields.hasNotes && (
-                                                <td className="p-2">
-                                                  <Input
-                                                    value={set.notes || ""}
-                                                    onChange={(e) =>
-                                                      updateSetField(
-                                                        routineIndex,
-                                                        exerciseIndex,
-                                                        setIndex,
-                                                        "notes",
-                                                        e.target.value,
-                                                      )
-                                                    }
-                                                    className="w-32"
-                                                    placeholder="Notes"
-                                                  />
-                                                </td>
-                                              )}
-                                              <td className="p-2">
-                                                <div className="flex gap-1">
-                                                  <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={createSafeClickHandler(
-                                                      () => duplicateSet(routineIndex, exerciseIndex, setIndex),
-                                                      `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
-                                                    )}
-                                                    title="Duplicate set"
-                                                  >
-                                                    <Copy className="h-3 w-3" />
-                                                  </Button>
-                                                  <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={createSafeClickHandler(
-                                                      () => removeSet(routineIndex, exerciseIndex, setIndex),
-                                                      `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
-                                                    )}
-                                                    title="Remove set"
-                                                  >
-                                                    <Trash2 className="h-3 w-3" />
-                                                  </Button>
-                                                </div>
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                      <div className="mt-2">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={createSafeClickHandler(
-                                            () => addSet(routineIndex, exerciseIndex),
-                                            `addSet-${routineIndex}-${exerciseIndex}`,
-                                          )}
-                                        >
-                                          <Plus className="h-3 w-3 mr-1" />
-                                          Add Set
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </Card>
-                    ))}
+                        </Card>
+                      )
+                    })}
                   </div>
                 </div>
               </Card>
@@ -1105,389 +1110,193 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         ) : // Show single routine template for non-periodized programs
         currentRoutines.length > 0 ? (
           <div className="space-y-4">
-            {currentRoutines.map((routine, routineIndex) => (
-              <Card key={routineIndex} className="border-l-4 border-l-blue-500">
-                <div className="p-4">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={createSafeClickHandler(
-                      () => toggleRoutineExpansion(routineIndex),
-                      `toggleRoutineExpansion-${routineIndex}`,
-                    )}
-                  >
-                    <div>
-                      <h3 className="font-medium">{routine.name || routine.title || `Routine ${routineIndex + 1}`}</h3>
-                      <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
-                    </div>
-                    {expandedRoutines[routineIndex] ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                  </div>
-
-                  {expandedRoutines[routineIndex] && (
-                    <div className="mt-4 space-y-4">
-                      {routine.exercises?.map((exercise, exerciseIndex) => (
-                        <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
-                          <h4 className="font-medium mb-3">{exercise.name}</h4>
-                          {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
-
-                          {/* Sets Table */}
-                          {exercise.sets && exercise.sets.length > 0 && (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b">
-                                    <th className="text-left p-2">Set</th>
-                                    {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
-                                    {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
-                                    {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
-                                    {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
-                                    {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
-                                    <th className="text-left p-2">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {exercise.sets.map((set, setIndex) => (
-                                    <tr key={setIndex} className="border-b">
-                                      <td className="p-2 font-medium">{setIndex + 1}</td>
-                                      {availableFields.hasReps && (
-                                        <td className="p-2">
-                                          <Input
-                                            value={set.reps || ""}
-                                            onChange={(e) =>
-                                              updateSetField(
-                                                routineIndex,
-                                                exerciseIndex,
-                                                setIndex,
-                                                "reps",
-                                                e.target.value,
-                                              )
-                                            }
-                                            className="w-20"
-                                            placeholder="12"
-                                          />
-                                        </td>
-                                      )}
-                                      {availableFields.hasWeight && (
-                                        <td className="p-2">
-                                          <Input
-                                            value={set.weight || ""}
-                                            onChange={(e) =>
-                                              updateSetField(
-                                                routineIndex,
-                                                exerciseIndex,
-                                                setIndex,
-                                                "weight",
-                                                e.target.value,
-                                              )
-                                            }
-                                            className="w-24"
-                                            placeholder="100"
-                                          />
-                                        </td>
-                                      )}
-                                      {availableFields.hasRpe && (
-                                        <td className="p-2">
-                                          <Input
-                                            value={set.rpe || ""}
-                                            onChange={(e) =>
-                                              updateSetField(
-                                                routineIndex,
-                                                exerciseIndex,
-                                                setIndex,
-                                                "rpe",
-                                                e.target.value,
-                                              )
-                                            }
-                                            className="w-16"
-                                            placeholder="8"
-                                          />
-                                        </td>
-                                      )}
-                                      {availableFields.hasRest && (
-                                        <td className="p-2">
-                                          <Input
-                                            value={set.rest || ""}
-                                            onChange={(e) =>
-                                              updateSetField(
-                                                routineIndex,
-                                                exerciseIndex,
-                                                setIndex,
-                                                "rest",
-                                                e.target.value,
-                                              )
-                                            }
-                                            className="w-20"
-                                            placeholder="60s"
-                                          />
-                                        </td>
-                                      )}
-                                      {availableFields.hasNotes && (
-                                        <td className="p-2">
-                                          <Input
-                                            value={set.notes || ""}
-                                            onChange={(e) =>
-                                              updateSetField(
-                                                routineIndex,
-                                                exerciseIndex,
-                                                setIndex,
-                                                "notes",
-                                                e.target.value,
-                                              )
-                                            }
-                                            className="w-32"
-                                            placeholder="Notes"
-                                          />
-                                        </td>
-                                      )}
-                                      <td className="p-2">
-                                        <div className="flex gap-1">
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={createSafeClickHandler(
-                                              () => duplicateSet(routineIndex, exerciseIndex, setIndex),
-                                              `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
-                                            )}
-                                            title="Duplicate set"
-                                          >
-                                            <Copy className="h-3 w-3" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={createSafeClickHandler(
-                                              () => removeSet(routineIndex, exerciseIndex, setIndex),
-                                              `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
-                                            )}
-                                            title="Remove set"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              <div className="mt-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={createSafeClickHandler(
-                                    () => addSet(routineIndex, exerciseIndex),
-                                    `addSet-${routineIndex}-${exerciseIndex}`,
-                                  )}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add Set
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            <p>No routines found in this program.</p>
-          </div>
-        )}
-      </Card>
-
-      {/* Send to Client Dialog */}
-      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send Program to Client</DialogTitle>
-            <DialogDescription>
-              Select a client to send "{programState.name || programState.program_title}" to their mobile app.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="client-select">Select Client</Label>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a client..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center">
-                          {client.initials || client.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span>{client.name}</span>
-                        {client.email && <span className="text-gray-500 text-sm">({client.email})</span>}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="custom-message">Custom Message (Optional)</Label>
-              <Textarea
-                id="custom-message"
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                placeholder="Add a personal message for your client..."
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={createSafeClickHandler(() => setShowSendDialog(false), "setShowSendDialog-false")}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")}
-              disabled={!selectedClientId || isSending}
-            >
-              {isSending ? "Sending..." : "Send Program"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Leave Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Are you sure you want to leave without saving?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={createSafeClickHandler(() => setShowConfirmDialog(false), "setShowConfirmDialog-false")}
-            >
-              Stay and Save
-            </Button>
-            <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
-              Leave Without Saving
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Periodization Conversion Dialog */}
-      <Dialog open={showPeriodizationDialog} onOpenChange={setShowPeriodizationDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {periodizationAction === "to-periodized" ? "Convert to Periodized" : "Convert to Non-Periodized"}
-            </DialogTitle>
-            <DialogDescription>
-              {periodizationAction === "to-periodized"
-                ? programState?.weeks && programState.weeks.length > 0
-                  ? "Select which week's routines to use as the template, then specify how many weeks the new program should run for."
-                  : "How many weeks should this program run for? The current routines will be duplicated for each week."
-                : "Which week's routines would you like to keep? This will become your base routine template."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {periodizationAction === "to-periodized" ? (
-              <>
-                {/* Show source week selector if program already has weeks */}
-                {/*{programState?.weeks && programState.weeks.length > 0 && (
-                  <div>
-                    <Label htmlFor="source-week-select">Source Week</Label>
-                    <Select
-                      value={selectedSourceWeek.toString()}
-                      onValueChange={(value) => setSelectedSourceWeek(Number.parseInt(value))}
+            {currentRoutines.map((routine, routineIndex) => {
+              const routineKey = `routine-${routineIndex}`
+              return (
+                <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                  <div className="p-4">
+                    <div
+                      className="flex items-center justify-between cursor-pointer"
+                      onClick={createSafeClickHandler(
+                        () => toggleRoutineExpansion(routineKey),
+                        `toggleRoutineExpansion-${routineKey}`,
+                      )}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {programState.weeks.map((week) => (
-                          <SelectItem key={week.week_number} value={week.week_number.toString()}>
-                            Week {week.week_number} ({week.routines?.length || 0} routines)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Which week's routines should be used as the template for all weeks?
-                    </p>
-                  </div>
-                )}*/}
+                      <div>
+                        <h3 className="font-medium">{routine.name || routine.title || `Routine ${routineIndex + 1}`}</h3>
+                        <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                      </div>
+                      {expandedRoutines[routineKey] ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
 
-                <div>
-                  <Label htmlFor="weeks-count">Number of Weeks</Label>
-                  <Input
-                    id="weeks-count"
-                    type="number"
-                    min="1"
-                    max="52"
-                    value={numberOfWeeks}
-                    onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
-                  />
-                  <p className="text-sm text-gray-600 mt-1">
-                    {programState?.weeks && programState.weeks.length > 0
-                      ? `Week 1's routines will be copied to each of the ${numberOfWeeks} weeks.`
-                      : "Current routines will be copied to each week, allowing you to customize them individually later."}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div>
-                <Label htmlFor="week-select">Select Week to Keep</Label>
-                <Select
-                  value={selectedWeekToKeep.toString()}
-                  onValueChange={(value) => setSelectedWeekToKeep(Number.parseInt(value))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {programState?.weeks?.map((week) => (
-                      <SelectItem key={week.week_number} value={week.week_number.toString()}>
-                        Week {week.week_number} ({week.routines?.length || 0} routines)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-gray-600 mt-1">
-                  The selected week's routines will become your base template that repeats each week.
-                </p>
-              </div>
-            )}
-          </div>
+                    {expandedRoutines[routineKey] && (
+                      <div className="mt-4 space-y-4">
+                        {routine.exercises?.map((exercise, exerciseIndex) => (
+                          <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                            <h4 className="font-medium mb-3">{exercise.name}</h4>
+                            {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={createSafeClickHandler(() => {
-                setShowPeriodizationDialog(false)
-                setPeriodizationAction(null)
-              }, "cancelPeriodizationDialog")}
-            >
-              Cancel
-            </Button>
-            <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
-              {periodizationAction === "to-periodized"
-                ? `Create ${numberOfWeeks} Weeks`
-                : `Keep Week ${selectedWeekToKeep}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+                            {/* Sets Table */}
+                            {exercise.sets && exercise.sets.length > 0 && (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b">
+                                      <th className="text-left p-2">Set</th>
+                                      {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                      {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                      {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                      {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                      {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                      <th className="text-left p-2">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {exercise.sets.map((set, setIndex) => (
+                                      <tr key={setIndex} className="border-b">
+                                        <td className="p-2 font-medium">{setIndex + 1}</td>
+                                        {availableFields.hasReps && (
+                                          <td className="p-2">
+                                            <Input
+                                              value={set.reps || ""}
+                                              onChange={(e) =>
+                                                updateSetField(
+                                                  null,
+                                                  routineIndex,
+                                                  exerciseIndex,
+                                                  setIndex,
+                                                  "reps",
+                                                  e.target.value,
+                                                )
+                                              }
+                                              className="w-20"
+                                              placeholder="12"
+                                            />
+                                          </td>
+                                        )}
+                                        {availableFields.hasWeight && (
+                                          <td className="p-2">
+                                            <Input
+                                              value={set.weight || ""}
+                                              onChange={(e) =>
+                                                updateSetField(
+                                                  null,
+                                                  routineIndex,
+                                                  exerciseIndex,
+                                                  setIndex,
+                                                  "weight",
+                                                  e.target.value,
+                                                )
+                                              }
+                                              className="w-24"
+                                              placeholder="100"
+                                            />
+                                          </td>
+                                        )}
+                                        {availableFields.hasRpe && (
+                                          <td className="p-2">
+                                            <Input
+                                              value={set.rpe || ""}
+                                              onChange={(e) =>
+                                                updateSetField(
+                                                  null,
+                                                  routineIndex,
+                                                  exerciseIndex,
+                                                  setIndex,
+                                                  "rpe",
+                                                  e.target.value,
+                                                )
+                                              }
+                                              className="w-16"
+                                              placeholder="8"
+                                            />
+                                          </td>
+                                        )}
+                                        {availableFields.hasRest && (
+                                          <td className="p-2">
+                                            <Input
+                                              value={set.rest || ""}
+                                              onChange={(e) =>
+                                                updateSetField(
+                                                  null,
+                                                  routineIndex,
+                                                  exerciseIndex,
+                                                  setIndex,
+                                                  "rest",
+                                                  e.target.value,
+                                                )
+                                              }
+                                              className="w-20"
+                                              placeholder="60s"
+                                            />
+                                          </td>
+                                        )}
+                                        {availableFields.hasNotes && (
+                                          <td className="p-2">
+                                            <Input
+                                              value={set.notes || ""}
+                                              onChange={(e) =>
+                                                updateSetField(
+                                                  null,
+                                                  routineIndex,
+                                                  exerciseIndex,
+                                                  setIndex,
+                                                  "notes",
+                                                  e.target.value,
+                                                )
+                                              }
+                                              className="w-32"
+                                              placeholder="Notes"
+                                            />
+                                          </td>
+                                        )}
+                                        <td className="p-2">
+                                          <div className="flex gap-1">
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={createSafeClickHandler(
+                                                () => duplicateSet(null, routineIndex, exerciseIndex, setIndex),
+                                                `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                              )}
+                                              title="Duplicate set"
+                                            >
+                                              <Copy className="h-3 w-3" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={createSafeClickHandler(
+                                                () => removeSet(null, routineIndex, exerciseIndex, setIndex),
+                                                `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                              )}
+                                              title="Remove set"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                                <div className="mt-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={createSafeClickHandler(
+                                      () => addSet(null, routineIndex, exerciseIndex),
+                                      `addSet-${routineIndex}-${exerciseIndex}`,
+                                    )}
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add Set
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                \
