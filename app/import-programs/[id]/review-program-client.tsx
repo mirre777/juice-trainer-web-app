@@ -410,6 +410,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         if (checked && !programState.is_periodized) {
           debugLog("Converting to periodized")
           setPeriodizationAction("to-periodized")
+          // Use current duration_weeks for the conversion
           setNumberOfWeeks(programState.duration_weeks || 4)
           setShowPeriodizationDialog(true)
         } else if (!checked && programState.is_periodized) {
@@ -487,7 +488,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             is_periodized: true,
             weeks,
             routines: undefined,
-            duration_weeks: numberOfWeeks,
+            duration_weeks: numberOfWeeks, // Keep the selected duration
           }
           debugLog("New program state after conversion to periodized:", newState)
           return newState
@@ -534,7 +535,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             is_periodized: false,
             routines: cleanedRoutines,
             weeks: undefined,
-            duration_weeks: 1,
+            // FIXED: Keep the original duration_weeks, don't change it to 1
+            duration_weeks: prev.duration_weeks, // Preserve original duration
           }
           debugLog("New program state after conversion to non-periodized:", newState)
           return newState
@@ -542,7 +544,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         toast({
           title: "Converted to Non-Periodized",
-          description: `Program converted using routines from Week ${selectedWeekToKeep}`,
+          description: `Program converted using routines from Week ${selectedWeekToKeep}. Duration remains ${programState.duration_weeks} weeks.`,
         })
       }
 
@@ -892,8 +894,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
               </Label>
               <p className="text-sm text-gray-600 mt-1">
                 {programState.is_periodized
-                  ? "Different routines for each week (periodized)"
-                  : "Same routines repeated each week (non-periodized)"}
+                  ? `Different routines for each week over ${programState.duration_weeks} weeks (periodized)`
+                  : `Same routines repeated each week for ${programState.duration_weeks} weeks (non-periodized)`}
               </p>
             </div>
             <Switch
@@ -1462,7 +1464,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
               {periodizationAction === "to-periodized" ? (
                 <div className="space-y-4">
                   <p className="text-gray-600">
-                    This will create multiple weeks using your current routines as a template.
+                    This will create {numberOfWeeks} different weeks using your current routines as a template.
                   </p>
                   <div>
                     <Label htmlFor="weeks-count">Number of Weeks</Label>
@@ -1479,7 +1481,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
               ) : (
                 <div className="space-y-4">
                   <p className="text-gray-600">
-                    This will convert to a single routine template. Choose which week to keep:
+                    This will convert to a single routine template that repeats for {programState?.duration_weeks}{" "}
+                    weeks. Choose which week's routines to keep:
                   </p>
                   <div>
                     <Label htmlFor="week-select">Week to Keep</Label>
