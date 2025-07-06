@@ -96,6 +96,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showPeriodizationDialog, setShowPeriodizationDialog] = useState(false)
+  const [periodizationAction, setPeriodizationAction] = useState<"to-periodized" | "to-non-periodized" | null>(null)
+  const [selectedWeekToKeep, setSelectedWeekToKeep] = useState<number>(1)
+  const [numberOfWeeks, setNumberOfWeeks] = useState<number>(4)
 
   // Analyze available fields in the program data
   const availableFields = useMemo((): AvailableFields => {
@@ -343,59 +347,79 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const handleTogglePeriodization = async (checked: boolean) => {
     if (!programState) return
 
-    setIsTogglingPeriodization(true)
+    // Determine the action needed
+    if (checked && !programState.is_periodized) {
+      // Converting to periodized - ask how many weeks
+      setPeriodizationAction("to-periodized")
+      setNumberOfWeeks(programState.duration_weeks || 4)
+      setShowPeriodizationDialog(true)
+    } else if (!checked && programState.is_periodized) {
+      // Converting to non-periodized - ask which week to keep
+      setPeriodizationAction("to-non-periodized")
+      setSelectedWeekToKeep(1)
+      setShowPeriodizationDialog(true)
+    }
+  }
 
-    try {
-      console.log("[ReviewProgramClient] Toggling periodization:", {
-        from: programState.is_periodized,
-        to: checked,
-      })
+  const confirmPeriodizationChange = () => {
+    if (!programState || !periodizationAction) return
 
-      const response = await fetch("/api/programs/toggle-periodization", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          programData: {
-            ...programState,
-            is_periodized: checked, // Set the target state
-          },
-        }),
-      })
+    if (periodizationAction === "to-periodized") {
+      // Convert non-periodized to periodized by duplicating routines
+      const baseRoutines = programState.routines || []
+      const weeks: Week[] = []
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to toggle periodization")
+      for (let weekNum = 1; weekNum <= numberOfWeeks; weekNum++) {
+        weeks.push({
+          week_number: weekNum,
+          routines: baseRoutines.map((routine, index) => ({
+            ...routine,
+            name: `${routine.name || routine.title || `Routine ${index + 1}`} - Week ${weekNum}`,
+          })),
+        })
       }
 
-      const result = await response.json()
-      console.log("[ReviewProgramClient] Periodization toggled successfully:", result)
-
-      // Update the program state with the converted structure
-      setProgramState(result.program)
-      setHasChanges(true)
+      setProgramState((prev) => ({
+        ...prev!,
+        is_periodized: true,
+        weeks,
+        routines: undefined,
+        duration_weeks: numberOfWeeks,
+      }))
 
       toast({
-        title: "Periodization Updated",
-        description: checked
-          ? "Program converted to periodized format with different routines per week"
-          : "Program converted to non-periodized format with same routines repeated",
+        title: "Converted to Periodized",
+        description: `Program converted to ${numberOfWeeks} weeks with different routines per week`,
       })
+    } else if (periodizationAction === "to-non-periodized") {
+      // Convert periodized to non-periodized by keeping selected week
+      const selectedWeek = programState.weeks?.find((w) => w.week_number === selectedWeekToKeep)
+      const routinesToKeep = selectedWeek?.routines || []
 
-      // Reset expanded routines to show first routine
-      setExpandedRoutines({ 0: true })
-    } catch (error) {
-      console.error("[ReviewProgramClient] Error toggling periodization:", error)
+      // Remove week suffixes from routine names
+      const cleanedRoutines = routinesToKeep.map((routine) => ({
+        ...routine,
+        name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
+      }))
+
+      setProgramState((prev) => ({
+        ...prev!,
+        is_periodized: false,
+        routines: cleanedRoutines,
+        weeks: undefined,
+        duration_weeks: 1,
+      }))
+
       toast({
-        title: "Failed to Toggle Periodization",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
-        variant: "destructive",
+        title: "Converted to Non-Periodized",
+        description: `Program converted using routines from Week ${selectedWeekToKeep}`,
       })
-    } finally {
-      setIsTogglingPeriodization(false)
     }
+
+    setHasChanges(true)
+    setShowPeriodizationDialog(false)
+    setPeriodizationAction(null)
+    setExpandedRoutines({ 0: true })
   }
 
   const updateProgramField = (field: keyof Program, value: any) => {
@@ -938,6 +962,74 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             </Button>
             <Button variant="destructive" onClick={confirmLeave}>
               Leave Without Saving
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Periodization Conversion Dialog */}
+      <Dialog open={showPeriodizationDialog} onOpenChange={setShowPeriodizationDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {periodizationAction === "to-periodized" ? "Convert to Periodized" : "Convert to Non-Periodized"}
+            </DialogTitle>
+            <DialogDescription>
+              {periodizationAction === "to-periodized"
+                ? "How many weeks should this program run for? The current routines will be duplicated for each week."
+                : "Which week's routines would you like to keep? This will become your base routine template."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {periodizationAction === "to-periodized" ? (
+              <div>
+                <Label htmlFor="weeks-count">Number of Weeks</Label>
+                <Input
+                  id="weeks-count"
+                  type="number"
+                  min="1"
+                  max="52"
+                  value={numberOfWeeks}
+                  onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
+                />
+                <p className="text-sm text-gray-600 mt-1">
+                  Current routines will be copied to each week, allowing you to customize them individually later.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="week-select">Select Week to Keep</Label>
+                <Select
+                  value={selectedWeekToKeep.toString()}
+                  onValueChange={(value) => setSelectedWeekToKeep(Number.parseInt(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {programState?.weeks?.map((week) => (
+                      <SelectItem key={week.week_number} value={week.week_number.toString()}>
+                        Week {week.week_number} ({week.routines?.length || 0} routines)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-gray-600 mt-1">
+                  The selected week's routines will become your base template that repeats each week.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPeriodizationDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmPeriodizationChange}>
+              {periodizationAction === "to-periodized"
+                ? `Create ${numberOfWeeks} Weeks`
+                : `Keep Week ${selectedWeekToKeep}`}
             </Button>
           </DialogFooter>
         </DialogContent>
