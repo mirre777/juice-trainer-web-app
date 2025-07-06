@@ -94,7 +94,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
-  const [isSending, setIsSending] = useState(isSending)
+  const [isSending, setIsSending] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
