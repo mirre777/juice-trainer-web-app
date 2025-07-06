@@ -282,7 +282,7 @@ export class ProgramConversionService {
 
     const routineDoc: MobileRoutine = {
       id: routineId,
-      name: routineName, // This is now guaranteed to be a non-empty string
+      name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
       createdAt: timestamp.toDate().toISOString(),
       updatedAt: timestamp.toDate().toISOString(),
@@ -390,7 +390,7 @@ export class ProgramConversionService {
         // Use Firestore Timestamp objects to match working program
         createdAt: firestoreTimestamp,
         startedAt: firestoreTimestamp,
-        updatedAt: firestoreTimestamp, // Note: updatedAt not updated_at
+        updatedAt: firestoreTimestamp,
         duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
         program_URL: "", // Keep this field - it exists in working programs
         routines: routineMap,
