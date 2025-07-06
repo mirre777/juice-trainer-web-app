@@ -42,6 +42,7 @@ interface Program {
   title?: string
   description?: string
   duration_weeks?: number
+  program_weeks?: number // Keep for backward compatibility
   is_periodized?: boolean
   weeks?: Week[]
   routines?: Routine[]
@@ -233,7 +234,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           name: importData.name || program.program_title || program.title || program.name || "Untitled Program",
           program_title: program.program_title || program.title || program.name,
           description: program.description || "",
-          duration_weeks: Number(program.duration_weeks || program.weeks?.length || 1),
+          duration_weeks: Number(program.duration_weeks || program.program_weeks || program.weeks?.length || 1),
           is_periodized: Boolean(program.is_periodized || (program.weeks && program.weeks.length > 1)),
           weeks: program.weeks || [],
           routines: program.routines || [],
