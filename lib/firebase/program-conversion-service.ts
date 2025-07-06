@@ -347,23 +347,15 @@ export class ProgramConversionService {
       // Create the program document - MATCH THE EXACT STRUCTURE OF THE WORKING PROGRAM
       const programId = uuidv4()
 
-      // Use Firestore Timestamp for consistency with working programs
-      const firestoreTimestamp = timestamp
-
       const program = {
+        createdAt: timestamp.toDate().toISOString(),
+        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
-        notes: "", // Always empty string, never null
-        // Use Firestore Timestamp objects instead of ISO strings to match working program
-        startedAt: firestoreTimestamp,
-        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
-        createdAt: firestoreTimestamp,
-        updated_at: firestoreTimestamp,
+        notes: "",
         routines: routineMap,
-        // Remove the extra fields that might be causing issues
-        // program_URL: "",
-        // isActive: true,
-        // status: "active",
+        startedAt: timestamp.toDate().toISOString(),
+        updated_at: timestamp.toDate().toISOString(),
       }
 
       // Save program to Firestore
