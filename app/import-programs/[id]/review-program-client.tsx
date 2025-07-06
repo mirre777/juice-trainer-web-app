@@ -89,6 +89,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const router = useRouter()
   const { toast } = useToast()
   const [programState, setProgramState] = useState<Program | null>(null)
+  const [originalProgramState, setOriginalProgramState] = useState<Program | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>(initialClients)
@@ -243,6 +244,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         debugLog("Created program state:", programState)
         setProgramState(programState)
+        setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Deep copy for comparison
         setIsLoading(false)
       } catch (err) {
         errorLog("Error initializing program state:", err)
@@ -316,6 +318,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         description: "Your program changes have been saved successfully.",
       })
       setHasChanges(false)
+      setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Update original state
     } catch (error) {
       errorLog("Error saving changes:", error)
       toast({
@@ -327,6 +330,22 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setIsSaving(false)
     }
   }, [programState, importId, toast])
+
+  const handleCancelChanges = useCallback(() => {
+    debugLog("Canceling changes, reverting to original state")
+
+    if (originalProgramState) {
+      setProgramState(JSON.parse(JSON.stringify(originalProgramState))) // Deep copy to avoid reference issues
+      setHasChanges(false)
+      setExpandedRoutines({ 0: true }) // Reset expanded state
+      setCurrentWeekIndex(0) // Reset week index
+
+      toast({
+        title: "Changes Canceled",
+        description: "All changes have been discarded and reverted to the original state.",
+      })
+    }
+  }, [originalProgramState, toast])
 
   const handleSendToClient = useCallback(async () => {
     debugLog("Sending program to client:", selectedClientId)
@@ -837,13 +856,22 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         </div>
         <div className="flex gap-2">
           {hasChanges && (
-            <Button
-              onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
-              disabled={isSaving}
-              variant="outline"
-            >
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
+            <>
+              <Button
+                onClick={createSafeClickHandler(handleCancelChanges, "handleCancelChanges")}
+                variant="outline"
+                disabled={isSaving}
+              >
+                Cancel Changes
+              </Button>
+              <Button
+                onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
+                disabled={isSaving}
+                variant="outline"
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </>
           )}
           <Button
             onClick={createSafeClickHandler(() => setShowSendDialog(true), "setShowSendDialog")}
