@@ -2,7 +2,24 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface Exercise {
   name: string
@@ -427,4 +444,504 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const addSet = (routineIndex: number, exerciseIndex: number) => {
-    if (!programState)\
+    if (!programState) return
+
+    setProgramState((prev) => {
+      const newState = { ...prev! }
+
+      // Handle both periodized and non-periodized structures
+      let targetRoutines: Routine[] = []
+
+      if (newState.weeks && newState.weeks.length > 0) {
+        targetRoutines = newState.weeks[0].routines
+      } else if (newState.routines) {
+        targetRoutines = newState.routines
+      }
+
+      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+        const exercise = targetRoutines[routineIndex].exercises[exerciseIndex]
+        if (!exercise.sets) exercise.sets = []
+
+        // Add a new set with default values
+        exercise.sets.push({
+          reps: "",
+          weight: "",
+          rpe: "",
+          rest: "",
+          notes: "",
+          set_number: exercise.sets.length + 1,
+        })
+      }
+
+      return newState
+    })
+    setHasChanges(true)
+  }
+
+  const removeSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
+    if (!programState) return
+
+    setProgramState((prev) => {
+      const newState = { ...prev! }
+
+      // Handle both periodized and non-periodized structures
+      let targetRoutines: Routine[] = []
+
+      if (newState.weeks && newState.weeks.length > 0) {
+        targetRoutines = newState.weeks[0].routines
+      } else if (newState.routines) {
+        targetRoutines = newState.routines
+      }
+
+      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
+        targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
+      }
+
+      return newState
+    })
+    setHasChanges(true)
+  }
+
+  const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
+    if (!programState) return
+
+    setProgramState((prev) => {
+      const newState = { ...prev! }
+
+      // Handle both periodized and non-periodized structures
+      let targetRoutines: Routine[] = []
+
+      if (newState.weeks && newState.weeks.length > 0) {
+        targetRoutines = newState.weeks[0].routines
+      } else if (newState.routines) {
+        targetRoutines = newState.routines
+      }
+
+      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+        const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+        const duplicatedSet = { ...originalSet }
+        targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
+      }
+
+      return newState
+    })
+    setHasChanges(true)
+  }
+
+  const handleBackClick = () => {
+    if (hasChanges) {
+      setShowConfirmDialog(true)
+    } else {
+      router.back()
+    }
+  }
+
+  const confirmLeave = () => {
+    setShowConfirmDialog(false)
+    router.back()
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading program data...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Program</h2>
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={() => router.back()} variant="outline">
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!programState) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-yellow-800 mb-2">No Program Data</h2>
+            <p className="text-yellow-600 mb-4">No program data was found to review.</p>
+            <Button onClick={() => router.back()} variant="outline">
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Get current routines to display (either from weeks or direct routines)
+  const currentRoutines =
+    programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
+
+  return (
+    <div className="container mx-auto p-6 max-w-6xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={handleBackClick}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Review Program</h1>
+            <p className="text-gray-600">Review and edit your imported program before sending to clients</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {hasChanges && (
+            <Button onClick={handleSaveChanges} disabled={isSaving} variant="outline">
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          )}
+          <Button onClick={() => setShowSendDialog(true)} disabled={!programState}>
+            Send to Client
+          </Button>
+        </div>
+      </div>
+
+      {/* Program Details */}
+      <Card className="p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">Program Details</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="program-name">Program Name</Label>
+            <Input
+              id="program-name"
+              value={programState.name || ""}
+              onChange={(e) => updateProgramField("name", e.target.value)}
+              placeholder="Enter program name"
+            />
+          </div>
+          <div>
+            <Label htmlFor="duration">Duration (weeks)</Label>
+            <Input
+              id="duration"
+              type="number"
+              min="1"
+              max="52"
+              value={programState.duration_weeks || 1}
+              onChange={(e) => updateProgramField("duration_weeks", Number.parseInt(e.target.value) || 1)}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={programState.description || ""}
+              onChange={(e) => updateProgramField("description", e.target.value)}
+              placeholder="Enter program description"
+              rows={3}
+            />
+          </div>
+        </div>
+
+        {/* Periodization Toggle */}
+        <div className="mt-6 pt-4 border-t">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="periodization-toggle" className="text-base font-medium">
+                Periodization
+              </Label>
+              <p className="text-sm text-gray-600 mt-1">
+                {programState.is_periodized
+                  ? "Different routines for each week (periodized)"
+                  : "Same routines repeated each week (non-periodized)"}
+              </p>
+            </div>
+            <Switch
+              id="periodization-toggle"
+              checked={programState.is_periodized || false}
+              onCheckedChange={handleTogglePeriodization}
+              disabled={isTogglingPeriodization}
+            />
+          </div>
+          {isTogglingPeriodization && <div className="mt-2 text-sm text-blue-600">Converting program structure...</div>}
+        </div>
+      </Card>
+
+      {/* Program Structure */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Program Structure</h2>
+          <div className="flex gap-2">
+            <Badge variant="outline">{programState.is_periodized ? "Periodized" : "Non-Periodized"}</Badge>
+            <Badge variant="secondary">{currentRoutines.length} Routines</Badge>
+          </div>
+        </div>
+
+        {/* Display current routines */}
+        {currentRoutines.length > 0 ? (
+          <div className="space-y-4">
+            {currentRoutines.map((routine, routineIndex) => (
+              <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                <div className="p-4">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => toggleRoutineExpansion(routineIndex)}
+                  >
+                    <div>
+                      <h3 className="font-medium">{routine.name || routine.title || `Routine ${routineIndex + 1}`}</h3>
+                      <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                    </div>
+                    {expandedRoutines[routineIndex] ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
+
+                  {expandedRoutines[routineIndex] && (
+                    <div className="mt-4 space-y-4">
+                      {routine.exercises?.map((exercise, exerciseIndex) => (
+                        <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                          <h4 className="font-medium mb-3">{exercise.name}</h4>
+                          {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
+
+                          {/* Sets Table */}
+                          {exercise.sets && exercise.sets.length > 0 && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left p-2">Set</th>
+                                    {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                    {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                    {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                    {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                    {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                    <th className="text-left p-2">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {exercise.sets.map((set, setIndex) => (
+                                    <tr key={setIndex} className="border-b">
+                                      <td className="p-2 font-medium">{setIndex + 1}</td>
+                                      {availableFields.hasReps && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.reps || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "reps",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-20"
+                                            placeholder="12"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasWeight && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.weight || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "weight",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-24"
+                                            placeholder="100"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasRpe && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.rpe || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "rpe",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-16"
+                                            placeholder="8"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasRest && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.rest || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "rest",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-20"
+                                            placeholder="60s"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasNotes && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.notes || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "notes",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-32"
+                                            placeholder="Notes"
+                                          />
+                                        </td>
+                                      )}
+                                      <td className="p-2">
+                                        <div className="flex gap-1">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
+                                            title="Duplicate set"
+                                          >
+                                            <Copy className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => removeSet(routineIndex, exerciseIndex, setIndex)}
+                                            title="Remove set"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="mt-2">
+                                <Button size="sm" variant="outline" onClick={() => addSet(routineIndex, exerciseIndex)}>
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Set
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <p>No routines found in this program.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Send to Client Dialog */}
+      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Program to Client</DialogTitle>
+            <DialogDescription>
+              Select a client to send "{programState.name || programState.program_title}" to their mobile app.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="client-select">Select Client</Label>
+              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a client..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center">
+                          {client.initials || client.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span>{client.name}</span>
+                        {client.email && <span className="text-gray-500 text-sm">({client.email})</span>}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="custom-message">Custom Message (Optional)</Label>
+              <Textarea
+                id="custom-message"
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Add a personal message for your client..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSendDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendToClient} disabled={!selectedClientId || isSending}>
+              {isSending ? "Sending..." : "Send Program"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Leave Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Are you sure you want to leave without saving?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+              Stay and Save
+            </Button>
+            <Button variant="destructive" onClick={confirmLeave}>
+              Leave Without Saving
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
