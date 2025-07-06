@@ -333,25 +333,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
   const handleCancelChanges = useCallback(() => {
     debugLog("Canceling changes, reverting to original state")
-    debugLog("Original program state:", originalProgramState)
-    debugLog("Current program state:", programState)
 
-    if (!originalProgramState) {
-      errorLog("No original program state to revert to")
-      toast({
-        title: "Cannot Cancel",
-        description: "No original state found to revert to.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      // Create a deep copy to avoid reference issues
-      const restoredState = JSON.parse(JSON.stringify(originalProgramState))
-      debugLog("Restoring state to:", restoredState)
-
-      setProgramState(restoredState)
+    if (originalProgramState) {
+      setProgramState(JSON.parse(JSON.stringify(originalProgramState))) // Deep copy to avoid reference issues
       setHasChanges(false)
       setExpandedRoutines({ 0: true }) // Reset expanded state
       setCurrentWeekIndex(0) // Reset week index
@@ -360,17 +344,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         title: "Changes Canceled",
         description: "All changes have been discarded and reverted to the original state.",
       })
-
-      debugLog("State successfully restored")
-    } catch (error) {
-      errorLog("Error restoring original state:", error)
-      toast({
-        title: "Cancel Failed",
-        description: "Failed to restore original state. Please refresh the page.",
-        variant: "destructive",
-      })
     }
-  }, [originalProgramState, programState, toast])
+  }, [originalProgramState, toast])
 
   const handleSendToClient = useCallback(async () => {
     debugLog("Sending program to client:", selectedClientId)
@@ -646,28 +621,35 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
       debugLog("Updating set field:", { routineIndex, exerciseIndex, setIndex, field, value })
 
-      if (!programState) {
-        debugLog("Cannot update set field - no program state")
-        return
-      }
-
       setProgramState((prev) => {
-        if (!prev) return prev
+        if (!prev) {
+          debugLog("Cannot update set field - no program state")
+          return prev
+        }
 
         const newState = { ...prev }
 
         // Handle both periodized (weeks) and non-periodized structures
         let targetRoutines: Routine[] = []
 
-        if (newState.weeks && newState.weeks.length > 0) {
-          targetRoutines = newState.weeks[0].routines
-          debugLog("Using periodized routines from first week")
-        } else if (newState.routines) {
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          // For periodized programs, update the current week being viewed
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+            debugLog("Using periodized routines from current week:", currentWeekIndex)
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          // For non-periodized programs, use the routines array
           targetRoutines = newState.routines
           debugLog("Using non-periodized routines")
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          // Fallback: use first week's routines if routines array is empty
+          targetRoutines = newState.weeks[0].routines
+          debugLog("Using fallback routines from first week")
         }
 
-        debugLog("Target routines for update:", targetRoutines)
+        debugLog("Target routines for update:", targetRoutines.length)
 
         if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
           const currentSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
@@ -684,99 +666,123 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       })
       setHasChanges(true)
     },
-    [programState],
+    [currentWeekIndex], // Add currentWeekIndex as dependency
   )
 
-  const addSet = useCallback((routineIndex: number, exerciseIndex: number) => {
-    debugLog("Adding set to routine:", routineIndex, "exercise:", exerciseIndex)
+  const addSet = useCallback(
+    (routineIndex: number, exerciseIndex: number) => {
+      debugLog("Adding set to routine:", routineIndex, "exercise:", exerciseIndex)
 
-    setProgramState((prev) => {
-      if (!prev) return prev
+      setProgramState((prev) => {
+        if (!prev) return prev
 
-      const newState = { ...prev }
+        const newState = { ...prev }
 
-      let targetRoutines: Routine[] = []
+        let targetRoutines: Routine[] = []
 
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
-      } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          targetRoutines = newState.routines
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          targetRoutines = newState.weeks[0].routines
+        }
 
-      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
-        const exercise = targetRoutines[routineIndex].exercises[exerciseIndex]
-        if (!exercise.sets) exercise.sets = []
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+          const exercise = targetRoutines[routineIndex].exercises[exerciseIndex]
+          if (!exercise.sets) exercise.sets = []
 
-        exercise.sets.push({
-          reps: "",
-          weight: "",
-          rpe: "",
-          rest: "",
-          notes: "",
-          set_number: exercise.sets.length + 1,
-        })
+          exercise.sets.push({
+            reps: "",
+            weight: "",
+            rpe: "",
+            rest: "",
+            notes: "",
+            set_number: exercise.sets.length + 1,
+          })
 
-        debugLog("Added new set, total sets now:", exercise.sets.length)
-      }
+          debugLog("Added new set, total sets now:", exercise.sets.length)
+        }
 
-      return newState
-    })
-    setHasChanges(true)
-  }, [])
+        return newState
+      })
+      setHasChanges(true)
+    },
+    [currentWeekIndex],
+  )
 
-  const removeSet = useCallback((routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    debugLog("Removing set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+  const removeSet = useCallback(
+    (routineIndex: number, exerciseIndex: number, setIndex: number) => {
+      debugLog("Removing set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
 
-    setProgramState((prev) => {
-      if (!prev) return prev
+      setProgramState((prev) => {
+        if (!prev) return prev
 
-      const newState = { ...prev }
+        const newState = { ...prev }
 
-      let targetRoutines: Routine[] = []
+        let targetRoutines: Routine[] = []
 
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
-      } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          targetRoutines = newState.routines
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          targetRoutines = newState.weeks[0].routines
+        }
 
-      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
-        targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
-        debugLog("Removed set successfully")
-      }
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
+          debugLog("Removed set successfully")
+        }
 
-      return newState
-    })
-    setHasChanges(true)
-  }, [])
+        return newState
+      })
+      setHasChanges(true)
+    },
+    [currentWeekIndex],
+  )
 
-  const duplicateSet = useCallback((routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    debugLog("Duplicating set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+  const duplicateSet = useCallback(
+    (routineIndex: number, exerciseIndex: number, setIndex: number) => {
+      debugLog("Duplicating set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
 
-    setProgramState((prev) => {
-      if (!prev) return prev
+      setProgramState((prev) => {
+        if (!prev) return prev
 
-      const newState = { ...prev }
+        const newState = { ...prev }
 
-      let targetRoutines: Routine[] = []
+        let targetRoutines: Routine[] = []
 
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
-      } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          targetRoutines = newState.routines
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          targetRoutines = newState.weeks[0].routines
+        }
 
-      if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
-        const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
-        const duplicatedSet = { ...originalSet }
-        targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
-        debugLog("Duplicated set successfully")
-      }
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+          const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+          const duplicatedSet = { ...originalSet }
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
+          debugLog("Duplicated set successfully")
+        }
 
-      return newState
-    })
-    setHasChanges(true)
-  }, [])
+        return newState
+      })
+      setHasChanges(true)
+    },
+    [currentWeekIndex],
+  )
 
   const handleBackClick = () => {
     debugLog("Back button clicked, has changes:", hasChanges)
