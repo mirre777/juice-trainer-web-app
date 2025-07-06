@@ -1,6 +1,7 @@
 /**
- * Test script for periodization toggle functionality
+ * Enhanced test script for periodization toggle functionality
  * Tests the conversion logic between periodized and non-periodized programs
+ * Includes bidirectional conversion testing
  */
 
 // Mock program data structures for testing
@@ -63,6 +64,15 @@ const mockPeriodizedProgram = {
             },
           ],
         },
+        {
+          name: "Week 1 - Lower Body",
+          exercises: [
+            {
+              name: "Squats",
+              sets: [{ reps: "15", weight: "70kg", rpe: "6", rest: "90s" }],
+            },
+          ],
+        },
       ],
     },
     {
@@ -74,6 +84,15 @@ const mockPeriodizedProgram = {
             {
               name: "Bench Press",
               sets: [{ reps: "10", weight: "90kg", rpe: "7", rest: "2min" }],
+            },
+          ],
+        },
+        {
+          name: "Week 2 - Lower Body",
+          exercises: [
+            {
+              name: "Squats",
+              sets: [{ reps: "12", weight: "80kg", rpe: "7", rest: "2min" }],
             },
           ],
         },
@@ -91,25 +110,36 @@ const mockPeriodizedProgram = {
             },
           ],
         },
+        {
+          name: "Week 3 - Lower Body",
+          exercises: [
+            {
+              name: "Squats",
+              sets: [{ reps: "10", weight: "90kg", rpe: "8", rest: "2min" }],
+            },
+          ],
+        },
       ],
     },
   ],
 }
 
-// Test functions
-function testConvertToPeriodicized(program, numberOfWeeks) {
-  console.log("\n=== Testing Conversion to Periodized ===")
-  console.log(`Original program: ${program.name}`)
-  console.log(`Is periodized: ${program.is_periodized}`)
-  console.log(`Converting to ${numberOfWeeks} weeks...`)
+// Conversion functions (mirroring the component logic)
+function convertToPeriodicized(program, numberOfWeeks) {
+  console.log(`\n🔄 Converting "${program.name}" to periodized (${numberOfWeeks} weeks)`)
 
   if (program.is_periodized) {
     console.log("❌ Program is already periodized!")
-    return program
+    return { success: false, program, error: "Already periodized" }
   }
 
-  // Simulate the conversion logic from the component
   const baseRoutines = program.routines || []
+
+  if (baseRoutines.length === 0) {
+    console.log("❌ No routines found to convert!")
+    return { success: false, program, error: "No routines found" }
+  }
+
   const weeks = []
 
   for (let weekNum = 1; weekNum <= numberOfWeeks; weekNum++) {
@@ -131,31 +161,28 @@ function testConvertToPeriodicized(program, numberOfWeeks) {
   }
 
   console.log("✅ Conversion successful!")
-  console.log(`Created ${weeks.length} weeks`)
-  console.log(`Week 1 routines: ${weeks[0].routines.map((r) => r.name).join(", ")}`)
-  console.log(`Week ${numberOfWeeks} routines: ${weeks[numberOfWeeks - 1].routines.map((r) => r.name).join(", ")}`)
+  console.log(`   - Created ${weeks.length} weeks`)
+  console.log(`   - Each week has ${weeks[0].routines.length} routines`)
+  console.log(`   - Week 1 routines: ${weeks[0].routines.map((r) => r.name).join(", ")}`)
+  console.log(`   - Week ${numberOfWeeks} routines: ${weeks[numberOfWeeks - 1].routines.map((r) => r.name).join(", ")}`)
 
-  return convertedProgram
+  return { success: true, program: convertedProgram }
 }
 
-function testConvertToNonPeriodized(program, selectedWeekToKeep) {
-  console.log("\n=== Testing Conversion to Non-Periodized ===")
-  console.log(`Original program: ${program.name}`)
-  console.log(`Is periodized: ${program.is_periodized}`)
-  console.log(`Keeping routines from week ${selectedWeekToKeep}...`)
+function convertToNonPeriodized(program, selectedWeekToKeep) {
+  console.log(`\n🔄 Converting "${program.name}" to non-periodized (keeping week ${selectedWeekToKeep})`)
 
   if (!program.is_periodized) {
     console.log("❌ Program is already non-periodized!")
-    return program
+    return { success: false, program, error: "Already non-periodized" }
   }
 
-  // Simulate the conversion logic from the component
   const selectedWeek = program.weeks?.find((w) => w.week_number === selectedWeekToKeep)
   const routinesToKeep = selectedWeek?.routines || []
 
   if (routinesToKeep.length === 0) {
     console.log(`❌ No routines found in week ${selectedWeekToKeep}`)
-    return program
+    return { success: false, program, error: `No routines in week ${selectedWeekToKeep}` }
   }
 
   // Remove week suffixes from routine names
@@ -173,14 +200,14 @@ function testConvertToNonPeriodized(program, selectedWeekToKeep) {
   }
 
   console.log("✅ Conversion successful!")
-  console.log(`Kept ${cleanedRoutines.length} routines from week ${selectedWeekToKeep}`)
-  console.log(`Routine names: ${cleanedRoutines.map((r) => r.name).join(", ")}`)
+  console.log(`   - Kept ${cleanedRoutines.length} routines from week ${selectedWeekToKeep}`)
+  console.log(`   - Routine names: ${cleanedRoutines.map((r) => r.name).join(", ")}`)
 
-  return convertedProgram
+  return { success: true, program: convertedProgram }
 }
 
 function testAvailableFieldsAnalysis(program) {
-  console.log("\n=== Testing Available Fields Analysis ===")
+  console.log(`\n🔍 Analyzing available fields in "${program.name}"`)
 
   const currentRoutines = program.weeks && program.weeks.length > 0 ? program.weeks[0].routines : program.routines || []
 
@@ -204,45 +231,86 @@ function testAvailableFieldsAnalysis(program) {
   }
 
   const availableFields = { hasReps, hasWeight, hasRpe, hasRest, hasNotes }
+  const fieldCount = Object.values(availableFields).filter(Boolean).length
 
-  console.log("Available fields analysis:", availableFields)
-  console.log(`Program has ${Object.values(availableFields).filter(Boolean).length} field types`)
+  console.log(`   - Available fields: ${JSON.stringify(availableFields)}`)
+  console.log(`   - Total field types: ${fieldCount}`)
 
   return availableFields
 }
 
-function runAllTests() {
-  console.log("🚀 Starting Periodization Toggle Tests")
-  console.log("=====================================")
+function testBidirectionalConversion() {
+  console.log("\n🔄 BIDIRECTIONAL CONVERSION TEST")
+  console.log("=================================")
 
-  // Test 1: Convert non-periodized to periodized
-  console.log("\n📋 TEST 1: Non-Periodized → Periodized")
-  const convertedToPeriodized = testConvertToPeriodicized(mockNonPeriodizedProgram, 4)
+  // Test 1: Non-Periodized → Periodized → Non-Periodized
+  console.log("\n📋 TEST 1: Non-Periodized → Periodized → Non-Periodized")
 
-  // Test 2: Convert periodized back to non-periodized
-  console.log("\n📋 TEST 2: Periodized → Non-Periodized")
-  const convertedBackToNonPeriodized = testConvertToNonPeriodized(convertedToPeriodized, 2)
+  let currentProgram = JSON.parse(JSON.stringify(mockNonPeriodizedProgram)) // Deep clone
+  console.log(`Starting with: "${currentProgram.name}" (is_periodized: ${currentProgram.is_periodized})`)
 
-  // Test 3: Convert already periodized to non-periodized
-  console.log("\n📋 TEST 3: Already Periodized → Non-Periodized")
-  const convertedPeriodizedToNon = testConvertToNonPeriodized(mockPeriodizedProgram, 2)
+  // Step 1: Convert to periodized
+  const step1 = convertToPeriodicized(currentProgram, 4)
+  if (!step1.success) {
+    console.log("❌ Step 1 failed:", step1.error)
+    return false
+  }
+  currentProgram = step1.program
 
-  // Test 4: Test available fields analysis
-  console.log("\n📋 TEST 4: Available Fields Analysis")
-  testAvailableFieldsAnalysis(mockNonPeriodizedProgram)
-  testAvailableFieldsAnalysis(mockPeriodizedProgram)
+  // Step 2: Convert back to non-periodized
+  const step2 = convertToNonPeriodized(currentProgram, 2)
+  if (!step2.success) {
+    console.log("❌ Step 2 failed:", step2.error)
+    return false
+  }
+  currentProgram = step2.program
 
-  // Test 5: Edge cases
-  console.log("\n📋 TEST 5: Edge Cases")
+  console.log(`✅ Final result: "${currentProgram.name}" (is_periodized: ${currentProgram.is_periodized})`)
+  console.log(`   - Final routines: ${currentProgram.routines?.map((r) => r.name).join(", ") || "None"}`)
 
-  // Empty program
-  const emptyProgram = { name: "Empty Program", routines: [] }
-  console.log("\nTesting empty program:")
-  testAvailableFieldsAnalysis(emptyProgram)
+  // Test 2: Periodized → Non-Periodized → Periodized
+  console.log("\n📋 TEST 2: Periodized → Non-Periodized → Periodized")
 
-  // Program with no sets
+  currentProgram = JSON.parse(JSON.stringify(mockPeriodizedProgram)) // Deep clone
+  console.log(`Starting with: "${currentProgram.name}" (is_periodized: ${currentProgram.is_periodized})`)
+
+  // Step 1: Convert to non-periodized
+  const step3 = convertToNonPeriodized(currentProgram, 2)
+  if (!step3.success) {
+    console.log("❌ Step 3 failed:", step3.error)
+    return false
+  }
+  currentProgram = step3.program
+
+  // Step 2: Convert back to periodized
+  const step4 = convertToPeriodicized(currentProgram, 6)
+  if (!step4.success) {
+    console.log("❌ Step 4 failed:", step4.error)
+    return false
+  }
+  currentProgram = step4.program
+
+  console.log(`✅ Final result: "${currentProgram.name}" (is_periodized: ${currentProgram.is_periodized})`)
+  console.log(`   - Final weeks: ${currentProgram.weeks?.length || 0}`)
+  console.log(`   - Week 1 routines: ${currentProgram.weeks?.[0]?.routines?.map((r) => r.name).join(", ") || "None"}`)
+
+  return true
+}
+
+function testEdgeCases() {
+  console.log("\n⚠️  EDGE CASES TEST")
+  console.log("==================")
+
+  // Test empty program
+  const emptyProgram = { name: "Empty Program", routines: [], is_periodized: false }
+  console.log("\n🧪 Testing empty program conversion:")
+  const emptyResult = convertToPeriodicized(emptyProgram, 4)
+  console.log(`   Result: ${emptyResult.success ? "✅ Success" : "❌ Failed - " + emptyResult.error}`)
+
+  // Test program with no sets
   const noSetsProgram = {
     name: "No Sets Program",
+    is_periodized: false,
     routines: [
       {
         name: "Empty Routine",
@@ -255,12 +323,122 @@ function runAllTests() {
       },
     ],
   }
-  console.log("\nTesting program with no sets:")
+  console.log("\n🧪 Testing program with no sets:")
   testAvailableFieldsAnalysis(noSetsProgram)
 
-  console.log("\n✅ All tests completed!")
-  console.log("=====================================")
+  // Test invalid week selection
+  const invalidWeekTest = convertToNonPeriodized(mockPeriodizedProgram, 99)
+  console.log("\n🧪 Testing invalid week selection:")
+  console.log(`   Result: ${invalidWeekTest.success ? "✅ Success" : "❌ Failed - " + invalidWeekTest.error}`)
+
+  // Test conversion with 0 weeks
+  const zeroWeeksTest = convertToPeriodicized(mockNonPeriodizedProgram, 0)
+  console.log("\n🧪 Testing conversion with 0 weeks:")
+  console.log(`   Result: ${zeroWeeksTest.success ? "✅ Success" : "❌ Failed - " + zeroWeeksTest.error}`)
 }
 
-// Run the tests
-runAllTests()
+function validateProgramStructure(program, expectedType) {
+  console.log(`\n🔍 Validating program structure (expected: ${expectedType})`)
+
+  const issues = []
+
+  if (expectedType === "periodized") {
+    if (!program.is_periodized) issues.push("is_periodized should be true")
+    if (!program.weeks || program.weeks.length === 0) issues.push("weeks array should exist and not be empty")
+    if (program.routines !== undefined) issues.push("routines should be undefined for periodized programs")
+
+    // Check week structure
+    if (program.weeks) {
+      for (const week of program.weeks) {
+        if (!week.week_number) issues.push(`Week missing week_number: ${JSON.stringify(week)}`)
+        if (!week.routines || !Array.isArray(week.routines))
+          issues.push(`Week ${week.week_number} missing routines array`)
+      }
+    }
+  } else if (expectedType === "non-periodized") {
+    if (program.is_periodized) issues.push("is_periodized should be false")
+    if (!program.routines || program.routines.length === 0) issues.push("routines array should exist and not be empty")
+    if (program.weeks !== undefined) issues.push("weeks should be undefined for non-periodized programs")
+  }
+
+  if (issues.length === 0) {
+    console.log("✅ Program structure is valid")
+    return true
+  } else {
+    console.log("❌ Program structure issues found:")
+    issues.forEach((issue) => console.log(`   - ${issue}`))
+    return false
+  }
+}
+
+function runComprehensiveTests() {
+  console.log("🚀 COMPREHENSIVE PERIODIZATION TOGGLE TESTS")
+  console.log("===========================================")
+
+  let allTestsPassed = true
+
+  // Test 1: Basic conversions
+  console.log("\n📋 BASIC CONVERSION TESTS")
+  const basicTest1 = convertToPeriodicized(mockNonPeriodizedProgram, 4)
+  if (basicTest1.success) {
+    allTestsPassed &= validateProgramStructure(basicTest1.program, "periodized")
+  } else {
+    allTestsPassed = false
+  }
+
+  const basicTest2 = convertToNonPeriodized(mockPeriodizedProgram, 2)
+  if (basicTest2.success) {
+    allTestsPassed &= validateProgramStructure(basicTest2.program, "non-periodized")
+  } else {
+    allTestsPassed = false
+  }
+
+  // Test 2: Bidirectional conversion
+  console.log("\n📋 BIDIRECTIONAL CONVERSION TESTS")
+  allTestsPassed &= testBidirectionalConversion()
+
+  // Test 3: Available fields analysis
+  console.log("\n📋 AVAILABLE FIELDS ANALYSIS TESTS")
+  testAvailableFieldsAnalysis(mockNonPeriodizedProgram)
+  testAvailableFieldsAnalysis(mockPeriodizedProgram)
+
+  // Test 4: Edge cases
+  testEdgeCases()
+
+  // Test 5: Data integrity check
+  console.log("\n📋 DATA INTEGRITY TESTS")
+  const integrityTest = convertToPeriodicized(mockNonPeriodizedProgram, 3)
+  if (integrityTest.success) {
+    const originalExerciseCount = mockNonPeriodizedProgram.routines.reduce(
+      (total, routine) => total + (routine.exercises?.length || 0),
+      0,
+    )
+    const convertedExerciseCount = integrityTest.program.weeks[0].routines.reduce(
+      (total, routine) => total + (routine.exercises?.length || 0),
+      0,
+    )
+
+    console.log(`   - Original exercise count: ${originalExerciseCount}`)
+    console.log(`   - Converted exercise count per week: ${convertedExerciseCount}`)
+
+    if (originalExerciseCount === convertedExerciseCount) {
+      console.log("✅ Exercise count preserved during conversion")
+    } else {
+      console.log("❌ Exercise count mismatch during conversion")
+      allTestsPassed = false
+    }
+  }
+
+  console.log("\n" + "=".repeat(50))
+  if (allTestsPassed) {
+    console.log("🎉 ALL TESTS PASSED! Periodization toggle is working correctly.")
+  } else {
+    console.log("❌ SOME TESTS FAILED! Please review the issues above.")
+  }
+  console.log("=".repeat(50))
+
+  return allTestsPassed
+}
+
+// Run all tests
+runComprehensiveTests()
