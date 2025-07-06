@@ -367,6 +367,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     if (periodizationAction === "to-periodized") {
       // Convert non-periodized to periodized by duplicating routines
       const baseRoutines = programState.routines || []
+
+      if (baseRoutines.length === 0) {
+        toast({
+          title: "No Routines Found",
+          description: "Cannot convert to periodized - no routines found in the program.",
+          variant: "destructive",
+        })
+        setShowPeriodizationDialog(false)
+        return
+      }
+
       const weeks: Week[] = []
 
       for (let weekNum = 1; weekNum <= numberOfWeeks; weekNum++) {
@@ -395,6 +406,15 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       // Convert periodized to non-periodized by keeping selected week
       const selectedWeek = programState.weeks?.find((w) => w.week_number === selectedWeekToKeep)
       const routinesToKeep = selectedWeek?.routines || []
+
+      if (routinesToKeep.length === 0) {
+        toast({
+          title: "No Routines Found",
+          description: `No routines found in week ${selectedWeekToKeep}. Please select a different week.`,
+          variant: "destructive",
+        })
+        return
+      }
 
       // Remove week suffixes from routine names
       const cleanedRoutines = routinesToKeep.map((routine) => ({
