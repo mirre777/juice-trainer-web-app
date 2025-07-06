@@ -64,6 +64,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
   })
   const [newTask, setNewTask] = useState("")
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [hasMounted, setHasMounted] = useState(false)
 
   // Try to load username from localStorage first, but don't rely on it exclusively
   const [userName, setUserName] = useState<string>(() => {
@@ -323,6 +324,14 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
     },
     [currentIndex, navItems, pathPrefix, router],
   )
+
+  useEffect(() => {
+    setHasMounted(true)
+  }, [])
+
+  if (!hasMounted) {
+    return null
+  }
 
   return (
     <>
