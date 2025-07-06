@@ -1,51 +1,38 @@
-// Simple debug script to check program structure
-console.log("=== PROGRAM DEBUG ANALYSIS ===")
+// Simple debug script to compare program structures
+console.log("=== PROGRAM STRUCTURE COMPARISON ===")
 
-// Mock data based on what we see in Firebase
-const currentProgram = {
-  id: "473a9142-36ed-42f1-823e-381fb27cbed1",
-  name: "Sample Workout Program",
-  duration: 4,
-  notes: "",
-  createdAt: "2025-07-06T11:45:31.548Z", // ❌ This is an ISO string
-  startedAt: "2025-07-06T11:45:31.548Z", // ❌ This is an ISO string
-  updated_at: "2025-07-06T11:45:31.548Z", // ❌ This is an ISO string
-  program_URL: "", // ❌ Extra field
-  isActive: true, // ❌ Extra field
-  status: "active", // ❌ Extra field
-  routines: [
-    { routineId: "g1be4875-001a-4d4a-8d9b-d0333e4a141a", week: 1, order: 1 },
-    { routineId: "84ce19d9-2776-42ba-94b1-50059dbdc267", week: 1, order: 2 },
-  ],
-}
-
+// Working program structure (from user 8oga)
 const workingProgram = {
-  id: "some-working-id",
-  name: "Working Program",
-  duration: 4,
-  notes: "",
-  createdAt: "Timestamp object", // ✅ Firestore Timestamp
-  startedAt: "Timestamp object", // ✅ Firestore Timestamp
-  updated_at: "Timestamp object", // ✅ Firestore Timestamp
-  // No extra fields
-  routines: [
-    { routineId: "routine-1", week: 1, order: 1 },
-    { routineId: "routine-2", week: 1, order: 2 },
-  ],
+  createdAt: "Firestore Timestamp",
+  duration: "Number",
+  id: "String",
+  name: "String",
+  notes: "Empty string",
+  program_URL: "Empty string",
+  routines: "Array of {order, routineId, week}",
+  startedAt: "Firestore Timestamp",
+  updatedAt: "Firestore Timestamp", // Note: updatedAt not updated_at
 }
 
-console.log("🔍 ISSUES FOUND:")
-console.log("1. Timestamps are ISO strings instead of Firestore Timestamp objects")
-console.log("2. Extra fields present: program_URL, isActive, status")
-console.log("3. Mobile app likely filters out programs with wrong timestamp types")
+// Your program structure
+const yourProgram = {
+  createdAt: "ISO String ❌",
+  duration: "Number ✅",
+  id: "String ✅",
+  isActive: "Boolean ❌ (extra field)",
+  name: "String ✅",
+  notes: "Empty string ✅",
+  program_URL: "Empty string ✅",
+  routines: "Array ✅",
+  startedAt: "ISO String ❌",
+  status: "String ❌ (extra field)",
+  updated_at: "ISO String ❌ (wrong field name and type)",
+}
 
-console.log("\n✅ SOLUTION:")
-console.log("Use the updated program conversion service that:")
-console.log("- Creates Timestamp objects with Timestamp.now()")
-console.log("- Removes extra fields")
-console.log("- Ensures proper data types")
+console.log("Working program fields:", Object.keys(workingProgram))
+console.log("Your program fields:", Object.keys(yourProgram))
 
-console.log("\n🚀 NEXT STEPS:")
-console.log("1. Test the updated service in preview environment")
-console.log("2. Create a new program assignment")
-console.log("3. Check if it appears in mobile app")
+console.log("\n🎯 The main issue is TIMESTAMP FORMAT and FIELD NAMING")
+console.log("Working program timestamps are Firestore Timestamp objects")
+console.log("Your program timestamps are ISO strings")
+console.log("Working program uses 'updatedAt', yours uses 'updated_at'")

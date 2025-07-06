@@ -7,11 +7,12 @@ import { v4 as uuidv4 } from "uuid"
 export interface MobileProgram {
   id: string
   name: string
-  notes: string | null
-  startedAt: string
+  notes: string
+  startedAt: Timestamp
   duration: number
-  createdAt: string
-  updated_at: string
+  createdAt: Timestamp
+  updatedAt: Timestamp // Note: updatedAt not updated_at
+  program_URL: string // Keep this field - it exists in working programs
   routines: Array<{
     routineId: string
     week: number
@@ -52,7 +53,7 @@ export interface MobileExercise {
   deletedAt: null
 }
 
-export interface WorkoutProgram {
+interface WorkoutProgram {
   id: string
   name: string
   duration: number
@@ -67,7 +68,7 @@ export interface WorkoutProgram {
   updated_at: Timestamp
 }
 
-export interface RoutineData {
+interface RoutineData {
   id: string
   name: string
   type: string
@@ -76,9 +77,9 @@ export interface RoutineData {
     name: string
     sets: number
     reps: string
-    weight?: string
-    notes?: string
-    restTime?: string
+    weight: string
+    notes: string
+    restTime: string
   }>
   createdAt: Timestamp
   updated_at: Timestamp
@@ -315,7 +316,7 @@ export class ProgramConversionService {
 
   /**
    * Main function to convert and send program to client
-   * Based on uploadPeriodizedProgram.js logic
+   * UPDATED TO MATCH WORKING PROGRAM STRUCTURE FROM USER 8OGA
    */
   async convertAndSendProgram(programData: any, clientUserId: string): Promise<string> {
     try {
@@ -376,26 +377,24 @@ export class ProgramConversionService {
         }
       }
 
-      // Create the program document - MATCH THE EXACT STRUCTURE OF THE WORKING PROGRAM
+      // Create the program document - MATCH THE EXACT STRUCTURE OF THE WORKING PROGRAM FROM USER 8OGA
       const programId = uuidv4()
 
-      // Use Firestore Timestamp for consistency with working programs
+      // Use Firestore Timestamp objects (not ISO strings)
       const firestoreTimestamp = timestamp
 
-      const program = {
+      const program: MobileProgram = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "", // Always empty string, never null
-        // Use Firestore Timestamp objects instead of ISO strings to match working program
-        startedAt: firestoreTimestamp,
-        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
+        // Use Firestore Timestamp objects to match working program
         createdAt: firestoreTimestamp,
-        updated_at: firestoreTimestamp,
+        startedAt: firestoreTimestamp,
+        updatedAt: firestoreTimestamp, // Note: updatedAt not updated_at
+        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
+        program_URL: "", // Keep this field - it exists in working programs
         routines: routineMap,
-        // Remove the extra fields that might be causing issues
-        // program_URL: "",
-        // isActive: true,
-        // status: "active",
+        // DO NOT include isActive or status - they don't exist in working programs
       }
 
       // Save program to Firestore
@@ -403,12 +402,13 @@ export class ProgramConversionService {
       await setDoc(doc(programsRef, programId), program)
 
       console.log(`[convertAndSendProgram] ✅ Created program: ${program.name} with ID: ${programId}`)
-      console.log(`[convertAndSendProgram] Program structure:`, {
+      console.log(`[convertAndSendProgram] Program structure matches working program from user 8oga:`, {
         totalRoutines: routineMap.length,
         weeks: program.duration,
+        hasTimestampObjects: program.createdAt instanceof Timestamp,
+        fieldName: "updatedAt", // not updated_at
+        hasProgramURL: typeof program.program_URL === "string",
         routineMap: routineMap.slice(0, 3), // Show first 3 for debugging
-        timestampType: typeof program.startedAt,
-        durationType: typeof program.duration,
       })
 
       return programId
