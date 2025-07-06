@@ -333,9 +333,25 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
   const handleCancelChanges = useCallback(() => {
     debugLog("Canceling changes, reverting to original state")
+    debugLog("Original program state:", originalProgramState)
+    debugLog("Current program state:", programState)
 
-    if (originalProgramState) {
-      setProgramState(JSON.parse(JSON.stringify(originalProgramState))) // Deep copy to avoid reference issues
+    if (!originalProgramState) {
+      errorLog("No original program state to revert to")
+      toast({
+        title: "Cannot Cancel",
+        description: "No original state found to revert to.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Create a deep copy to avoid reference issues
+      const restoredState = JSON.parse(JSON.stringify(originalProgramState))
+      debugLog("Restoring state to:", restoredState)
+
+      setProgramState(restoredState)
       setHasChanges(false)
       setExpandedRoutines({ 0: true }) // Reset expanded state
       setCurrentWeekIndex(0) // Reset week index
@@ -344,8 +360,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         title: "Changes Canceled",
         description: "All changes have been discarded and reverted to the original state.",
       })
+
+      debugLog("State successfully restored")
+    } catch (error) {
+      errorLog("Error restoring original state:", error)
+      toast({
+        title: "Cancel Failed",
+        description: "Failed to restore original state. Please refresh the page.",
+        variant: "destructive",
+      })
     }
-  }, [originalProgramState, toast])
+  }, [originalProgramState, programState, toast])
 
   const handleSendToClient = useCallback(async () => {
     debugLog("Sending program to client:", selectedClientId)
@@ -659,7 +684,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       })
       setHasChanges(true)
     },
-    [],
+    [programState],
   )
 
   const addSet = useCallback((routineIndex: number, exerciseIndex: number) => {
