@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { cookies } from "next/headers"
-import PeriodizedReviewClient from "./periodized-review-client"
+import ReviewProgramClient from "./review-program-client"
 import { fetchClients } from "@/lib/firebase/client-service"
 import { db } from "@/lib/firebase/firebase"
 import { doc, getDoc } from "firebase/firestore"
@@ -39,28 +39,44 @@ async function getImportData(id: string): Promise<ImportData | null> {
 
     console.log(`[getImportData] Using trainer ID: ${trainerId}`)
 
-    // Fetch the actual import document from Firebase
-    const importDocRef = doc(db, "users", trainerId, "sheets-imports", id)
-    const importDoc = await getDoc(importDocRef)
+    // Fetch the actual import document from Firebase - try both possible paths
+    let importDoc
+
+    // First try the subcollection path
+    const subCollectionRef = doc(db, "users", trainerId, "sheets-imports", id)
+    importDoc = await getDoc(subCollectionRef)
 
     if (!importDoc.exists()) {
-      console.log(`[getImportData] Import document not found at: users/${trainerId}/sheets-imports/${id}`)
+      // Try the root collection path as fallback
+      const rootCollectionRef = doc(db, "sheets_imports", id)
+      importDoc = await getDoc(rootCollectionRef)
+    }
+
+    if (!importDoc.exists()) {
+      console.log(`[getImportData] Import document not found in either location for ID: ${id}`)
       return null
     }
 
     const importData = importDoc.data()
     console.log(`[getImportData] Found import data:`, {
-      id: importData.id,
+      id: importData.id || id,
       name: importData.name,
       status: importData.status,
       hasProgram: !!importData.program,
       programKeys: importData.program ? Object.keys(importData.program) : [],
-      programTitle: importData.program?.program_title || importData.program?.name,
+      programTitle: importData.program?.program_title || importData.program?.title || importData.program?.name,
+      userId: importData.userId,
+      trainer_id: importData.trainer_id,
     })
 
     return {
       id: importData.id || id,
-      name: importData.name || importData.program?.program_title || importData.program?.name || "Untitled Program",
+      name:
+        importData.name ||
+        importData.program?.program_title ||
+        importData.program?.title ||
+        importData.program?.name ||
+        "Untitled Program",
       program: importData.program || null,
       status: importData.status || "pending",
       created_at: importData.created_at || importData.createdAt || new Date(),
@@ -131,5 +147,5 @@ export default async function ReviewProgramPage({
     status: importData.status,
   })
 
-  return <PeriodizedReviewClient importData={importData} importId={id} initialClients={initialClients} />
+  return <ReviewProgramClient importData={importData} importId={id} initialClients={initialClients} />
 }
