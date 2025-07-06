@@ -248,7 +248,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     fetchClients()
   }, [initialClients])
 
-  // Use useCallback to ensure stable function references
   const handleSaveChanges = useCallback(async () => {
     debugLog("Saving changes for program:", programState?.name)
 
@@ -390,7 +389,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         errorLog("Error in handleTogglePeriodization:", err)
       }
     },
-    [programState],
+    [programState, setPeriodizationAction, setShowPeriodizationDialog],
   )
 
   const confirmPeriodizationChange = useCallback(() => {
@@ -474,6 +473,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           return
         }
 
+        // Remove week suffixes from routine names
         const cleanedRoutines = routinesToKeep.map((routine) => ({
           ...routine,
           name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
@@ -524,6 +524,11 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const updateProgramField = useCallback((field: keyof Program, value: any) => {
     debugLog("Updating program field:", field, "with value:", value)
 
+    if (!programState) {
+      debugLog("Cannot update field - no program state")
+      return
+    }
+
     setProgramState((prev) => {
       if (!prev) return prev
       const newState = {
@@ -549,11 +554,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
       debugLog("Updating set field:", { routineIndex, exerciseIndex, setIndex, field, value })
 
+      if (!programState) {
+        debugLog("Cannot update set field - no program state")
+        return
+      }
+
       setProgramState((prev) => {
         if (!prev) return prev
 
         const newState = { ...prev }
 
+        // Handle both periodized (weeks) and non-periodized structures
         let targetRoutines: Routine[] = []
 
         if (newState.weeks && newState.weeks.length > 0) {
@@ -675,7 +686,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     setHasChanges(true)
   }, [])
 
-  const handleBackClick = useCallback(() => {
+  const handleBackClick = () => {
     debugLog("Back button clicked, has changes:", hasChanges)
 
     if (hasChanges) {
@@ -683,30 +694,25 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     } else {
       router.back()
     }
-  }, [hasChanges, router])
+  }
 
-  const confirmLeave = useCallback(() => {
+  const confirmLeave = () => {
     debugLog("Confirmed leaving without saving")
     setShowConfirmDialog(false)
     router.back()
-  }, [router])
+  }
 
-  const handleCloseSendDialog = useCallback(() => {
-    setShowSendDialog(false)
-  }, [])
-
-  const handleOpenSendDialog = useCallback(() => {
-    setShowSendDialog(true)
-  }, [])
-
-  const handleCloseConfirmDialog = useCallback(() => {
-    setShowConfirmDialog(false)
-  }, [])
-
-  const handleClosePeriodizationDialog = useCallback(() => {
-    setShowPeriodizationDialog(false)
-    setPeriodizationAction(null)
-  }, [])
+  // Create safe click handlers to prevent the "j is not a function" error
+  const createSafeClickHandler = (handler: () => void, handlerName: string) => {
+    return () => {
+      try {
+        debugLog(`Executing safe click handler: ${handlerName}`)
+        handler()
+      } catch (err) {
+        errorLog(`Error in ${handlerName}:`, err)
+      }
+    }
+  }
 
   if (isLoading) {
     return (
@@ -728,7 +734,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Program</h2>
             <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={() => router.back()} variant="outline">
+            <Button onClick={createSafeClickHandler(() => router.back(), "router.back")} variant="outline">
               Go Back
             </Button>
           </div>
@@ -744,7 +750,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-yellow-800 mb-2">No Program Data</h2>
             <p className="text-yellow-600 mb-4">No program data was found to review.</p>
-            <Button onClick={() => router.back()} variant="outline">
+            <Button onClick={createSafeClickHandler(() => router.back(), "router.back")} variant="outline">
               Go Back
             </Button>
           </div>
@@ -763,7 +769,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={handleBackClick}>
+          <Button variant="ghost" size="sm" onClick={createSafeClickHandler(handleBackClick, "handleBackClick")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
@@ -774,11 +780,18 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         </div>
         <div className="flex gap-2">
           {hasChanges && (
-            <Button onClick={handleSaveChanges} disabled={isSaving} variant="outline">
+            <Button
+              onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
+              disabled={isSaving}
+              variant="outline"
+            >
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>
           )}
-          <Button onClick={handleOpenSendDialog} disabled={!programState}>
+          <Button
+            onClick={createSafeClickHandler(() => setShowSendDialog(true), "setShowSendDialog")}
+            disabled={!programState}
+          >
             Send to Client
           </Button>
         </div>
@@ -860,7 +873,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                 <div className="p-4">
                   <div
                     className="flex items-center justify-between cursor-pointer"
-                    onClick={() => toggleRoutineExpansion(routineIndex)}
+                    onClick={createSafeClickHandler(
+                      () => toggleRoutineExpansion(routineIndex),
+                      `toggleRoutineExpansion-${routineIndex}`,
+                    )}
                   >
                     <div>
                       <h3 className="font-medium">{routine.name || routine.title || `Routine ${routineIndex + 1}`}</h3>
@@ -994,7 +1010,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                           <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
+                                            onClick={createSafeClickHandler(
+                                              () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                              `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
                                             title="Duplicate set"
                                           >
                                             <Copy className="h-3 w-3" />
@@ -1002,7 +1021,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                           <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => removeSet(routineIndex, exerciseIndex, setIndex)}
+                                            onClick={createSafeClickHandler(
+                                              () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                              `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
                                             title="Remove set"
                                           >
                                             <Trash2 className="h-3 w-3" />
@@ -1014,7 +1036,14 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                 </tbody>
                               </table>
                               <div className="mt-2">
-                                <Button size="sm" variant="outline" onClick={() => addSet(routineIndex, exerciseIndex)}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={createSafeClickHandler(
+                                    () => addSet(routineIndex, exerciseIndex),
+                                    `addSet-${routineIndex}-${exerciseIndex}`,
+                                  )}
+                                >
                                   <Plus className="h-3 w-3 mr-1" />
                                   Add Set
                                 </Button>
@@ -1079,10 +1108,16 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseSendDialog}>
+            <Button
+              variant="outline"
+              onClick={createSafeClickHandler(() => setShowSendDialog(false), "setShowSendDialog-false")}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSendToClient} disabled={!selectedClientId || isSending}>
+            <Button
+              onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")}
+              disabled={!selectedClientId || isSending}
+            >
               {isSending ? "Sending..." : "Send Program"}
             </Button>
           </DialogFooter>
@@ -1099,10 +1134,13 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseConfirmDialog}>
+            <Button
+              variant="outline"
+              onClick={createSafeClickHandler(() => setShowConfirmDialog(false), "setShowConfirmDialog-false")}
+            >
               Stay and Save
             </Button>
-            <Button variant="destructive" onClick={confirmLeave}>
+            <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
               Leave Without Saving
             </Button>
           </DialogFooter>
@@ -1165,10 +1203,16 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleClosePeriodizationDialog}>
+            <Button
+              variant="outline"
+              onClick={createSafeClickHandler(() => {
+                setShowPeriodizationDialog(false)
+                setPeriodizationAction(null)
+              }, "cancelPeriodizationDialog")}
+            >
               Cancel
             </Button>
-            <Button onClick={confirmPeriodizationChange}>
+            <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
               {periodizationAction === "to-periodized"
                 ? `Create ${numberOfWeeks} Weeks`
                 : `Keep Week ${selectedWeekToKeep}`}
