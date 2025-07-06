@@ -85,6 +85,34 @@ interface RoutineData {
   updated_at: Timestamp
 }
 
+interface Exercise {
+  name: string
+  sets?: number
+  reps?: string
+  weight?: string
+  rest?: string
+  notes?: string
+  rpe?: string
+}
+
+interface Routine {
+  name: string
+  exercises: Exercise[]
+}
+
+interface Program {
+  name: string
+  description?: string
+  duration_weeks?: number
+  is_periodized?: boolean
+  weeks?: Array<{
+    week_number: number
+    routines: Routine[]
+  }>
+  routines?: Routine[]
+  notes?: string
+}
+
 export class ProgramConversionService {
   /**
    * Ensures an exercise exists in either global or user's custom collection
@@ -846,6 +874,100 @@ export class ProgramConversionService {
       return {
         success: false,
         fixesApplied: [`Error: ${error instanceof Error ? error.message : "Unknown error"}`],
+      }
+    }
+  }
+
+  /**
+   * Converts and sends a program to a client
+   */
+  async convertAndSendProgramToClient(
+    clientId: string,
+    programData: Program,
+    trainerId: string,
+    customMessage?: string,
+  ): Promise<{ success: boolean; programId?: string; error?: string }> {
+    try {
+      console.log("[convertAndSendProgramToClient] Starting conversion:", {
+        clientId,
+        programName: programData.name,
+        trainerId,
+        hasCustomMessage: !!customMessage,
+      })
+
+      // Generate program ID
+      const programId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const now = Timestamp.now()
+
+      // Create the program document for the client
+      const programDoc = {
+        id: programId,
+        name: programData.name || "Untitled Program",
+        notes: programData.notes || "",
+        duration: programData.duration_weeks || 1,
+        createdAt: now,
+        updatedAt: now,
+        program_URL: "", // Keep this field as it was in working version
+        // Remove isActive and status fields as they weren't in working version
+      }
+
+      // Save program to client's programs collection
+      const clientProgramRef = doc(db, "users", clientId, "programs", programId)
+      await setDoc(clientProgramRef, programDoc)
+
+      console.log("[convertAndSendProgramToClient] Program document created:", programId)
+
+      // Create routines from the program data
+      const routines = programData.routines || programData.weeks?.[0]?.routines || []
+
+      for (let routineIndex = 0; routineIndex < routines.length; routineIndex++) {
+        const routine = routines[routineIndex]
+
+        // Generate routine ID
+        const routineId = `${programId}-routine-${routineIndex}`
+
+        // Create routine document
+        const routineDoc = {
+          id: routineId,
+          name: routine.name || `Routine ${routineIndex + 1}`,
+          notes: "",
+          type: "program", // Critical field for mobile app filtering
+          updatedAt: now, // Use updatedAt, not updated_at
+          exercises:
+            routine.exercises?.map((exercise, exerciseIndex) => ({
+              id: `${routineId}-exercise-${exerciseIndex}`,
+              name: exercise.name,
+              notes: exercise.notes || "",
+              sets: Array.from({ length: exercise.sets || 1 }, (_, setIndex) => ({
+                id: `${routineId}-exercise-${exerciseIndex}-set-${setIndex}`,
+                notes: exercise.rpe
+                  ? `RPE: ${exercise.rpe} | Rest: ${exercise.rest || "-"}`
+                  : `Rest: ${exercise.rest || "-"}`,
+                reps: exercise.reps || "",
+                type: "normal",
+                weight: exercise.weight || "",
+              })),
+            })) || [],
+        }
+
+        // Save routine to client's routines collection
+        const clientRoutineRef = doc(db, "users", clientId, "routines", routineId)
+        await setDoc(clientRoutineRef, routineDoc)
+
+        console.log("[convertAndSendProgramToClient] Routine created:", routineId)
+      }
+
+      console.log("[convertAndSendProgramToClient] Conversion completed successfully")
+
+      return {
+        success: true,
+        programId,
+      }
+    } catch (error) {
+      console.error("[convertAndSendProgramToClient] Error:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error occurred",
       }
     }
   }
