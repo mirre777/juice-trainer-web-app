@@ -112,7 +112,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [showPeriodizationDialog, setShowPeriodizationDialog] = useState(false)
   const [periodizationAction, setPeriodizationAction] = useState<"to-periodized" | "to-non-periodized" | null>(null)
   const [selectedWeekToKeep, setSelectedWeekToKeep] = useState<number>(1)
-  const [selectedSourceWeek, setSelectedSourceWeek] = useState<number>(1)
   const [numberOfWeeks, setNumberOfWeeks] = useState<number>(4)
 
   // Analyze available fields in the program data
@@ -380,7 +379,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
           // If program already has weeks, set default source week to 1
           if (programState.weeks && programState.weeks.length > 0) {
-            setSelectedSourceWeek(1)
+            //setSelectedSourceWeek(1)
           }
 
           setShowPeriodizationDialog(true)
@@ -416,9 +415,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         let baseRoutines: Routine[] = []
         if (programState.weeks && programState.weeks.length > 0) {
           // If already has weeks structure, get routines from selected source week
-          const sourceWeek = programState.weeks.find((w) => w.week_number === selectedSourceWeek)
-          baseRoutines = sourceWeek?.routines || []
-          debugLog(`Using routines from week ${selectedSourceWeek}:`, baseRoutines)
+          //const sourceWeek = programState.weeks.find((w) => w.week_number === selectedSourceWeek)
+          //baseRoutines = sourceWeek?.routines || []
+          //debugLog(`Using routines from week ${selectedSourceWeek}:`, baseRoutines)
         } else {
           // If non-periodized, get from root routines array
           baseRoutines = programState.routines || []
@@ -431,17 +430,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           weeksLength: programState.weeks?.length,
           hasRootRoutines: !!programState.routines,
           rootRoutinesLength: programState.routines?.length,
-          selectedSourceWeek,
-          sourceWeekRoutines: programState.weeks?.find((w) => w.week_number === selectedSourceWeek)?.routines?.length,
-          selectedSource:
-            programState.weeks && programState.weeks.length > 0 ? `weeks[${selectedSourceWeek}].routines` : "routines",
+          //selectedSourceWeek,
+          //sourceWeekRoutines: programState.weeks?.find((w) => w.week_number === selectedSourceWeek)?.routines?.length,
+          //selectedSource:
+          //  programState.weeks && programState.weeks.length > 0 ? `weeks[${selectedSourceWeek}].routines` : "routines",
         })
 
         if (baseRoutines.length === 0) {
           debugLog("No routines found for conversion")
           toast({
             title: "No Routines Found",
-            description: `Cannot convert to periodized - no routines found in ${programState.weeks && programState.weeks.length > 0 ? `week ${selectedSourceWeek}` : "the program"}.`,
+            description: `Cannot convert to periodized - no routines found in ${programState.weeks && programState.weeks.length > 0 ? `week 1` : "the program"}.`,
             variant: "destructive",
           })
           setShowPeriodizationDialog(false)
@@ -481,7 +480,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         toast({
           title: "Converted to Periodized",
-          description: `Program converted to ${numberOfWeeks} weeks using routines from ${programState.weeks && programState.weeks.length > 0 ? `week ${selectedSourceWeek}` : "the base template"}`,
+          description: `Program converted to ${numberOfWeeks} weeks using routines from ${programState.weeks && programState.weeks.length > 0 ? `week 1` : "the base template"}`,
         })
       } else if (periodizationAction === "to-non-periodized") {
         debugLog("Converting to non-periodized, keeping week:", selectedWeekToKeep)
@@ -548,7 +547,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setShowPeriodizationDialog(false)
       setPeriodizationAction(null)
     }
-  }, [programState, periodizationAction, numberOfWeeks, selectedWeekToKeep, selectedSourceWeek, toast])
+  }, [programState, periodizationAction, numberOfWeeks, selectedWeekToKeep, toast])
 
   const updateProgramField = useCallback((field: keyof Program, value: any) => {
     debugLog("Updating program field:", field, "with value:", value)
@@ -788,8 +787,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     )
   }
 
-  const currentRoutines =
-    programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
+  const displayAllWeeks = programState.is_periodized && programState.weeks && programState.weeks.length > 0
+  const currentRoutines = displayAllWeeks ? [] : programState.routines || []
 
   debugLog("Rendering component with current routines:", currentRoutines)
 
@@ -890,12 +889,221 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           <h2 className="text-lg font-semibold">Program Structure</h2>
           <div className="flex gap-2">
             <Badge variant="outline">{programState.is_periodized ? "Periodized" : "Non-Periodized"}</Badge>
-            <Badge variant="secondary">{currentRoutines.length} Routines</Badge>
+            {displayAllWeeks ? (
+              <Badge variant="secondary">{programState.weeks?.length} Weeks</Badge>
+            ) : (
+              <Badge variant="secondary">{currentRoutines.length} Routines</Badge>
+            )}
           </div>
         </div>
 
-        {/* Display current routines */}
-        {currentRoutines.length > 0 ? (
+        {displayAllWeeks ? (
+          // Show all weeks for periodized programs
+          <div className="space-y-6">
+            {programState.weeks?.map((week, weekIndex) => (
+              <Card key={week.week_number} className="border-l-4 border-l-green-500">
+                <div className="p-4">
+                  <h3 className="font-semibold text-lg mb-4">Week {week.week_number}</h3>
+                  <div className="space-y-4">
+                    {week.routines?.map((routine, routineIndex) => (
+                      // Routine display logic here - same as current routine display
+                      <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                        <div className="p-4">
+                          <div
+                            className="flex items-center justify-between cursor-pointer"
+                            onClick={createSafeClickHandler(
+                              () => toggleRoutineExpansion(routineIndex),
+                              `toggleRoutineExpansion-${routineIndex}`,
+                            )}
+                          >
+                            <div>
+                              <h3 className="font-medium">
+                                {routine.name || routine.title || `Routine ${routineIndex + 1}`}
+                              </h3>
+                              <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                            </div>
+                            {expandedRoutines[routineIndex] ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </div>
+
+                          {expandedRoutines[routineIndex] && (
+                            <div className="mt-4 space-y-4">
+                              {routine.exercises?.map((exercise, exerciseIndex) => (
+                                <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                                  <h4 className="font-medium mb-3">{exercise.name}</h4>
+                                  {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
+
+                                  {/* Sets Table */}
+                                  {exercise.sets && exercise.sets.length > 0 && (
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="border-b">
+                                            <th className="text-left p-2">Set</th>
+                                            {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                            {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                            {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                            {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                            {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                            <th className="text-left p-2">Actions</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {exercise.sets.map((set, setIndex) => (
+                                            <tr key={setIndex} className="border-b">
+                                              <td className="p-2 font-medium">{setIndex + 1}</td>
+                                              {availableFields.hasReps && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.reps || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "reps",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-20"
+                                                    placeholder="12"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasWeight && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.weight || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "weight",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-24"
+                                                    placeholder="100"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasRpe && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.rpe || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "rpe",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-16"
+                                                    placeholder="8"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasRest && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.rest || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "rest",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-20"
+                                                    placeholder="60s"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasNotes && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.notes || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "notes",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-32"
+                                                    placeholder="Notes"
+                                                  />
+                                                </td>
+                                              )}
+                                              <td className="p-2">
+                                                <div className="flex gap-1">
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={createSafeClickHandler(
+                                                      () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                                      `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                    )}
+                                                    title="Duplicate set"
+                                                  >
+                                                    <Copy className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={createSafeClickHandler(
+                                                      () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                                      `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                    )}
+                                                    title="Remove set"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                      <div className="mt-2">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={createSafeClickHandler(
+                                            () => addSet(routineIndex, exerciseIndex),
+                                            `addSet-${routineIndex}-${exerciseIndex}`,
+                                          )}
+                                        >
+                                          <Plus className="h-3 w-3 mr-1" />
+                                          Add Set
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : // Show single routine template for non-periodized programs
+        currentRoutines.length > 0 ? (
           <div className="space-y-4">
             {currentRoutines.map((routine, routineIndex) => (
               <Card key={routineIndex} className="border-l-4 border-l-blue-500">
@@ -1196,7 +1404,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             {periodizationAction === "to-periodized" ? (
               <>
                 {/* Show source week selector if program already has weeks */}
-                {programState?.weeks && programState.weeks.length > 0 && (
+                {/*{programState?.weeks && programState.weeks.length > 0 && (
                   <div>
                     <Label htmlFor="source-week-select">Source Week</Label>
                     <Select
@@ -1218,7 +1426,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                       Which week's routines should be used as the template for all weeks?
                     </p>
                   </div>
-                )}
+                )}*/}
 
                 <div>
                   <Label htmlFor="weeks-count">Number of Weeks</Label>
@@ -1232,7 +1440,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                   />
                   <p className="text-sm text-gray-600 mt-1">
                     {programState?.weeks && programState.weeks.length > 0
-                      ? `Week ${selectedSourceWeek}'s routines will be copied to each of the ${numberOfWeeks} weeks.`
+                      ? `Week 1's routines will be copied to each of the ${numberOfWeeks} weeks.`
                       : "Current routines will be copied to each week, allowing you to customize them individually later."}
                   </p>
                 </div>
