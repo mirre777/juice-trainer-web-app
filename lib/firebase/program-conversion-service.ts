@@ -52,6 +52,21 @@ export interface MobileExercise {
   deletedAt: null
 }
 
+export interface ConvertedProgram {
+  id: string
+  name: string
+  duration: number
+  routines: Array<{
+    routineId: string
+    week: number
+    order: number
+  }>
+  createdAt: Timestamp
+  startedAt: Timestamp
+  updated_at: Timestamp
+  notes: string
+}
+
 export class ProgramConversionService {
   /**
    * Ensures an exercise exists in either global or user's custom collection
@@ -347,15 +362,23 @@ export class ProgramConversionService {
       // Create the program document - MATCH THE EXACT STRUCTURE OF THE WORKING PROGRAM
       const programId = uuidv4()
 
+      // Use Firestore Timestamp for consistency with working programs
+      const firestoreTimestamp = timestamp
+
       const program = {
-        createdAt: timestamp.toDate().toISOString(),
-        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
-        notes: "",
+        notes: "", // Always empty string, never null
+        // Use Firestore Timestamp objects instead of ISO strings to match working program
+        startedAt: firestoreTimestamp,
+        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
+        createdAt: firestoreTimestamp,
+        updated_at: firestoreTimestamp,
         routines: routineMap,
-        startedAt: timestamp.toDate().toISOString(),
-        updated_at: timestamp.toDate().toISOString(),
+        // Remove the extra fields that might be causing issues
+        // program_URL: "",
+        // isActive: true,
+        // status: "active",
       }
 
       // Save program to Firestore
@@ -574,3 +597,63 @@ export class ProgramConversionService {
 
 // Export singleton instance
 export const programConversionService = new ProgramConversionService()
+
+// Helper function to validate program structure
+export function validateProgramStructure(program: any): { isValid: boolean; errors: string[] } {
+  const errors: string[] = []
+
+  if (!program.id) errors.push("Missing program ID")
+  if (!program.name) errors.push("Missing program name")
+  if (typeof program.duration !== "number") errors.push("Duration must be a number")
+  if (!Array.isArray(program.routines)) errors.push("Routines must be an array")
+  if (!program.createdAt) errors.push("Missing createdAt timestamp")
+  if (!program.startedAt) errors.push("Missing startedAt timestamp")
+  if (!program.updated_at) errors.push("Missing updated_at timestamp")
+  if (typeof program.notes !== "string") errors.push("Notes must be a string")
+
+  // Validate routines structure
+  if (Array.isArray(program.routines)) {
+    program.routines.forEach((routine: any, index: number) => {
+      if (!routine.routineId) errors.push(`Routine ${index}: Missing routineId`)
+      if (typeof routine.week !== "number") errors.push(`Routine ${index}: Week must be a number`)
+      if (typeof routine.order !== "number") errors.push(`Routine ${index}: Order must be a number`)
+    })
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  }
+}
+
+// Debug function to check existing programs
+export async function debugClientPrograms(clientId: string) {
+  try {
+    const { getDocs, collection: firestoreCollection } = await import("firebase/firestore")
+
+    const programsRef = firestoreCollection(db, "users", clientId, "programs")
+    const snapshot = await getDocs(programsRef)
+
+    console.log(`Found ${snapshot.size} programs for client ${clientId}`)
+
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      const validation = validateProgramStructure(data)
+
+      console.log(`Program ${doc.id}:`, {
+        name: data.name,
+        duration: data.duration,
+        routinesCount: data.routines?.length || 0,
+        isValid: validation.isValid,
+        errors: validation.errors,
+        timestamps: {
+          createdAt: data.createdAt,
+          startedAt: data.startedAt,
+          updated_at: data.updated_at,
+        },
+      })
+    })
+  } catch (error) {
+    console.error("Error debugging client programs:", error)
+  }
+}
