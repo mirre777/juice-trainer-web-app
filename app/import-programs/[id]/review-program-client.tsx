@@ -566,25 +566,28 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     }
   }, [programState, periodizationAction, numberOfWeeks, selectedWeekToKeep, toast])
 
-  const updateProgramField = useCallback((field: keyof Program, value: any) => {
-    debugLog("Updating program field:", field, "with value:", value)
+  const updateProgramField = useCallback(
+    (field: keyof Program, value: any) => {
+      debugLog("Updating program field:", field, "with value:", value)
 
-    if (!programState) {
-      debugLog("Cannot update field - no program state")
-      return
-    }
-
-    setProgramState((prev) => {
-      if (!prev) return prev
-      const newState = {
-        ...prev,
-        [field]: value,
+      if (!programState) {
+        debugLog("Cannot update field - no program state")
+        return
       }
-      debugLog("Updated program state:", newState)
-      return newState
-    })
-    setHasChanges(true)
-  }, [])
+
+      setProgramState((prev) => {
+        if (!prev) return prev
+        const newState = {
+          ...prev,
+          [field]: value,
+        }
+        debugLog("Updated program state:", newState)
+        return newState
+      })
+      setHasChanges(true) // This should trigger the Save Changes button to appear
+    },
+    [programState],
+  )
 
   const toggleRoutineExpansion = useCallback((index: number) => {
     debugLog("Toggling routine expansion for index:", index)
@@ -758,6 +761,11 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       }
     }
   }
+
+  // Add this useEffect to debug hasChanges state
+  useEffect(() => {
+    debugLog("hasChanges state changed:", hasChanges)
+  }, [hasChanges])
 
   if (isLoading) {
     return (
