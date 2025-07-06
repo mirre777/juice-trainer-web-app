@@ -87,33 +87,150 @@ interface RoutineData {
 
 interface Exercise {
   name: string
-  sets?: number
-  reps?: string
-  weight?: string
-  rest?: string
+  sets?: Array<{
+    reps?: string
+    weight?: string
+    rpe?: string
+    rest?: string
+    notes?: string
+    set_number?: number
+  }>
   notes?: string
-  rpe?: string
 }
 
 interface Routine {
-  name: string
+  name?: string
+  title?: string
   exercises: Exercise[]
 }
 
+interface Week {
+  week_number: number
+  routines: Routine[]
+}
+
 interface Program {
-  name: string
+  name?: string
+  program_title?: string
+  title?: string
   description?: string
   duration_weeks?: number
+  program_weeks?: number
   is_periodized?: boolean
-  weeks?: Array<{
-    week_number: number
-    routines: Routine[]
-  }>
+  weeks?: Week[]
   routines?: Routine[]
   notes?: string
 }
 
 export class ProgramConversionService {
+  /**
+   * Convert a non-periodized program to periodized format
+   * Takes routines array and creates weeks with different routines
+   */
+  convertToPeriodized(program: Program): Program {
+    console.log("[convertToPeriodized] Converting program to periodized format")
+
+    if (program.is_periodized && program.weeks && program.weeks.length > 0) {
+      console.log("[convertToPeriodized] Program is already periodized")
+      return program
+    }
+
+    const routines = program.routines || []
+    const duration = program.duration_weeks || 4
+
+    if (routines.length === 0) {
+      console.log("[convertToPeriodized] No routines to convert")
+      return {
+        ...program,
+        is_periodized: true,
+        weeks: [],
+        routines: undefined,
+      }
+    }
+
+    // Create weeks with variations of the base routines
+    const weeks: Week[] = []
+
+    for (let weekNum = 1; weekNum <= duration; weekNum++) {
+      const weekRoutines: Routine[] = routines.map((routine, index) => ({
+        name: `${routine.name || `Routine ${index + 1}`} - Week ${weekNum}`,
+        title: routine.title,
+        exercises: routine.exercises.map((exercise) => ({
+          ...exercise,
+          // You could add week-specific variations here
+          // For now, we'll keep the same structure but allow for future customization
+        })),
+      }))
+
+      weeks.push({
+        week_number: weekNum,
+        routines: weekRoutines,
+      })
+    }
+
+    console.log(`[convertToPeriodized] Created ${weeks.length} weeks with ${routines.length} routines each`)
+
+    return {
+      ...program,
+      is_periodized: true,
+      weeks,
+      routines: undefined, // Remove the flat routines array
+    }
+  }
+
+  /**
+   * Convert a periodized program to non-periodized format
+   * Takes the first week's routines as the base template
+   */
+  convertToNonPeriodized(program: Program): Program {
+    console.log("[convertToNonPeriodized] Converting program to non-periodized format")
+
+    if (!program.is_periodized && program.routines && program.routines.length > 0) {
+      console.log("[convertToNonPeriodized] Program is already non-periodized")
+      return program
+    }
+
+    if (!program.weeks || program.weeks.length === 0) {
+      console.log("[convertToNonPeriodized] No weeks to convert")
+      return {
+        ...program,
+        is_periodized: false,
+        routines: [],
+        weeks: undefined,
+      }
+    }
+
+    // Use the first week's routines as the template
+    const firstWeek = program.weeks[0]
+    const baseRoutines: Routine[] = firstWeek.routines.map((routine) => ({
+      name: routine.name?.replace(/ - Week \d+$/, "") || routine.name, // Remove week suffix
+      title: routine.title,
+      exercises: routine.exercises,
+    }))
+
+    console.log(`[convertToNonPeriodized] Created ${baseRoutines.length} base routines from first week`)
+
+    return {
+      ...program,
+      is_periodized: false,
+      routines: baseRoutines,
+      weeks: undefined, // Remove the weeks array
+    }
+  }
+
+  /**
+   * Toggle periodization and convert program structure accordingly
+   */
+  togglePeriodization(program: Program): Program {
+    console.log(`[togglePeriodization] Current periodization: ${program.is_periodized}`)
+
+    if (program.is_periodized) {
+      return this.convertToNonPeriodized(program)
+    } else {
+      return this.convertToPeriodized(program)
+    }
+  }
+
   /**
    * Ensures an exercise exists in either global or user's custom collection
    * Creates it if it doesn't exist
@@ -166,7 +283,7 @@ export class ProgramConversionService {
   /**
    * Generate a meaningful routine name based on available data
    */
-  private generateRoutineName(routineData: any, weekNumber: number, routineIndex: number): string {
+  private generateRoutineName(routineData: any, weekNumber: number, routineIndex = 0): string {
     console.log(`[generateRoutineName] Generating name for routine data:`, {
       routine_name: routineData.routine_name,
       name: routineData.name,
@@ -938,15 +1055,16 @@ export class ProgramConversionService {
               id: `${routineId}-exercise-${exerciseIndex}`,
               name: exercise.name,
               notes: exercise.notes || "",
-              sets: Array.from({ length: exercise.sets || 1 }, (_, setIndex) => ({
-                id: `${routineId}-exercise-${exerciseIndex}-set-${setIndex}`,
-                notes: exercise.rpe
-                  ? `RPE: ${exercise.rpe} | Rest: ${exercise.rest || "-"}`
-                  : `Rest: ${exercise.rest || "-"}`,
-                reps: exercise.reps || "",
-                type: "normal",
-                weight: exercise.weight || "",
-              })),
+              sets: Array.from({ length: exercise.sets?.length || 1 }, (_, setIndex) => {
+                const set = exercise.sets?.[setIndex] || {}
+                return {
+                  id: `${routineId}-exercise-${exerciseIndex}-set-${setIndex}`,
+                  notes: set.rpe ? `RPE: ${set.rpe} | Rest: ${set.rest || "-"}` : `Rest: ${set.rest || "-"}`,
+                  reps: set.reps || "",
+                  type: "normal",
+                  weight: set.weight || "",
+                }
+              }),
             })) || [],
         }
 

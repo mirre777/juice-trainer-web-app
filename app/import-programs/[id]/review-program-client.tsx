@@ -2,24 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 
 interface Exercise {
   name: string
@@ -91,6 +74,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [customMessage, setCustomMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isTogglingPeriodization, setIsTogglingPeriodization] = useState(false)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
@@ -339,6 +323,64 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     }
   }
 
+  const handleTogglePeriodization = async (checked: boolean) => {
+    if (!programState) return
+
+    setIsTogglingPeriodization(true)
+
+    try {
+      console.log("[ReviewProgramClient] Toggling periodization:", {
+        from: programState.is_periodized,
+        to: checked,
+      })
+
+      const response = await fetch("/api/programs/toggle-periodization", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          programData: {
+            ...programState,
+            is_periodized: checked, // Set the target state
+          },
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to toggle periodization")
+      }
+
+      const result = await response.json()
+      console.log("[ReviewProgramClient] Periodization toggled successfully:", result)
+
+      // Update the program state with the converted structure
+      setProgramState(result.program)
+      setHasChanges(true)
+
+      toast({
+        title: "Periodization Updated",
+        description: checked
+          ? "Program converted to periodized format with different routines per week"
+          : "Program converted to non-periodized format with same routines repeated",
+      })
+
+      // Reset expanded routines to show first routine
+      setExpandedRoutines({ 0: true })
+    } catch (error) {
+      console.error("[ReviewProgramClient] Error toggling periodization:", error)
+      toast({
+        title: "Failed to Toggle Periodization",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsTogglingPeriodization(false)
+    }
+  }
+
   const updateProgramField = (field: keyof Program, value: any) => {
     if (!programState) return
     setProgramState((prev) => ({
@@ -385,486 +427,4 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const addSet = (routineIndex: number, exerciseIndex: number) => {
-    if (!programState) return
-
-    setProgramState((prev) => {
-      const newState = { ...prev! }
-
-      let targetRoutines: Routine[] = []
-
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
-      } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
-
-      const exercise = targetRoutines[routineIndex]?.exercises[exerciseIndex]
-      if (exercise) {
-        if (!exercise.sets) exercise.sets = []
-
-        // Create new set with only the fields that exist in the program
-        const newSet: any = {}
-        if (availableFields.hasReps) newSet.reps = ""
-        if (availableFields.hasWeight) newSet.weight = ""
-        if (availableFields.hasRpe) newSet.rpe = ""
-        if (availableFields.hasRest) newSet.rest = ""
-        if (availableFields.hasNotes) newSet.notes = ""
-
-        exercise.sets.push(newSet)
-      }
-
-      return newState
-    })
-    setHasChanges(true)
-  }
-
-  const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    if (!programState) return
-
-    setProgramState((prev) => {
-      const newState = { ...prev! }
-
-      let targetRoutines: Routine[] = []
-
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
-      } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
-
-      const exercise = targetRoutines[routineIndex]?.exercises[exerciseIndex]
-      if (exercise?.sets?.[setIndex]) {
-        const setToDuplicate = { ...exercise.sets[setIndex] }
-        exercise.sets.splice(setIndex + 1, 0, setToDuplicate)
-      }
-
-      return newState
-    })
-    setHasChanges(true)
-  }
-
-  const deleteSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    if (!programState) return
-
-    setProgramState((prev) => {
-      const newState = { ...prev! }
-
-      let targetRoutines: Routine[] = []
-
-      if (newState.weeks && newState.weeks.length > 0) {
-        targetRoutines = newState.weeks[0].routines
-      } else if (newState.routines) {
-        targetRoutines = newState.routines
-      }
-
-      const exercise = targetRoutines[routineIndex]?.exercises[exerciseIndex]
-      if (exercise?.sets && exercise.sets.length > 1) {
-        exercise.sets.splice(setIndex, 1)
-      }
-
-      return newState
-    })
-    setHasChanges(true)
-  }
-
-  // Calculate dynamic column spans based on available fields
-  const getColumnConfig = () => {
-    const columns = []
-    let totalCols = 4 // Exercise name + Sets + Actions (minimum)
-
-    if (availableFields.hasReps) {
-      columns.push({ key: "reps", label: "Reps", span: 2 })
-      totalCols += 2
-    }
-    if (availableFields.hasWeight) {
-      columns.push({ key: "weight", label: "Weight", span: 2 })
-      totalCols += 2
-    }
-    if (availableFields.hasRpe) {
-      columns.push({ key: "rpe", label: "RPE", span: 1 })
-      totalCols += 1
-    }
-    if (availableFields.hasRest) {
-      columns.push({ key: "rest", label: "Rest", span: 2 })
-      totalCols += 2
-    }
-
-    return { columns, totalCols }
-  }
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-          <p className="text-gray-500">Loading program...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Error state
-  if (error || !programState) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-gray-400 mb-4">
-            <div className="mx-auto h-12 w-12 rounded-full border-2 border-gray-200 flex items-center justify-center">
-              <span className="text-2xl">😞</span>
-            </div>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Program Not Found</h3>
-          <p className="text-gray-500 mb-4">
-            {error ||
-              "We couldn't find the workout program you're looking for. It might have been deleted or the link is incorrect."}
-          </p>
-          <Button onClick={() => router.push("/import-programs")} className="bg-green-500 hover:bg-green-600">
-            Go to Import Programs
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  // Get routines from either weeks or direct routines
-  const currentRoutines =
-    programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
-
-  const { columns, totalCols } = getColumnConfig()
-
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={() => router.push("/import-programs")}
-        >
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          Back
-        </Button>
-      </div>
-
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
-          <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowConfirmDialog(true)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSaveChanges}
-            disabled={isSaving || !hasChanges}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-          <Button onClick={() => setShowSendDialog(true)} className="bg-green-500 hover:bg-green-600">
-            Send to Client
-          </Button>
-        </div>
-      </div>
-
-      {/* Program Settings */}
-      <Card className="p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <Label htmlFor="program-title">Program Title</Label>
-            <Input
-              id="program-title"
-              value={programState.name || ""}
-              onChange={(e) => updateProgramField("name", e.target.value)}
-              className="w-full"
-            />
-          </div>
-          <div>
-            <Label htmlFor="program-weeks">Program Weeks</Label>
-            <Input
-              id="program-weeks"
-              type="number"
-              value={programState.duration_weeks || 1}
-              onChange={(e) => updateProgramField("duration_weeks", Number(e.target.value) || 1)}
-              min="1"
-              className="w-full"
-            />
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <Label htmlFor="program-notes">Program Notes</Label>
-          <Textarea
-            id="program-notes"
-            value={programState.notes || ""}
-            onChange={(e) => updateProgramField("notes", e.target.value)}
-            className="w-full min-h-[100px]"
-            placeholder="Add notes about this program..."
-          />
-        </div>
-
-        {/* Periodization Toggle */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-          <div>
-            <h3 className="font-medium text-gray-900">Periodization</h3>
-            <p className="text-sm text-gray-600">
-              {programState.is_periodized
-                ? "This program has different routines for each week"
-                : "Same routines repeated each week"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={programState.is_periodized || false}
-              onCheckedChange={(checked) => updateProgramField("is_periodized", checked)}
-            />
-            <span className="text-sm text-gray-600">Periodized</span>
-          </div>
-        </div>
-      </Card>
-
-      {/* Routines */}
-      {currentRoutines && currentRoutines.length > 0 ? (
-        <div className="space-y-4">
-          {currentRoutines.map((routine, routineIndex) => (
-            <div key={routineIndex} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div
-                className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
-                onClick={() => toggleRoutineExpansion(routineIndex)}
-              >
-                <div className="flex items-center">
-                  <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white mr-3">
-                    {routine.name?.charAt(0) || "R"}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">
-                      {routine.name || routine.title || `Routine ${routineIndex + 1}`}
-                    </h3>
-                    <p className="text-sm text-gray-500">{routine.exercises?.length || 0} exercises</p>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm">
-                  {expandedRoutines[routineIndex] ? (
-                    <ChevronUp className="h-5 w-5" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5" />
-                  )}
-                </Button>
-              </div>
-
-              {expandedRoutines[routineIndex] && (
-                <div className="p-4">
-                  {routine.exercises && routine.exercises.length > 0 ? (
-                    <div>
-                      {/* Dynamic Header Row */}
-                      <div
-                        className={`grid gap-4 py-2 px-4 bg-gray-100 rounded-t-lg text-sm font-medium text-gray-600`}
-                        style={{
-                          gridTemplateColumns: `4fr 1fr ${columns.map((col) => `${col.span}fr`).join(" ")} 2fr`,
-                        }}
-                      >
-                        <div>Exercise</div>
-                        <div className="text-center">Sets</div>
-                        {columns.map((col) => (
-                          <div key={col.key} className="text-center">
-                            {col.label}
-                          </div>
-                        ))}
-                        <div className="text-right">Actions</div>
-                      </div>
-
-                      {routine.exercises.map((exercise, exerciseIndex) => (
-                        <div key={exerciseIndex}>
-                          {exercise.sets && exercise.sets.length > 0 ? (
-                            exercise.sets.map((set, setIndex) => (
-                              <div
-                                key={setIndex}
-                                className={`grid gap-4 py-3 px-4 border-b border-gray-200 items-center`}
-                                style={{
-                                  gridTemplateColumns: `4fr 1fr ${columns.map((col) => `${col.span}fr`).join(" ")} 2fr`,
-                                }}
-                              >
-                                <div>
-                                  {setIndex === 0 && (
-                                    <div>
-                                      <div className="font-medium text-gray-900">{exercise.name}</div>
-                                      {exercise.notes && (
-                                        <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="text-center text-sm text-gray-600">
-                                  {setIndex === 0 ? exercise.sets.length : ""}
-                                </div>
-
-                                {/* Dynamic Field Columns */}
-                                {columns.map((col) => (
-                                  <div key={col.key} className="text-center">
-                                    <Input
-                                      value={set[col.key as keyof typeof set] || ""}
-                                      onChange={(e) =>
-                                        updateSetField(routineIndex, exerciseIndex, setIndex, col.key, e.target.value)
-                                      }
-                                      className="text-center border-0 p-0 h-7 focus:ring-0"
-                                      placeholder={
-                                        col.key === "reps"
-                                          ? "10"
-                                          : col.key === "rpe"
-                                            ? "7"
-                                            : col.key === "rest"
-                                              ? "60s"
-                                              : ""
-                                      }
-                                    />
-                                  </div>
-                                ))}
-
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
-                                  >
-                                    <Copy className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div
-                              className={`grid gap-4 py-4 px-4 border-b border-gray-200 items-center`}
-                              style={{ gridTemplateColumns: `4fr ${totalCols - 6}fr 2fr` }}
-                            >
-                              <div>
-                                <div className="font-medium text-gray-900">{exercise.name}</div>
-                                {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
-                              </div>
-                              <div className="text-center text-gray-500">No sets defined</div>
-                              <div className="flex justify-end">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => addSet(routineIndex, exerciseIndex)}
-                                >
-                                  <Plus className="h-4 w-4 text-gray-400" />
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">No exercises found in this routine.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-          <div className="text-gray-400 mb-2">
-            <ChevronDown className="mx-auto h-12 w-12" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">No routines found</h3>
-          <p className="text-gray-500 mb-4">This program doesn't have any workout routines yet.</p>
-        </div>
-      )}
-
-      {/* Send to Client Dialog */}
-      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send Program to Client</DialogTitle>
-            <DialogDescription>
-              Select a client to send "{programState.name || programState.program_title}" to their mobile app.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="client-select">Select Client</Label>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a client..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-xs">
-                          {client.initials || client.name?.charAt(0) || "?"}
-                        </div>
-                        <span>{client.name}</span>
-                        <Badge variant="outline" className="ml-auto text-xs">
-                          {client.status || "Active"}
-                        </Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="custom-message">Custom Message (Optional)</Label>
-              <Textarea
-                id="custom-message"
-                placeholder="Add a personal message for your client..."
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendToClient}
-              disabled={!selectedClientId || isSending}
-              className="bg-green-500 hover:bg-green-600"
-            >
-              {isSending ? "Sending..." : "Send Program"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Continue Editing
-            </Button>
-            <Button variant="destructive" onClick={() => router.push("/import-programs")}>
-              Discard Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+    if (!programState)\
