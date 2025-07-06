@@ -297,7 +297,7 @@ export class ProgramConversionService {
         availableKeys: Object.keys(programData || {}),
       })
 
-      const timestamp = new Date()
+      const timestamp = Timestamp.now()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
       // Handle periodized programs (with weeks array)
@@ -344,21 +344,26 @@ export class ProgramConversionService {
         }
       }
 
-      // Create the program document (based on uploadPeriodizedProgram.js)
+      // Create the program document - MATCH THE EXACT STRUCTURE OF THE WORKING PROGRAM
       const programId = uuidv4()
+
+      // Use Firestore Timestamp for consistency with working programs
+      const firestoreTimestamp = timestamp
+
       const program = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
-        notes: programData.program_notes || programData.notes || "",
-        startedAt: timestamp.toISOString(),
-        duration: programData.program_weeks || programData.weeks?.length || programData.duration || 4,
-        createdAt: timestamp.toISOString(),
-        updated_at: timestamp.toISOString(),
+        notes: "", // Always empty string, never null
+        // Use Firestore Timestamp objects instead of ISO strings to match working program
+        startedAt: firestoreTimestamp,
+        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
+        createdAt: firestoreTimestamp,
+        updated_at: firestoreTimestamp,
         routines: routineMap,
-        // Add these additional fields that might be required
-        program_URL: programData.program_URL || "",
-        isActive: true,
-        status: "active",
+        // Remove the extra fields that might be causing issues
+        // program_URL: "",
+        // isActive: true,
+        // status: "active",
       }
 
       // Save program to Firestore
@@ -370,6 +375,8 @@ export class ProgramConversionService {
         totalRoutines: routineMap.length,
         weeks: program.duration,
         routineMap: routineMap.slice(0, 3), // Show first 3 for debugging
+        timestampType: typeof program.startedAt,
+        durationType: typeof program.duration,
       })
 
       return programId
