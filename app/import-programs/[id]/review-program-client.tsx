@@ -8,9 +8,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface Exercise {
   name: string
@@ -108,22 +117,22 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   // FIXED: Get current routines with fallback logic
   const currentRoutines = useMemo(() => {
     if (!programState) return []
-    
+
     const displayAllWeeks = programState.is_periodized && programState.weeks && programState.weeks.length > 0
-    
+
     if (displayAllWeeks) {
       return [] // Will show weeks view instead
     }
-    
+
     // For non-periodized, check routines array first
     let routines = programState.routines || []
-    
+
     // CRITICAL FIX: If routines array is empty but we have weeks, use weeks[0].routines
     if (routines.length === 0 && programState.weeks && programState.weeks.length > 0) {
       routines = programState.weeks[0]?.routines || []
       debugLog("Using fallback routines from weeks[0]:", routines.length)
     }
-    
+
     return routines
   }, [programState])
 
@@ -143,8 +152,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     }
 
     // FIXED: Use currentRoutines which handles the fallback logic
-    const routinesToCheck = currentRoutines.length > 0 ? currentRoutines : 
-      (programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : [])
+    const routinesToCheck =
+      currentRoutines.length > 0
+        ? currentRoutines
+        : programState.weeks && programState.weeks.length > 0
+          ? programState.weeks[0].routines
+          : []
 
     debugLog("Routines for field analysis:", routinesToCheck)
 
@@ -421,7 +434,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         // FIXED: Get base routines with proper fallback logic
         let baseRoutines: Routine[] = programState.routines || []
-        
+
         // CRITICAL FIX: If routines array is empty, check weeks[0].routines
         if (baseRoutines.length === 0 && programState.weeks && programState.weeks.length > 0) {
           baseRoutines = programState.weeks[0]?.routines || []
@@ -1241,4 +1254,189 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                       )}
                                       <td className="p-2">
                                         <div className="flex gap-1">
-                                          <Button\
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={createSafeClickHandler(
+                                              () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                              `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
+                                            title="Duplicate set"
+                                          >
+                                            <Copy className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={createSafeClickHandler(
+                                              () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                              `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
+                                            title="Remove set"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="mt-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={createSafeClickHandler(
+                                    () => addSet(routineIndex, exerciseIndex),
+                                    `addSet-${routineIndex}-${exerciseIndex}`,
+                                  )}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Set
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No routines found in this program.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Send to Client Dialog */}
+      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Program to Client</DialogTitle>
+            <DialogDescription>Select a client to send this program to.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="client-select">Select Client</Label>
+              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name} {client.email && `(${client.email})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="custom-message">Custom Message (Optional)</Label>
+              <Textarea
+                id="custom-message"
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Add a personal message for your client..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSendDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")} disabled={isSending}>
+              {isSending ? "Sending..." : "Send Program"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Periodization Dialog */}
+      <Dialog open={showPeriodizationDialog} onOpenChange={setShowPeriodizationDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {periodizationAction === "to-periodized" ? "Convert to Periodized" : "Convert to Non-Periodized"}
+            </DialogTitle>
+            <DialogDescription>
+              {periodizationAction === "to-periodized"
+                ? "Select which week's routines to use as the template, then specify how many weeks the new program should run for."
+                : "Select which week's routines to keep for the non-periodized program."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {periodizationAction === "to-periodized" ? (
+              <div>
+                <Label htmlFor="weeks-count">Number of Weeks</Label>
+                <Input
+                  id="weeks-count"
+                  type="number"
+                  min="1"
+                  max="52"
+                  value={numberOfWeeks}
+                  onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
+                />
+                <p className="text-sm text-gray-600 mt-1">
+                  Week 1's routines will be copied to each of the {numberOfWeeks} weeks.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="week-select">Select Week to Keep</Label>
+                <Select
+                  value={selectedWeekToKeep.toString()}
+                  onValueChange={(v) => setSelectedWeekToKeep(Number.parseInt(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {programState.weeks?.map((week) => (
+                      <SelectItem key={week.week_number} value={week.week_number.toString()}>
+                        Week {week.week_number} ({week.routines?.length || 0} routines)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPeriodizationDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
+              {periodizationAction === "to-periodized" ? `Create ${numberOfWeeks} Weeks` : "Convert"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Leave Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Are you sure you want to leave without saving?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+              Stay
+            </Button>
+            <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
+              Leave Without Saving
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
