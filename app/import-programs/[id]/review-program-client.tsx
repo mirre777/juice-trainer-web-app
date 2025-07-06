@@ -91,7 +91,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [customMessage, setCustomMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [isTogglingPeriodization, setIsTogglingPeriodization] = useState(false)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
@@ -344,8 +343,13 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     }
   }
 
-  const handleTogglePeriodization = async (checked: boolean) => {
+  const handleTogglePeriodization = (checked: boolean) => {
     if (!programState) return
+
+    console.log("[ReviewProgramClient] Toggle periodization:", {
+      checked,
+      currentlyPeriodized: programState.is_periodized,
+    })
 
     // Determine the action needed
     if (checked && !programState.is_periodized) {
@@ -362,92 +366,122 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   }
 
   const confirmPeriodizationChange = () => {
-    if (!programState || !periodizationAction) return
-
-    if (periodizationAction === "to-periodized") {
-      // Convert non-periodized to periodized by duplicating routines
-      const baseRoutines = programState.routines || []
-
-      if (baseRoutines.length === 0) {
-        toast({
-          title: "No Routines Found",
-          description: "Cannot convert to periodized - no routines found in the program.",
-          variant: "destructive",
-        })
-        setShowPeriodizationDialog(false)
-        return
-      }
-
-      const weeks: Week[] = []
-
-      for (let weekNum = 1; weekNum <= numberOfWeeks; weekNum++) {
-        weeks.push({
-          week_number: weekNum,
-          routines: baseRoutines.map((routine, index) => ({
-            ...routine,
-            name: `${routine.name || routine.title || `Routine ${index + 1}`} - Week ${weekNum}`,
-          })),
-        })
-      }
-
-      setProgramState((prev) => ({
-        ...prev!,
-        is_periodized: true,
-        weeks,
-        routines: undefined,
-        duration_weeks: numberOfWeeks,
-      }))
-
-      toast({
-        title: "Converted to Periodized",
-        description: `Program converted to ${numberOfWeeks} weeks with different routines per week`,
-      })
-    } else if (periodizationAction === "to-non-periodized") {
-      // Convert periodized to non-periodized by keeping selected week
-      const selectedWeek = programState.weeks?.find((w) => w.week_number === selectedWeekToKeep)
-      const routinesToKeep = selectedWeek?.routines || []
-
-      if (routinesToKeep.length === 0) {
-        toast({
-          title: "No Routines Found",
-          description: `No routines found in week ${selectedWeekToKeep}. Please select a different week.`,
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Remove week suffixes from routine names
-      const cleanedRoutines = routinesToKeep.map((routine) => ({
-        ...routine,
-        name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
-      }))
-
-      setProgramState((prev) => ({
-        ...prev!,
-        is_periodized: false,
-        routines: cleanedRoutines,
-        weeks: undefined,
-        duration_weeks: 1,
-      }))
-
-      toast({
-        title: "Converted to Non-Periodized",
-        description: `Program converted using routines from Week ${selectedWeekToKeep}`,
-      })
+    if (!programState || !periodizationAction) {
+      console.error("[ReviewProgramClient] Missing program state or action")
+      return
     }
 
-    setHasChanges(true)
-    setShowPeriodizationDialog(false)
-    setPeriodizationAction(null)
-    setExpandedRoutines({ 0: true })
+    console.log("[ReviewProgramClient] Confirming periodization change:", {
+      action: periodizationAction,
+      numberOfWeeks,
+      selectedWeekToKeep,
+    })
+
+    try {
+      if (periodizationAction === "to-periodized") {
+        // Convert non-periodized to periodized by duplicating routines
+        const baseRoutines = programState.routines || []
+
+        if (baseRoutines.length === 0) {
+          toast({
+            title: "No Routines Found",
+            description: "Cannot convert to periodized - no routines found in the program.",
+            variant: "destructive",
+          })
+          setShowPeriodizationDialog(false)
+          setPeriodizationAction(null)
+          return
+        }
+
+        const weeks: Week[] = []
+
+        for (let weekNum = 1; weekNum <= numberOfWeeks; weekNum++) {
+          weeks.push({
+            week_number: weekNum,
+            routines: baseRoutines.map((routine, index) => ({
+              ...routine,
+              name: `${routine.name || routine.title || `Routine ${index + 1}`} - Week ${weekNum}`,
+            })),
+          })
+        }
+
+        setProgramState((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            is_periodized: true,
+            weeks,
+            routines: undefined,
+            duration_weeks: numberOfWeeks,
+          }
+        })
+
+        toast({
+          title: "Converted to Periodized",
+          description: `Program converted to ${numberOfWeeks} weeks with different routines per week`,
+        })
+      } else if (periodizationAction === "to-non-periodized") {
+        // Convert periodized to non-periodized by keeping selected week
+        const selectedWeek = programState.weeks?.find((w) => w.week_number === selectedWeekToKeep)
+        const routinesToKeep = selectedWeek?.routines || []
+
+        if (routinesToKeep.length === 0) {
+          toast({
+            title: "No Routines Found",
+            description: `No routines found in week ${selectedWeekToKeep}. Please select a different week.`,
+            variant: "destructive",
+          })
+          return
+        }
+
+        // Remove week suffixes from routine names
+        const cleanedRoutines = routinesToKeep.map((routine) => ({
+          ...routine,
+          name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
+        }))
+
+        setProgramState((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            is_periodized: false,
+            routines: cleanedRoutines,
+            weeks: undefined,
+            duration_weeks: 1,
+          }
+        })
+
+        toast({
+          title: "Converted to Non-Periodized",
+          description: `Program converted using routines from Week ${selectedWeekToKeep}`,
+        })
+      }
+
+      setHasChanges(true)
+      setShowPeriodizationDialog(false)
+      setPeriodizationAction(null)
+      setExpandedRoutines({ 0: true })
+    } catch (error) {
+      console.error("[ReviewProgramClient] Error in periodization conversion:", error)
+      toast({
+        title: "Conversion Failed",
+        description: "An error occurred during the conversion. Please try again.",
+        variant: "destructive",
+      })
+      setShowPeriodizationDialog(false)
+      setPeriodizationAction(null)
+    }
   }
 
   const updateProgramField = (field: keyof Program, value: any) => {
     if (!programState) return
-    setProgramState((prev) => ({
-      ...prev!,
-      [field]: value,
-    }))
+    setProgramState((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        [field]: value,
+      }
+    })
     setHasChanges(true)
   }
 
@@ -462,7 +496,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     if (!programState) return
 
     setProgramState((prev) => {
-      const newState = { ...prev! }
+      if (!prev) return prev
+
+      const newState = { ...prev }
 
       // Handle both periodized (weeks) and non-periodized (routines) structures
       let targetRoutines: Routine[] = []
@@ -491,7 +527,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     if (!programState) return
 
     setProgramState((prev) => {
-      const newState = { ...prev! }
+      if (!prev) return prev
+
+      const newState = { ...prev }
 
       // Handle both periodized and non-periodized structures
       let targetRoutines: Routine[] = []
@@ -526,7 +564,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     if (!programState) return
 
     setProgramState((prev) => {
-      const newState = { ...prev! }
+      if (!prev) return prev
+
+      const newState = { ...prev }
 
       // Handle both periodized and non-periodized structures
       let targetRoutines: Routine[] = []
@@ -550,7 +590,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     if (!programState) return
 
     setProgramState((prev) => {
-      const newState = { ...prev! }
+      if (!prev) return prev
+
+      const newState = { ...prev }
 
       // Handle both periodized and non-periodized structures
       let targetRoutines: Routine[] = []
@@ -713,10 +755,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
               id="periodization-toggle"
               checked={programState.is_periodized || false}
               onCheckedChange={handleTogglePeriodization}
-              disabled={isTogglingPeriodization}
             />
           </div>
-          {isTogglingPeriodization && <div className="mt-2 text-sm text-blue-600">Converting program structure...</div>}
         </div>
       </Card>
 
