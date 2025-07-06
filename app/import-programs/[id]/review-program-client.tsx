@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft } from "lucide-react"
+import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Exercise {
   name: string
@@ -94,7 +94,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
-  const [isSending, setIsSending] = useState(false)
+  const [isSending, setIsSending] = useState(isSending)
   const [isSaving, setIsSaving] = useState(false)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
@@ -104,6 +104,23 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [periodizationAction, setPeriodizationAction] = useState<"to-periodized" | "to-non-periodized" | null>(null)
   const [selectedWeekToKeep, setSelectedWeekToKeep] = useState<number>(1)
   const [numberOfWeeks, setNumberOfWeeks] = useState<number>(4)
+  const [currentWeekIndex, setCurrentWeekIndex] = useState<number>(0)
+
+  const goToNextWeek = useCallback(() => {
+    if (programState?.weeks && currentWeekIndex < programState.weeks.length - 1) {
+      setCurrentWeekIndex(currentWeekIndex + 1)
+    }
+  }, [currentWeekIndex, programState?.weeks])
+
+  const goToPreviousWeek = useCallback(() => {
+    if (currentWeekIndex > 0) {
+      setCurrentWeekIndex(currentWeekIndex - 1)
+    }
+  }, [currentWeekIndex])
+
+  const goToWeek = useCallback((weekIndex: number) => {
+    setCurrentWeekIndex(weekIndex)
+  }, [])
 
   // FIXED: Get current routines with fallback logic
   const currentRoutines = useMemo(() => {
@@ -900,14 +917,62 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         </div>
 
         {displayAllWeeks ? (
-          // Show all weeks for periodized programs
-          <div className="space-y-6">
-            {programState.weeks?.map((week, weekIndex) => (
-              <Card key={week.week_number} className="border-l-4 border-l-green-500">
+          // Show weeks carousel for periodized programs
+          <div className="space-y-4">
+            {/* Week Navigation Header */}
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={createSafeClickHandler(goToPreviousWeek, "goToPreviousWeek")}
+                  disabled={currentWeekIndex === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+
+                <div className="text-center">
+                  <h3 className="font-semibold text-lg">
+                    Week {programState.weeks?.[currentWeekIndex]?.week_number || 1}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {currentWeekIndex + 1} of {programState.weeks?.length || 0}
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={createSafeClickHandler(goToNextWeek, "goToNextWeek")}
+                  disabled={currentWeekIndex === (programState.weeks?.length || 1) - 1}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Week Dots Indicator */}
+              <div className="flex gap-2">
+                {programState.weeks?.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => goToWeek(index)}
+                    className={`w-3 h-3 rounded-full transition-colors ${
+                      index === currentWeekIndex ? "bg-blue-500" : "bg-gray-300 hover:bg-gray-400"
+                    }`}
+                    title={`Go to Week ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Current Week Content */}
+            {programState.weeks?.[currentWeekIndex] && (
+              <Card className="border-l-4 border-l-green-500">
                 <div className="p-4">
-                  <h3 className="font-semibold text-lg mb-4">Week {week.week_number}</h3>
                   <div className="space-y-4">
-                    {week.routines?.map((routine, routineIndex) => (
+                    {programState.weeks[currentWeekIndex].routines?.map((routine, routineIndex) => (
                       <Card key={routineIndex} className="border-l-4 border-l-blue-500">
                         <div className="p-4">
                           <div
@@ -1101,7 +1166,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                   </div>
                 </div>
               </Card>
-            ))}
+            )}
           </div>
         ) : // Show single routine template for non-periodized programs
         currentRoutines.length > 0 ? (
