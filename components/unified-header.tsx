@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Settings, Menu, X } from "lucide-react"
 import { LogoutButton } from "@/components/auth/logout-button"
 
@@ -19,6 +19,38 @@ export function UnifiedHeader() {
   const [loading, setLoading] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showTaskList, setShowTaskList] = useState(() => {
+    // Initialize from localStorage if available
+    if (typeof window !== "undefined") {
+      const savedTaskListState = localStorage.getItem("taskListOpen")
+      return savedTaskListState ? JSON.parse(savedTaskListState) : false
+    }
+    return false
+  })
+  const [darkMode, setDarkMode] = useState(false)
+  const [tasks, setTasks] = useState(() => {
+    // Initialize tasks from localStorage if available
+    if (typeof window !== "undefined") {
+      const savedTasks = localStorage.getItem("tasks")
+      return savedTasks
+        ? JSON.parse(savedTasks)
+        : [
+            { id: 1, text: "Complete client assessment", completed: false },
+            { id: 2, text: "Send invoice to new clients", completed: true },
+            { id: 3, text: "Prepare workout plan", completed: false },
+          ]
+    }
+    return [
+      { id: 1, text: "Complete client assessment", completed: false },
+      { id: 2, text: "Send invoice to new clients", completed: true },
+      { id: 3, text: "Prepare workout plan", completed: false },
+    ]
+  })
+  const [newTask, setNewTask] = useState("")
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [hasMounted, setHasMounted] = useState(false)
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -93,6 +125,14 @@ export function UnifiedHeader() {
       return pathname === "/" || pathname === "/overview"
     }
     return pathname.startsWith(href)
+  }
+
+  useEffect(() => {
+    setHasMounted(true)
+  }, [])
+
+  if (!hasMounted) {
+    return null
   }
 
   return (
