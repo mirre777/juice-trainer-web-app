@@ -405,8 +405,25 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       if (periodizationAction === "to-periodized") {
         debugLog("Converting to periodized with weeks:", numberOfWeeks)
 
-        const baseRoutines = programState.routines || []
+        // Get routines from the correct location based on current structure
+        let baseRoutines: Routine[] = []
+        if (programState.weeks && programState.weeks.length > 0) {
+          // If already has weeks structure, get routines from first week
+          baseRoutines = programState.weeks[0].routines || []
+        } else {
+          // If non-periodized, get from root routines array
+          baseRoutines = programState.routines || []
+        }
+
         debugLog("Base routines for conversion:", baseRoutines)
+        debugLog("Program structure check:", {
+          hasWeeks: !!programState.weeks,
+          weeksLength: programState.weeks?.length,
+          hasRootRoutines: !!programState.routines,
+          rootRoutinesLength: programState.routines?.length,
+          firstWeekRoutines: programState.weeks?.[0]?.routines?.length,
+          selectedSource: programState.weeks && programState.weeks.length > 0 ? "weeks[0].routines" : "routines",
+        })
 
         if (baseRoutines.length === 0) {
           debugLog("No routines found for conversion")
