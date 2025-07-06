@@ -473,7 +473,7 @@ export function ClientWorkoutView({
             <div className="flex items-center mb-4">
               <h3 className="text-[18px] font-semibold">{currentExercise?.name || "Unknown Exercise"}</h3>
               <Link
-                href={`/demo/exercise-history/${currentExercise?.id || "unknown"}`}
+                href={`/exercise-history/${client?.userId || userId || "unknown"}/${currentExercise?.id || "unknown"}`}
                 className="ml-2 text-xs text-black border-b-2 border-[#D2FF28] px-1 py-0.5 hover:bg-gray-50"
               >
                 View history

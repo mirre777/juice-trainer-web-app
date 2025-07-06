@@ -1,13 +1,15 @@
 import type React from "react"
 import type { FirebaseWorkout } from "@/lib/firebase/workout-service"
+import Link from "next/link"
 
 interface SharedWorkoutDisplayProps {
   workout?: FirebaseWorkout
   userId?: string
   workoutId?: string
+  clientId?: string
 }
 
-const SharedWorkoutDisplay: React.FC<SharedWorkoutDisplayProps> = ({ workout, userId, workoutId }) => {
+const SharedWorkoutDisplay: React.FC<SharedWorkoutDisplayProps> = ({ workout, userId, workoutId, clientId }) => {
   // Add a check for undefined workout
   if (!workout) {
     return (
@@ -88,7 +90,14 @@ const SharedWorkoutDisplay: React.FC<SharedWorkoutDisplayProps> = ({ workout, us
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium">{workout.exercises[0].name}</h3>
-            <button className="text-sm text-blue-600 hover:text-blue-800">View history</button>
+            {clientId && workout.exercises[0].id && (
+              <Link
+                href={`/exercise-history/${clientId}/${workout.exercises[0].id}`}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                View history
+              </Link>
+            )}
           </div>
 
           <div className="mb-2">
