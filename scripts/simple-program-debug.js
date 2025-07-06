@@ -1,43 +1,51 @@
-// Simple debug script that doesn't require Firebase connection
-console.log("=== PROGRAM STRUCTURE ANALYSIS ===")
+// Simple debug script to check program structure
+console.log("=== PROGRAM DEBUG ANALYSIS ===")
 
-// Based on your Firebase screenshot, here's what I observed:
-console.log("\n📊 YOUR CURRENT PROGRAM STRUCTURE:")
-console.log("Document ID: 473a9142-36ed-42f1-823e-381fb27cbed1")
-console.log("Fields:")
-console.log("  createdAt: '2025-07-06T11:45:31.548Z' (ISO string)")
-console.log("  duration: 4 (number)")
-console.log("  id: '473a9142-36ed-42f1-823e-381fb27cbed1' (string)")
-console.log("  isActive: true (boolean)")
-console.log("  name: 'Sample Workout Program' (string)")
-console.log("  notes: '' (empty string)")
-console.log("  program_URL: '' (empty string)")
-console.log("  routines: [array with 2 items]")
-console.log("  startedAt: '2025-07-06T11:45:31.548Z' (ISO string)")
-console.log("  status: 'active' (string)")
-console.log("  updated_at: '2025-07-06T11:45:31.548Z' (ISO string)")
+// Mock data based on what we see in Firebase
+const currentProgram = {
+  id: "473a9142-36ed-42f1-823e-381fb27cbed1",
+  name: "Sample Workout Program",
+  duration: 4,
+  notes: "",
+  createdAt: "2025-07-06T11:45:31.548Z", // ❌ This is an ISO string
+  startedAt: "2025-07-06T11:45:31.548Z", // ❌ This is an ISO string
+  updated_at: "2025-07-06T11:45:31.548Z", // ❌ This is an ISO string
+  program_URL: "", // ❌ Extra field
+  isActive: true, // ❌ Extra field
+  status: "active", // ❌ Extra field
+  routines: [
+    { routineId: "g1be4875-001a-4d4a-8d9b-d0333e4a141a", week: 1, order: 1 },
+    { routineId: "84ce19d9-2776-42ba-94b1-50059dbdc267", week: 1, order: 2 },
+  ],
+}
 
-console.log("\n🔍 IDENTIFIED ISSUES:")
-console.log("1. 🔴 CRITICAL: Timestamps are ISO strings, should be Firestore Timestamps")
-console.log("2. 🟡 WARNING: Extra fields (isActive, status, program_URL) might cause filtering")
-console.log("3. 🟡 INFO: Need to verify routines exist in routines collection")
+const workingProgram = {
+  id: "some-working-id",
+  name: "Working Program",
+  duration: 4,
+  notes: "",
+  createdAt: "Timestamp object", // ✅ Firestore Timestamp
+  startedAt: "Timestamp object", // ✅ Firestore Timestamp
+  updated_at: "Timestamp object", // ✅ Firestore Timestamp
+  // No extra fields
+  routines: [
+    { routineId: "routine-1", week: 1, order: 1 },
+    { routineId: "routine-2", week: 1, order: 2 },
+  ],
+}
 
-console.log("\n✅ RECOMMENDED FIXES:")
-console.log("1. Convert all timestamps to Firestore Timestamp objects")
-console.log("2. Remove extra fields that working programs don't have")
-console.log("3. Ensure routine documents exist with correct structure")
+console.log("🔍 ISSUES FOUND:")
+console.log("1. Timestamps are ISO strings instead of Firestore Timestamp objects")
+console.log("2. Extra fields present: program_URL, isActive, status")
+console.log("3. Mobile app likely filters out programs with wrong timestamp types")
 
-console.log("\n📋 EXPECTED WORKING STRUCTURE:")
-console.log("  createdAt: Timestamp object")
-console.log("  duration: number")
-console.log("  id: string")
-console.log("  name: string")
-console.log("  notes: string (empty)")
-console.log("  routines: array of {order, routineId, week}")
-console.log("  startedAt: Timestamp object")
-console.log("  updated_at: Timestamp object")
+console.log("\n✅ SOLUTION:")
+console.log("Use the updated program conversion service that:")
+console.log("- Creates Timestamp objects with Timestamp.now()")
+console.log("- Removes extra fields")
+console.log("- Ensures proper data types")
 
 console.log("\n🚀 NEXT STEPS:")
-console.log("1. Update program-conversion-service.ts to use Timestamp objects")
-console.log("2. Remove extra fields from program creation")
-console.log("3. Test with a new program assignment")
+console.log("1. Test the updated service in preview environment")
+console.log("2. Create a new program assignment")
+console.log("3. Check if it appears in mobile app")
