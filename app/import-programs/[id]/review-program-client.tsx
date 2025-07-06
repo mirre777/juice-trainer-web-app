@@ -855,24 +855,20 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           </div>
         </div>
         <div className="flex gap-2">
-          {hasChanges && (
-            <>
-              <Button
-                onClick={createSafeClickHandler(handleCancelChanges, "handleCancelChanges")}
-                variant="outline"
-                disabled={isSaving}
-              >
-                Cancel Changes
-              </Button>
-              <Button
-                onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
-                disabled={isSaving}
-                variant="outline"
-              >
-                {isSaving ? "Saving..." : "Save Changes"}
-              </Button>
-            </>
-          )}
+          <Button
+            onClick={createSafeClickHandler(handleCancelChanges, "handleCancelChanges")}
+            variant="outline"
+            disabled={!hasChanges || isSaving}
+          >
+            Cancel Changes
+          </Button>
+          <Button
+            onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
+            disabled={!hasChanges || isSaving}
+            variant="outline"
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
           <Button
             onClick={createSafeClickHandler(() => setShowSendDialog(true), "setShowSendDialog")}
             disabled={!programState}
