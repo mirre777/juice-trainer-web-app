@@ -1,27 +1,32 @@
 import { notFound } from "next/navigation"
 import { cookies } from "next/headers"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
 import ReviewProgramClient from "./review-program-client"
 import { fetchClients } from "@/lib/firebase/client-service"
+import { db } from "@/lib/firebase/firebase"
+import { doc, getDoc } from "firebase/firestore"
 
 interface ImportData {
   id: string
-  name: string
+  name?: string
   program: any
   status: string
-  createdAt: any
-  updatedAt: any
-  userId: string
-  spreadsheetId?: string
-  sheetsUrl?: string
+  created_at: any
+  trainer_id?: string
+}
+
+interface Client {
+  id: string
+  name: string
+  email?: string
+  status?: string
+  initials?: string
 }
 
 async function getImportData(id: string): Promise<ImportData | null> {
-  console.log(`[getImportData] Fetching import data for ID: ${id}`)
-
   try {
-    // Get trainer ID from cookies (NOT hardcoded)
+    console.log(`[getImportData] Fetching import data for ID: ${id}`)
+
+    // Get trainer ID from cookies
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
     const userIdAlt = cookieStore.get("userId")?.value
@@ -32,113 +37,115 @@ async function getImportData(id: string): Promise<ImportData | null> {
       return null
     }
 
-    console.log(`[getImportData] Using trainer ID from cookies: ${trainerId}`)
+    console.log(`[getImportData] Using trainer ID: ${trainerId}`)
 
-    // Try the trainer's sheets-imports collection first
-    console.log(`[getImportData] Trying trainer path: users/${trainerId}/sheets-imports/${id}`)
-    let docRef = doc(db, "users", trainerId, "sheets-imports", id)
-    let docSnap = await getDoc(docRef)
+    // Fetch the actual import document from Firebase - try both possible paths
+    let importDoc
 
-    if (docSnap.exists()) {
-      const data = docSnap.data()
-      console.log(`[getImportData] Found document in trainer collection:`, {
-        id: docSnap.id,
-        name: data.name,
-        hasProgram: !!data.program,
-        status: data.status,
-        programTitle: data.program?.program_title || data.program?.title || data.program?.name,
-      })
+    // First try the subcollection path
+    const subCollectionRef = doc(db, "users", trainerId, "sheets-imports", id)
+    importDoc = await getDoc(subCollectionRef)
 
-      return {
-        id: docSnap.id,
-        ...data,
-      } as ImportData
+    if (!importDoc.exists()) {
+      // Try the root collection path as fallback
+      const rootCollectionRef = doc(db, "sheets_imports", id)
+      importDoc = await getDoc(rootCollectionRef)
     }
 
-    // Try the global sheets_imports collection as fallback
-    console.log(`[getImportData] Trying global path: sheets_imports/${id}`)
-    docRef = doc(db, "sheets_imports", id)
-    docSnap = await getDoc(docRef)
-
-    if (docSnap.exists()) {
-      const data = docSnap.data()
-      console.log(`[getImportData] Found document in global collection:`, {
-        id: docSnap.id,
-        name: data.name,
-        hasProgram: !!data.program,
-        status: data.status,
-        programTitle: data.program?.program_title || data.program?.title || data.program?.name,
-      })
-
-      return {
-        id: docSnap.id,
-        ...data,
-      } as ImportData
+    if (!importDoc.exists()) {
+      console.log(`[getImportData] Import document not found in either location for ID: ${id}`)
+      return null
     }
 
-    console.log(`[getImportData] Document not found in either location`)
-    return null
+    const importData = importDoc.data()
+    console.log(`[getImportData] Found import data:`, {
+      id: importData.id || id,
+      name: importData.name,
+      status: importData.status,
+      hasProgram: !!importData.program,
+      programKeys: importData.program ? Object.keys(importData.program) : [],
+      programTitle: importData.program?.program_title || importData.program?.title || importData.program?.name,
+      userId: importData.userId,
+      trainer_id: importData.trainer_id,
+    })
+
+    return {
+      id: importData.id || id,
+      name:
+        importData.name ||
+        importData.program?.program_title ||
+        importData.program?.title ||
+        importData.program?.name ||
+        "Untitled Program",
+      program: importData.program || null,
+      status: importData.status || "pending",
+      created_at: importData.created_at || importData.createdAt || new Date(),
+      trainer_id: importData.trainer_id || importData.userId || trainerId,
+    }
   } catch (error) {
-    console.error(`[getImportData] Error fetching import data:`, error)
+    console.error("[getImportData] Error fetching import data:", error)
     return null
   }
 }
 
-async function getClients(): Promise<any[]> {
+async function getClients(): Promise<Client[]> {
   try {
-    // Get trainer ID from cookies (NOT hardcoded)
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
     const userIdAlt = cookieStore.get("userId")?.value
     const trainerId = userId || userIdAlt
 
     if (!trainerId) {
-      console.log("[getClients] No trainer ID found in cookies")
+      console.log("No trainer ID found in cookies")
       return []
     }
 
-    console.log(`[getClients] Fetching clients for trainer: ${trainerId}`)
-
+    console.log("Fetching clients for trainer:", trainerId)
     const clients = await fetchClients(trainerId)
-    console.log(`[getClients] Fetched ${clients.length} clients`)
 
     // Transform clients to match expected interface
-    return clients.map((client) => ({
+    const transformedClients: Client[] = clients.map((client) => ({
       id: client.id,
       name: client.name,
-      email: client.email || "",
+      email: client.email,
       status: client.status || "Active",
       initials: client.initials || client.name?.charAt(0) || "?",
     }))
+
+    console.log("Server-side clients fetched:", transformedClients.length)
+    return transformedClients
   } catch (error) {
-    console.error(`[getClients] Error fetching clients:`, error)
+    console.error("Error fetching clients server-side:", error)
     return []
   }
 }
 
-export default async function ReviewProgramPage({ params }: { params: { id: string } }) {
-  console.log(`[ReviewProgramPage] Loading page for import ID: ${params.id}`)
+export default async function ReviewProgramPage({
+  params,
+}: {
+  params: { id: string }
+}) {
+  const { id } = params
 
-  // Fetch import data and clients in parallel
-  const [importData, clients] = await Promise.all([getImportData(params.id), getClients()])
-
-  if (!importData) {
-    console.log(`[ReviewProgramPage] Import data not found, showing 404`)
+  if (!id) {
     notFound()
   }
 
-  console.log(`[ReviewProgramPage] Rendering page with:`, {
-    importId: importData.id,
-    importName: importData.name,
+  console.log(`[ReviewProgramPage] Loading page for import ID: ${id}`)
+
+  // Fetch import data and clients in parallel
+  const [importData, initialClients] = await Promise.all([getImportData(id), getClients()])
+
+  if (!importData) {
+    console.log(`[ReviewProgramPage] No import data found for ID: ${id}`)
+    notFound()
+  }
+
+  console.log(`[ReviewProgramPage] Successfully loaded import data:`, {
+    name: importData.name,
     hasProgram: !!importData.program,
-    clientsCount: clients.length,
-    programStructure: {
-      hasWeeks: !!importData.program?.weeks,
-      hasRoutines: !!importData.program?.routines,
-      weeksLength: importData.program?.weeks?.length,
-      routinesLength: importData.program?.routines?.length,
-    },
+    status: importData.status,
   })
 
-  return <ReviewProgramClient importData={importData} importId={params.id} initialClients={clients} />
+  return <ReviewProgramClient importData={importData} importId={id} initialClients={initialClients} />
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft } from "lucide-react"
 import {
   Dialog,
@@ -28,6 +29,7 @@ interface Exercise {
     rpe?: string
     rest?: string
     notes?: string
+    set_number?: number
   }>
   notes?: string
 }
@@ -70,6 +72,14 @@ interface ReviewProgramClientProps {
   initialClients?: Client[]
 }
 
+interface AvailableFields {
+  hasReps: boolean
+  hasWeight: boolean
+  hasRpe: boolean
+  hasRest: boolean
+  hasNotes: boolean
+}
+
 export default function ReviewProgramClient({ importData, importId, initialClients = [] }: ReviewProgramClientProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -85,6 +95,51 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+
+  // Analyze available fields in the program data
+  const availableFields = useMemo((): AvailableFields => {
+    if (!programState) {
+      return {
+        hasReps: false,
+        hasWeight: false,
+        hasRpe: false,
+        hasRest: false,
+        hasNotes: false,
+      }
+    }
+
+    const currentRoutines =
+      programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
+
+    let hasReps = false
+    let hasWeight = false
+    let hasRpe = false
+    let hasRest = false
+    let hasNotes = false
+
+    // Check all exercises and sets to see what fields exist
+    for (const routine of currentRoutines) {
+      for (const exercise of routine.exercises || []) {
+        for (const set of exercise.sets || []) {
+          if (set.reps !== undefined && set.reps !== null && set.reps !== "") hasReps = true
+          if (set.weight !== undefined && set.weight !== null && set.weight !== "") hasWeight = true
+          if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") hasRpe = true
+          if (set.rest !== undefined && set.rest !== null && set.rest !== "") hasRest = true
+          if (set.notes !== undefined && set.notes !== null && set.notes !== "") hasNotes = true
+        }
+      }
+    }
+
+    console.log("[ReviewProgramClient] Available fields analysis:", {
+      hasReps,
+      hasWeight,
+      hasRpe,
+      hasRest,
+      hasNotes,
+    })
+
+    return { hasReps, hasWeight, hasRpe, hasRest, hasNotes }
+  }, [programState])
 
   // Initialize program state from import data
   useEffect(() => {
@@ -125,7 +180,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         program_title: program.program_title || program.title || program.name,
         description: program.description || "",
         duration_weeks: Number(program.program_weeks || program.duration_weeks || program.weeks?.length || 1),
-        is_periodized: Boolean(program.is_periodized),
+        is_periodized: Boolean(program.is_periodized || (program.weeks && program.weeks.length > 1)),
         weeks: program.weeks || [],
         routines: program.routines || [],
         notes: program.notes || "",
@@ -346,13 +401,16 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       const exercise = targetRoutines[routineIndex]?.exercises[exerciseIndex]
       if (exercise) {
         if (!exercise.sets) exercise.sets = []
-        exercise.sets.push({
-          reps: "",
-          weight: "",
-          rpe: "",
-          rest: "",
-          notes: "",
-        })
+
+        // Create new set with only the fields that exist in the program
+        const newSet: any = {}
+        if (availableFields.hasReps) newSet.reps = ""
+        if (availableFields.hasWeight) newSet.weight = ""
+        if (availableFields.hasRpe) newSet.rpe = ""
+        if (availableFields.hasRest) newSet.rest = ""
+        if (availableFields.hasNotes) newSet.notes = ""
+
+        exercise.sets.push(newSet)
       }
 
       return newState
@@ -409,6 +467,31 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     setHasChanges(true)
   }
 
+  // Calculate dynamic column spans based on available fields
+  const getColumnConfig = () => {
+    const columns = []
+    let totalCols = 4 // Exercise name + Sets + Actions (minimum)
+
+    if (availableFields.hasReps) {
+      columns.push({ key: "reps", label: "Reps", span: 2 })
+      totalCols += 2
+    }
+    if (availableFields.hasWeight) {
+      columns.push({ key: "weight", label: "Weight", span: 2 })
+      totalCols += 2
+    }
+    if (availableFields.hasRpe) {
+      columns.push({ key: "rpe", label: "RPE", span: 1 })
+      totalCols += 1
+    }
+    if (availableFields.hasRest) {
+      columns.push({ key: "rest", label: "Rest", span: 2 })
+      totalCols += 2
+    }
+
+    return { columns, totalCols }
+  }
+
   // Loading state
   if (isLoading) {
     return (
@@ -447,6 +530,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   // Get routines from either weeks or direct routines
   const currentRoutines =
     programState.weeks && programState.weeks.length > 0 ? programState.weeks[0].routines : programState.routines || []
+
+  const { columns, totalCols } = getColumnConfig()
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -510,7 +595,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           </div>
         </div>
 
-        <div>
+        <div className="mb-6">
           <Label htmlFor="program-notes">Program Notes</Label>
           <Textarea
             id="program-notes"
@@ -519,6 +604,25 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             className="w-full min-h-[100px]"
             placeholder="Add notes about this program..."
           />
+        </div>
+
+        {/* Periodization Toggle */}
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div>
+            <h3 className="font-medium text-gray-900">Periodization</h3>
+            <p className="text-sm text-gray-600">
+              {programState.is_periodized
+                ? "This program has different routines for each week"
+                : "Same routines repeated each week"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={programState.is_periodized || false}
+              onCheckedChange={(checked) => updateProgramField("is_periodized", checked)}
+            />
+            <span className="text-sm text-gray-600">Periodized</span>
+          </div>
         </div>
       </Card>
 
@@ -555,13 +659,21 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                 <div className="p-4">
                   {routine.exercises && routine.exercises.length > 0 ? (
                     <div>
-                      <div className="grid grid-cols-12 gap-4 py-2 px-4 bg-gray-100 rounded-t-lg text-sm font-medium text-gray-600">
-                        <div className="col-span-4">Exercise</div>
-                        <div className="col-span-1 text-center">Sets</div>
-                        <div className="col-span-2 text-center">Reps</div>
-                        <div className="col-span-1 text-center">RPE</div>
-                        <div className="col-span-2 text-center">Rest</div>
-                        <div className="col-span-2 text-right">Actions</div>
+                      {/* Dynamic Header Row */}
+                      <div
+                        className={`grid gap-4 py-2 px-4 bg-gray-100 rounded-t-lg text-sm font-medium text-gray-600`}
+                        style={{
+                          gridTemplateColumns: `4fr 1fr ${columns.map((col) => `${col.span}fr`).join(" ")} 2fr`,
+                        }}
+                      >
+                        <div>Exercise</div>
+                        <div className="text-center">Sets</div>
+                        {columns.map((col) => (
+                          <div key={col.key} className="text-center">
+                            {col.label}
+                          </div>
+                        ))}
+                        <div className="text-right">Actions</div>
                       </div>
 
                       {routine.exercises.map((exercise, exerciseIndex) => (
@@ -570,9 +682,12 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                             exercise.sets.map((set, setIndex) => (
                               <div
                                 key={setIndex}
-                                className="grid grid-cols-12 gap-4 py-3 px-4 border-b border-gray-200 items-center"
+                                className={`grid gap-4 py-3 px-4 border-b border-gray-200 items-center`}
+                                style={{
+                                  gridTemplateColumns: `4fr 1fr ${columns.map((col) => `${col.span}fr`).join(" ")} 2fr`,
+                                }}
                               >
-                                <div className="col-span-4">
+                                <div>
                                   {setIndex === 0 && (
                                     <div>
                                       <div className="font-medium text-gray-900">{exercise.name}</div>
@@ -583,44 +698,33 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                                   )}
                                 </div>
 
-                                <div className="col-span-1 text-center text-sm text-gray-600">
+                                <div className="text-center text-sm text-gray-600">
                                   {setIndex === 0 ? exercise.sets.length : ""}
                                 </div>
 
-                                <div className="col-span-2 text-center">
-                                  <Input
-                                    value={set.reps || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
-                                    }
-                                    className="text-center border-0 p-0 h-7 focus:ring-0"
-                                    placeholder="10"
-                                  />
-                                </div>
+                                {/* Dynamic Field Columns */}
+                                {columns.map((col) => (
+                                  <div key={col.key} className="text-center">
+                                    <Input
+                                      value={set[col.key as keyof typeof set] || ""}
+                                      onChange={(e) =>
+                                        updateSetField(routineIndex, exerciseIndex, setIndex, col.key, e.target.value)
+                                      }
+                                      className="text-center border-0 p-0 h-7 focus:ring-0"
+                                      placeholder={
+                                        col.key === "reps"
+                                          ? "10"
+                                          : col.key === "rpe"
+                                            ? "7"
+                                            : col.key === "rest"
+                                              ? "60s"
+                                              : ""
+                                      }
+                                    />
+                                  </div>
+                                ))}
 
-                                <div className="col-span-1 text-center">
-                                  <Input
-                                    value={set.rpe || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
-                                    }
-                                    className="text-center border-0 p-0 h-7 focus:ring-0 w-12"
-                                    placeholder="7"
-                                  />
-                                </div>
-
-                                <div className="col-span-2 text-center">
-                                  <Input
-                                    value={set.rest || ""}
-                                    onChange={(e) =>
-                                      updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
-                                    }
-                                    className="text-center border-0 p-0 h-7 focus:ring-0"
-                                    placeholder="60s"
-                                  />
-                                </div>
-
-                                <div className="col-span-2 flex justify-end gap-2">
+                                <div className="flex justify-end gap-2">
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -641,13 +745,16 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                               </div>
                             ))
                           ) : (
-                            <div className="grid grid-cols-12 gap-4 py-4 px-4 border-b border-gray-200 items-center">
-                              <div className="col-span-4">
+                            <div
+                              className={`grid gap-4 py-4 px-4 border-b border-gray-200 items-center`}
+                              style={{ gridTemplateColumns: `4fr ${totalCols - 6}fr 2fr` }}
+                            >
+                              <div>
                                 <div className="font-medium text-gray-900">{exercise.name}</div>
                                 {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
                               </div>
-                              <div className="col-span-6 text-center text-gray-500">No sets defined</div>
-                              <div className="col-span-2 flex justify-end">
+                              <div className="text-center text-gray-500">No sets defined</div>
+                              <div className="flex justify-end">
                                 <Button
                                   variant="ghost"
                                   size="sm"
