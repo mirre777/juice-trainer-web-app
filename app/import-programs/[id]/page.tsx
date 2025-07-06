@@ -2,6 +2,8 @@ import { notFound } from "next/navigation"
 import { cookies } from "next/headers"
 import ReviewProgramClient from "./review-program-client"
 import { fetchClients } from "@/lib/firebase/client-service"
+import { db } from "@/lib/firebase/firebase"
+import { doc, getDoc } from "firebase/firestore"
 
 interface ImportData {
   id: string
@@ -22,66 +24,47 @@ interface Client {
 
 async function getImportData(id: string): Promise<ImportData | null> {
   try {
-    // Mock data for now - replace with actual Firebase fetch
-    const mockImportData: ImportData = {
-      id,
-      name: "Sample Workout Program",
-      program: {
-        name: "Sample Workout Program",
-        description: "A comprehensive workout program imported from Google Sheets",
-        duration_weeks: 4,
-        is_periodized: false,
-        routines: [
-          {
-            name: "Upper Body Strength",
-            exercises: [
-              {
-                name: "Bench Press",
-                sets: 3,
-                reps: "8-10",
-                weight: "80% 1RM",
-                rest: "2-3 minutes",
-                notes: "Focus on controlled movement",
-              },
-              {
-                name: "Pull-ups",
-                sets: 3,
-                reps: "6-8",
-                weight: "Bodyweight",
-                rest: "2 minutes",
-              },
-            ],
-          },
-          {
-            name: "Lower Body Power",
-            exercises: [
-              {
-                name: "Squats",
-                sets: 4,
-                reps: "5-6",
-                weight: "85% 1RM",
-                rest: "3 minutes",
-                notes: "Explosive concentric phase",
-              },
-              {
-                name: "Romanian Deadlifts",
-                sets: 3,
-                reps: "8-10",
-                weight: "70% 1RM",
-                rest: "2-3 minutes",
-              },
-            ],
-          },
-        ],
-      },
-      status: "completed",
-      created_at: new Date(),
-      trainer_id: "sample-trainer-id",
+    console.log(`[getImportData] Fetching import data for ID: ${id}`)
+
+    // Get trainer ID from cookies
+    const cookieStore = cookies()
+    const userId = cookieStore.get("user_id")?.value
+    const userIdAlt = cookieStore.get("userId")?.value
+    const trainerId = userId || userIdAlt
+
+    if (!trainerId) {
+      console.log("[getImportData] No trainer ID found in cookies")
+      return null
     }
 
-    return mockImportData
+    // Fetch the actual import document from Firebase
+    const importDocRef = doc(db, "users", trainerId, "sheets-imports", id)
+    const importDoc = await getDoc(importDocRef)
+
+    if (!importDoc.exists()) {
+      console.log(`[getImportData] Import document not found: ${id}`)
+      return null
+    }
+
+    const importData = importDoc.data()
+    console.log(`[getImportData] Found import data:`, {
+      id: importData.id,
+      name: importData.name,
+      status: importData.status,
+      hasProgram: !!importData.program,
+      programKeys: importData.program ? Object.keys(importData.program) : [],
+    })
+
+    return {
+      id: importData.id || id,
+      name: importData.name || "Untitled Program",
+      program: importData.program || null,
+      status: importData.status || "pending",
+      created_at: importData.created_at || new Date(),
+      trainer_id: importData.trainer_id || trainerId,
+    }
   } catch (error) {
-    console.error("Error fetching import data:", error)
+    console.error("[getImportData] Error fetching import data:", error)
     return null
   }
 }

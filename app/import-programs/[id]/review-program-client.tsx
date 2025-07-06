@@ -99,14 +99,28 @@ export default function ReviewProgramClient({
         return
       }
 
-      const initialProgram: Program = JSON.parse(JSON.stringify(importData.program))
-      initialProgram.duration_weeks =
-        Number.isInteger(initialProgram.duration_weeks) && initialProgram.duration_weeks > 0
-          ? initialProgram.duration_weeks
-          : 4
-      initialProgram.name = importData.name || initialProgram.name || "Untitled Program"
+      // Use the actual imported program data, not sample data
+      const actualProgram: Program = JSON.parse(JSON.stringify(importData.program))
 
-      setProgramState(initialProgram)
+      // Set reasonable defaults if missing
+      actualProgram.duration_weeks =
+        Number.isInteger(actualProgram.duration_weeks) && actualProgram.duration_weeks > 0
+          ? actualProgram.duration_weeks
+          : actualProgram.weeks?.length || 4
+
+      // Use the import name or program name
+      actualProgram.name = importData.name || actualProgram.name || "Untitled Program"
+
+      console.log("[ReviewProgramClient] Setting actual program state:", {
+        name: actualProgram.name,
+        duration_weeks: actualProgram.duration_weeks,
+        hasWeeks: !!actualProgram.weeks,
+        hasRoutines: !!actualProgram.routines,
+        weeksLength: actualProgram.weeks?.length,
+        routinesLength: actualProgram.routines?.length,
+      })
+
+      setProgramState(actualProgram)
       setIsLoading(false)
     } catch (err) {
       console.error("Error initializing program state:", err)
@@ -225,7 +239,7 @@ export default function ReviewProgramClient({
       console.log("[ReviewProgramClient] Sending program to client:", {
         clientId: selectedClientId,
         clientName: selectedClient.name,
-        programTitle: programData?.name || programState?.name,
+        programTitle: programState?.name,
         importId,
       })
 
@@ -237,7 +251,7 @@ export default function ReviewProgramClient({
         },
         body: JSON.stringify({
           clientId: selectedClientId,
-          programData: programData || programState,
+          programData: programState, // Use the actual program state, not sample data
           customMessage,
           importId,
         }),
@@ -253,7 +267,7 @@ export default function ReviewProgramClient({
 
       toast({
         title: "Program Sent Successfully!",
-        description: `The program "${programData?.name || programState?.name}" has been sent to ${selectedClient.name}.`,
+        description: `The program "${programState?.name}" has been sent to ${selectedClient.name}.`,
       })
 
       // Reset form
@@ -272,20 +286,18 @@ export default function ReviewProgramClient({
   }
 
   const getRoutineCount = () => {
-    return (
-      programData?.routines?.length || programState?.weeks?.[0]?.routines?.length || programState?.routines?.length || 0
-    )
+    return programState?.weeks?.[0]?.routines?.length || programState?.routines?.length || 0
   }
 
   const getTotalExercises = () => {
-    const routines = programData?.routines || programState?.weeks?.[0]?.routines || programState?.routines || []
+    const routines = programState?.weeks?.[0]?.routines || programState?.routines || []
     return routines.reduce((total: number, routine: any) => {
       return total + (routine.exercises?.length || 0)
     }, 0)
   }
 
   const getProgramWeeks = () => {
-    return programData?.duration_weeks || programState?.duration_weeks || 0
+    return programState?.duration_weeks || programState?.weeks?.length || 0
   }
 
   return (
@@ -314,12 +326,8 @@ export default function ReviewProgramClient({
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <h3 className="font-semibold text-xl mb-2">
-              {programData?.name || programState?.name || "Untitled Program"}
-            </h3>
-            {(programData?.description || programState?.description) && (
-              <p className="text-gray-600">{programData?.description || programState?.description}</p>
-            )}
+            <h3 className="font-semibold text-xl mb-2">{programState?.name || "Untitled Program"}</h3>
+            {programState?.description && <p className="text-gray-600">{programState.description}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-6">
@@ -345,11 +353,11 @@ export default function ReviewProgramClient({
             </p>
           </div>
 
-          {(programData?.routines || programState?.weeks?.[0]?.routines || programState?.routines) && (
+          {(programState?.weeks?.[0]?.routines || programState?.routines) && (
             <div className="space-y-2">
               <h4 className="font-medium">Routines:</h4>
               <div className="flex flex-wrap gap-2">
-                {(programData?.routines || programState?.weeks?.[0]?.routines || programState?.routines || []).map(
+                {(programState?.weeks?.[0]?.routines || programState?.routines || []).map(
                   (routine: any, index: number) => (
                     <Badge key={index} variant="secondary">
                       {routine.name}

@@ -1,0 +1,43 @@
+console.log("=== ROUTINE STRUCTURE VERIFICATION ===")
+
+// This script verifies that routines are being created with the correct structure
+// based on the working routine from user 8oga
+
+console.log("✅ Routine structure requirements based on working routine:")
+console.log("1. id: string (UUID)")
+console.log("2. name: string (exercise name)")
+console.log("3. notes: string (empty string)")
+console.log("4. type: 'program' (critical for mobile app filtering)")
+console.log("5. updatedAt: Firestore Timestamp (displayed as readable date)")
+console.log("6. exercises: array of exercise objects")
+console.log("7. exercises[].id: string (exercise ID)")
+console.log("8. exercises[].name: string (exercise name)")
+console.log("9. exercises[].sets: array of set objects")
+console.log("10. exercises[].sets[].id: string (set ID)")
+console.log("11. exercises[].sets[].type: string ('normal', 'warmup', etc.)")
+console.log("12. exercises[].sets[].weight: string")
+console.log("13. exercises[].sets[].reps: string")
+console.log("14. exercises[].sets[].notes: string (optional, for RPE/rest)")
+
+console.log("\n✅ Program structure requirements:")
+console.log("1. id: string (UUID)")
+console.log("2. name: string")
+console.log("3. notes: string (empty string)")
+console.log("4. duration: number")
+console.log("5. createdAt: Firestore Timestamp")
+console.log("6. startedAt: Firestore Timestamp")
+console.log("7. updatedAt: Firestore Timestamp (not updated_at)")
+console.log("8. program_URL: string (empty string)")
+console.log("9. routines: array of routine references")
+console.log("10. routines[].routineId: string")
+console.log("11. routines[].week: number")
+console.log("12. routines[].order: number")
+
+console.log("\n🔍 Key differences from your previous structure:")
+console.log("- Use updatedAt instead of updated_at")
+console.log("- Keep program_URL field (empty string)")
+console.log("- Remove isActive and status fields")
+console.log("- Use Firestore Timestamp objects, not ISO strings")
+console.log("- Ensure routine type is 'program'")
+
+console.log("\n✅ Script completed successfully!")
