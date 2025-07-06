@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { cookies } from "next/headers"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import ReviewProgramClient from "./review-program-client"
@@ -20,9 +21,20 @@ async function getImportData(id: string): Promise<ImportData | null> {
   console.log(`[getImportData] Fetching import data for ID: ${id}`)
 
   try {
-    // Try the trainer's sheets-imports collection first
-    const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1" // This should come from auth context
+    // Get trainer ID from cookies (NOT hardcoded)
+    const cookieStore = cookies()
+    const userId = cookieStore.get("user_id")?.value
+    const userIdAlt = cookieStore.get("userId")?.value
+    const trainerId = userId || userIdAlt
 
+    if (!trainerId) {
+      console.log("[getImportData] No trainer ID found in cookies")
+      return null
+    }
+
+    console.log(`[getImportData] Using trainer ID from cookies: ${trainerId}`)
+
+    // Try the trainer's sheets-imports collection first
     console.log(`[getImportData] Trying trainer path: users/${trainerId}/sheets-imports/${id}`)
     let docRef = doc(db, "users", trainerId, "sheets-imports", id)
     let docSnap = await getDoc(docRef)
@@ -74,24 +86,28 @@ async function getImportData(id: string): Promise<ImportData | null> {
 
 async function getClients(): Promise<any[]> {
   try {
-    const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1" // This should come from auth context
+    // Get trainer ID from cookies (NOT hardcoded)
+    const cookieStore = cookies()
+    const userId = cookieStore.get("user_id")?.value
+    const userIdAlt = cookieStore.get("userId")?.value
+    const trainerId = userId || userIdAlt
+
+    if (!trainerId) {
+      console.log("[getClients] No trainer ID found in cookies")
+      return []
+    }
+
     console.log(`[getClients] Fetching clients for trainer: ${trainerId}`)
 
     const clients = await fetchClients(trainerId)
     console.log(`[getClients] Fetched ${clients.length} clients`)
 
-    // Filter to only active clients with linked accounts for program sending
-    const eligibleClients = clients.filter(
-      (client) => client.status === "Active" && client.userId && client.hasLinkedAccount,
-    )
-
-    console.log(`[getClients] ${eligibleClients.length} eligible clients for program sending`)
-
-    return eligibleClients.map((client) => ({
+    // Transform clients to match expected interface
+    return clients.map((client) => ({
       id: client.id,
       name: client.name,
       email: client.email || "",
-      status: client.status,
+      status: client.status || "Active",
       initials: client.initials || client.name?.charAt(0) || "?",
     }))
   } catch (error) {
