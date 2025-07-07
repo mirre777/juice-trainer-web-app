@@ -226,7 +226,7 @@ export class ProgramConversionService {
     weekNumber: number,
     routineIndex = 0,
     batch: WriteBatch,
-    programId: string, // Add programId parameter
+    programId: string,
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
     const timestamp = Timestamp.now()
@@ -424,9 +424,9 @@ export class ProgramConversionService {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: timestamp,
-        startedAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: timestamp.toDate().toISOString(), // Convert to ISO string for mobile app
+        startedAt: timestamp.toDate().toISOString(), // Convert to ISO string for mobile app
+        updatedAt: timestamp.toDate().toISOString(), // Convert to ISO string for mobile app
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
