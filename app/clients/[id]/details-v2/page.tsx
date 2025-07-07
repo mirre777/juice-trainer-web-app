@@ -8,6 +8,7 @@ import { getClient, updateClient } from "@/lib/firebase/client-service"
 import { getUserWorkouts, getClientWorkouts } from "@/lib/firebase/workout-service"
 import LoadingSpinner from "@/components/shared/loading-spinner"
 import { Button } from "@/components/ui/button"
+import { ClientWorkoutView } from "@/components/client-workout-view"
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -35,7 +36,7 @@ export default function ClientDetailPage() {
       setIsLoading(true)
       try {
         // Get trainer ID from cookie with improved cookie reading
-        const getCookie = (name) => {
+        const getCookie = (name: string) => {
           if (typeof document === "undefined") return null
           const value = `; ${document.cookie}`
           const parts = value.split(`; ${name}=`)
@@ -201,11 +202,13 @@ export default function ClientDetailPage() {
       ]
     }
 
-    // Group by week logic here
+    // Group by week logic here (Monday as start of week)
     const weeks: { [key: string]: any } = {}
     const now = new Date()
     const currentWeekStart = new Date(now)
-    currentWeekStart.setDate(now.getDate() - now.getDay()) // Get start of current week (Sunday)
+    // Set to Monday
+    currentWeekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+    currentWeekStart.setHours(0, 0, 0, 0)
 
     // Format for current week
     const currentWeekKey = `Week of ${currentWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
@@ -230,8 +233,10 @@ export default function ClientDetailPage() {
         workoutDate = new Date() // Fallback to current date
       }
 
+      // Set week start to Monday
       const weekStart = new Date(workoutDate)
-      weekStart.setDate(workoutDate.getDate() - workoutDate.getDay()) // Get start of week (Sunday)
+      weekStart.setDate(workoutDate.getDate() - ((workoutDate.getDay() + 6) % 7))
+      weekStart.setHours(0, 0, 0, 0)
       const weekKey = `Week of ${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
 
       if (!weeks[weekKey]) {
@@ -255,9 +260,19 @@ export default function ClientDetailPage() {
         notes: workout.notes || "",
         personalRecords: workout.personalRecords || [],
         completedAt: workout.completedAt, // Add this line
+        startedAt: workout.startedAt, // Add this for sorting
       }
 
       weeks[weekKey].sessions.push(formattedWorkout)
+    })
+
+    // Sort sessions within each week by startedAt (most recent first)
+    Object.values(weeks).forEach((week: any) => {
+      week.sessions.sort((a: any, b: any) => {
+        const dateA = a.startedAt && a.startedAt.seconds ? new Date(a.startedAt.seconds * 1000) : new Date(a.date)
+        const dateB = b.startedAt && b.startedAt.seconds ? new Date(b.startedAt.seconds * 1000) : new Date(b.date)
+        return dateB.getTime() - dateA.getTime()
+      })
     })
 
     // Sort weeks by date (most recent first)
@@ -355,11 +370,17 @@ export default function ClientDetailPage() {
 
   const toggleWorkoutExpand = (weekIndex: number, workoutIndex: number) => {
     setWorkouts((prevWorkouts) => {
-      const newWorkouts = [...prevWorkouts]
-      const workout = newWorkouts[weekIndex].sessions[workoutIndex]
-      workout.expanded = !workout.expanded
-      return newWorkouts
-    })
+      return prevWorkouts.map((week: any, wIdx: number) => {
+        if (wIdx !== weekIndex) return week;
+        return {
+          ...week,
+          sessions: week.sessions.map((workout: any, sIdx: number) => {
+            if (sIdx !== workoutIndex) return workout;
+            return { ...workout, expanded: !workout.expanded };
+          }),
+        };
+      });
+    });
   }
 
   const handleEditNotesClick = () => {
@@ -378,7 +399,7 @@ export default function ClientDetailPage() {
 
     try {
       // Get trainer ID (same logic as in fetchClientData)
-      const getCookie = (name) => {
+      const getCookie = (name: string) => {
         if (typeof document === "undefined") return null
         const value = `; ${document.cookie}`
         const parts = value.split(`; ${name}=`)
@@ -411,7 +432,7 @@ export default function ClientDetailPage() {
       if (result.success) {
         console.log("✅ Notes saved successfully!")
         // Update local state
-        set_clientData((prev) => ({
+        set_clientData((prev: any) => ({
           ...prev,
           notes: editedNotes,
         }))
@@ -462,18 +483,23 @@ export default function ClientDetailPage() {
         <div className="w-full p-6 flex flex-col">
           <div className="flex">
             <div className="pr-6">
-              <div className="w-24 h-24 bg-gray-200 rounded-full overflow-hidden">
-                <img
-                  src={
-                    clientData.avatarUrl ||
-                    "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/f40cd549493308d07082565b9e3c7aac83a59e0d-9jeksWlxLU0OCSOBLxNuwlrKxabUcv.png" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg"
-                  }
-                  alt={clientData.name || "Client"}
-                  className="w-24 h-24 object-cover"
-                />
+              <div className="w-24 h-24 rounded-full flex items-center justify-center overflow-hidden" style={{ background: clientData.avatarUrl ? undefined : '#D2FF28' }}>
+                {clientData.avatarUrl ? (
+                  <img
+                    src={clientData.avatarUrl}
+                    alt={clientData.name || "Client"}
+                    className="w-24 h-24 object-cover"
+                  />
+                ) : (
+                  <span className="text-black text-4xl font-bold select-none">
+                    {(() => {
+                      if (!clientData.name) return "?";
+                      const words = clientData.name.trim().split(/\s+/);
+                      if (words.length === 1) return words[0][0].toUpperCase();
+                      return (words[0][0] + words[1][0]).toUpperCase();
+                    })()}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex flex-col">
@@ -624,10 +650,7 @@ export default function ClientDetailPage() {
                         <Calendar className="w-4 h-4 text-gray-500" />
                       </div>
                       <div className="text-gray-500 text-base font-normal font-secondary leading-normal">
-                        {weekData.week}{" "}
-                        {weekData.sessions.some((session: any) => !session.completedAt) && (
-                          <span className="text-lime-600 font-medium">(Happening Now)</span>
-                        )}
+                        {weekData.week}
                       </div>
                     </div>
                   </div>
@@ -679,48 +702,34 @@ export default function ClientDetailPage() {
 
                       {workout.expanded && (
                         <div className="px-4 py-4 border-t border-gray-200">
-                          {/* Workout Notes */}
-                          {workout.notes && (
-                            <div className="mb-4 p-3 bg-gray-50 rounded-md">
-                              <p className="text-sm font-medium text-gray-700 mb-1">Notes:</p>
-                              <p className="text-sm text-gray-600">{workout.notes}</p>
-                            </div>
-                          )}
-
-                          {/* Exercises */}
-                          {workout.exercises && workout.exercises.length > 0 ? (
-                            <div className="space-y-6">
-                              {workout.exercises.map((exercise: any, exerciseIndex: number) => (
-                                <div key={exerciseIndex}>
-                                  <div className="text-gray-900 font-medium font-sans mb-2">
-                                    {exercise.name || "Unnamed Exercise"}
-                                  </div>
-
-                                  {exercise.sets && exercise.sets.length > 0 && (
-                                    <div className="space-y-1">
-                                      {exercise.sets.map((set: any, setIndex: number) => (
-                                        <div key={setIndex} className="flex items-start">
-                                          <div className="w-14 text-gray-700 font-medium">Set {setIndex + 1}:</div>
-                                          <div className="w-24 text-gray-700">
-                                            {set.weight ? `${set.weight} kg` : "N/A"} × {set.reps || "N/A"}
-                                          </div>
-                                          {set.type && set.type.toLowerCase() === "warmup" && (
-                                            <div className="text-gray-500 ml-2">Warm-up</div>
-                                          )}
-                                          {set.progress && (
-                                            <div className="text-green-500 ml-2">+{set.progress} from last session</div>
-                                          )}
-                                          {set.isPR && <div className="text-amber-500 ml-2">🏆 PR</div>}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 text-center py-2">No exercises recorded</p>
-                          )}
+                          <ClientWorkoutView
+                            client={{
+                              id: clientData.id,
+                              name: clientData.name,
+                              image: clientData.avatarUrl,
+                              userId: clientData.userId,
+                              programWeek: clientData.programWeek,
+                              programTotal: clientData.programTotal,
+                              daysCompleted: clientData.daysCompleted,
+                              daysTotal: clientData.daysTotal,
+                              date: workout.date,
+                            }}
+                            workout={{
+                              id: workout.id,
+                              name: workout.name,
+                              focus: workout.focus,
+                              clientNote: workout.notes,
+                              date: workout.date,
+                              completedAt: workout.completedAt,
+                              userId: clientData.userId,
+                              clientId: clientData.id,
+                              createdAt: workout.createdAt,
+                              startedAt: workout.startedAt,
+                            }}
+                            exercises={workout.exercises}
+                            personalRecords={workout.personalRecords}
+                            showInteractionButtons={false}
+                          />
                         </div>
                       )}
                     </div>
