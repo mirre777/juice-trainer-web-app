@@ -1,5 +1,5 @@
 import { db } from "./firebase"
-import { collection, doc, setDoc, getDoc, getDocs, query, where, Timestamp } from "firebase/firestore"
+import { collection, doc, setDoc, getDoc, getDocs, Timestamp } from "firebase/firestore"
 import { fetchClients } from "./client-service"
 import { v4 as uuidv4 } from "uuid"
 
@@ -54,7 +54,8 @@ export interface MobileExercise {
 }
 
 interface Exercise {
-  name: string
+  name?: string
+  id?: string // Handle both name and id fields
   sets?: Array<{
     reps?: string | number
     weight?: string | number
@@ -95,54 +96,86 @@ interface Program {
 export class ProgramConversionService {
   /**
    * Ensures an exercise exists in either global or user's custom collection
-   * Creates it if it doesn't exist
+   * OPTIMIZED: Batch check exercises to reduce Firebase calls
    */
-  private async ensureExerciseExists(userId: string, exerciseName: string): Promise<string> {
-    console.log(`[ensureExerciseExists] Checking for exercise: ${exerciseName}`)
+  private async ensureExercisesExist(userId: string, exerciseNames: string[]): Promise<Map<string, string>> {
+    console.log(`[ensureExercisesExist] Checking ${exerciseNames.length} exercises for user: ${userId}`)
+
+    const exerciseMap = new Map<string, string>()
+    const uniqueNames = [...new Set(exerciseNames.filter((name) => name && name.trim()))]
+
+    if (uniqueNames.length === 0) {
+      return exerciseMap
+    }
 
     try {
-      // First check global exercises collection
+      // Batch check global exercises
       const globalExercisesRef = collection(db, "exercises")
-      const globalQuery = query(globalExercisesRef, where("name", "==", exerciseName))
-      const globalSnapshot = await getDocs(globalQuery)
+      const globalSnapshot = await getDocs(globalExercisesRef)
 
-      if (!globalSnapshot.empty) {
-        console.log(`[ensureExerciseExists] Found in global collection: ${globalSnapshot.docs[0].id}`)
-        return globalSnapshot.docs[0].id
+      globalSnapshot.docs.forEach((doc) => {
+        const data = doc.data()
+        if (data.name && uniqueNames.includes(data.name)) {
+          exerciseMap.set(data.name, doc.id)
+        }
+      })
+
+      // Check remaining exercises in user's collection
+      const remainingNames = uniqueNames.filter((name) => !exerciseMap.has(name))
+
+      if (remainingNames.length > 0) {
+        const userExercisesRef = collection(db, "users", userId, "exercises")
+        const userSnapshot = await getDocs(userExercisesRef)
+
+        userSnapshot.docs.forEach((doc) => {
+          const data = doc.data()
+          if (data.name && remainingNames.includes(data.name)) {
+            exerciseMap.set(data.name, doc.id)
+          }
+        })
       }
 
-      // Check user's custom exercises collection
-      const userExercisesRef = collection(db, "users", userId, "exercises")
-      const userQuery = query(userExercisesRef, where("name", "==", exerciseName))
-      const userSnapshot = await getDocs(userQuery)
+      // Create missing exercises in batch
+      const missingNames = uniqueNames.filter((name) => !exerciseMap.has(name))
 
-      if (!userSnapshot.empty) {
-        console.log(`[ensureExerciseExists] Found in user collection: ${userSnapshot.docs[0].id}`)
-        return userSnapshot.docs[0].id
+      if (missingNames.length > 0) {
+        console.log(`[ensureExercisesExist] Creating ${missingNames.length} missing exercises`)
+
+        const timestamp = Timestamp.now()
+        const userExercisesRef = collection(db, "users", userId, "exercises")
+
+        // Create exercises in parallel but limit concurrency
+        const batchSize = 5
+        for (let i = 0; i < missingNames.length; i += batchSize) {
+          const batch = missingNames.slice(i, i + batchSize)
+
+          await Promise.all(
+            batch.map(async (exerciseName) => {
+              const exerciseId = uuidv4()
+
+              const exerciseDoc: MobileExercise = {
+                id: exerciseId,
+                name: exerciseName,
+                muscleGroup: "Other",
+                isCardio: false,
+                isFullBody: false,
+                isMobility: false,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+                deletedAt: null,
+              }
+
+              await setDoc(doc(userExercisesRef, exerciseId), exerciseDoc)
+              exerciseMap.set(exerciseName, exerciseId)
+            }),
+          )
+        }
       }
 
-      // Create new exercise in user's collection
-      const exerciseId = uuidv4()
-      const timestamp = Timestamp.now()
-
-      const exerciseDoc: MobileExercise = {
-        id: exerciseId,
-        name: exerciseName,
-        muscleGroup: "Other",
-        isCardio: false,
-        isFullBody: false,
-        isMobility: false,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        deletedAt: null,
-      }
-
-      await setDoc(doc(userExercisesRef, exerciseId), exerciseDoc)
-      console.log(`[ensureExerciseExists] ✅ Created new exercise: ${exerciseName} with ID: ${exerciseId}`)
-
-      return exerciseId
+      console.log(`[ensureExercisesExist] ✅ Processed ${exerciseMap.size} exercises`)
+      return exerciseMap
     } catch (error) {
-      console.error(`[ensureExerciseExists] Error processing exercise ${exerciseName}:`, error)
+      console.error(`[ensureExercisesExist] Error processing exercises:`, error)
       throw error
     }
   }
@@ -151,16 +184,6 @@ export class ProgramConversionService {
    * Generate a meaningful routine name based on available data
    */
   private generateRoutineName(routineData: any, weekNumber: number, routineIndex = 0): string {
-    console.log(`[generateRoutineName] Generating name for routine data:`, {
-      routine_name: routineData.routine_name,
-      name: routineData.name,
-      day: routineData.day,
-      title: routineData.title,
-      weekNumber,
-      routineIndex,
-      availableKeys: Object.keys(routineData || {}),
-    })
-
     // Strategy 1: Use explicit routine name fields
     if (routineData.routine_name && typeof routineData.routine_name === "string" && routineData.routine_name.trim()) {
       return routineData.routine_name.trim()
@@ -182,8 +205,8 @@ export class ProgramConversionService {
     // Strategy 3: Generate name from exercise names
     if (routineData.exercises && Array.isArray(routineData.exercises) && routineData.exercises.length > 0) {
       const exerciseNames = routineData.exercises
-        .filter((ex) => ex && ex.name && typeof ex.name === "string")
-        .map((ex) => ex.name.trim())
+        .filter((ex) => ex && (ex.name || ex.id) && typeof (ex.name || ex.id) === "string")
+        .map((ex) => (ex.name || ex.id).trim())
         .slice(0, 2)
 
       if (exerciseNames.length > 0) {
@@ -192,143 +215,105 @@ export class ProgramConversionService {
       }
     }
 
-    // Strategy 4: Use workout type or body part if available
-    if (routineData.workout_type && typeof routineData.workout_type === "string" && routineData.workout_type.trim()) {
-      return `Week ${weekNumber} - ${routineData.workout_type.trim()}`
-    }
-
-    if (routineData.body_part && typeof routineData.body_part === "string" && routineData.body_part.trim()) {
-      return `Week ${weekNumber} - ${routineData.body_part.trim()}`
-    }
-
-    // Strategy 5: Generic fallback with meaningful info
+    // Strategy 4: Generic fallback
     return `Week ${weekNumber} - Workout ${routineIndex + 1}`
   }
 
   /**
    * Creates a routine document in the user's routines collection
-   * FIXED: Always create routines, even with empty exercises
+   * OPTIMIZED: Use pre-fetched exercise map to avoid individual lookups
    */
   private async createRoutine(
     userId: string,
     routineData: any,
     weekNumber: number,
     routineIndex = 0,
+    exerciseMap: Map<string, string>,
   ): Promise<{ routineId: string; routineDoc: MobileRoutine }> {
     const routineId = uuidv4()
     const timestamp = Timestamp.now()
 
-    console.log(`[createRoutine] === CREATING ROUTINE ===`)
-    console.log(`[createRoutine] User ID: ${userId}`)
-    console.log(`[createRoutine] Routine ID: ${routineId}`)
-    console.log(`[createRoutine] Week Number: ${weekNumber}`)
-    console.log(`[createRoutine] Routine Index: ${routineIndex}`)
-    console.log(`[createRoutine] Routine Data:`, JSON.stringify(routineData, null, 2))
+    console.log(`[createRoutine] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
 
     // Validate routine data
     if (!routineData) {
-      console.log(`[createRoutine] No routine data provided, creating empty routine`)
       routineData = { exercises: [] }
     }
 
-    // Generate a meaningful routine name
+    // Generate routine name
     const routineName = this.generateRoutineName(routineData, weekNumber, routineIndex)
-    console.log(`[createRoutine] Generated routine name: "${routineName}"`)
 
-    // Process exercises - ALWAYS CREATE ROUTINE EVEN IF NO EXERCISES
+    // Process exercises
     const exercises = []
     const exercisesArray = routineData.exercises || []
 
-    console.log(`[createRoutine] Processing ${exercisesArray.length} exercises for routine: ${routineName}`)
-
     if (Array.isArray(exercisesArray) && exercisesArray.length > 0) {
-      for (let exerciseIndex = 0; exerciseIndex < exercisesArray.length; exerciseIndex++) {
-        const exercise = exercisesArray[exerciseIndex]
-
-        // NEW CODE - Handle both 'name' and 'id' fields:
+      for (const exercise of exercisesArray) {
+        // FIXED: Handle both 'name' and 'id' fields
         const exerciseName = exercise.name || exercise.id
-        if (!exercise || !exerciseName || typeof exerciseName !== "string" || exerciseName.trim() === "") {
-          console.log(`[createRoutine] Skipping exercise ${exerciseIndex} with invalid name/id:`, exercise)
+
+        if (!exerciseName || typeof exerciseName !== "string" || exerciseName.trim() === "") {
+          console.log(`[createRoutine] Skipping exercise with invalid name/id:`, exercise)
           continue
         }
 
-        console.log(`[createRoutine] Processing exercise ${exerciseIndex + 1}: ${exerciseName}`)
+        const exerciseId = exerciseMap.get(exerciseName.trim())
+        if (!exerciseId) {
+          console.log(`[createRoutine] Exercise not found in map: ${exerciseName}`)
+          continue
+        }
 
-        try {
-          const exerciseId = await this.ensureExerciseExists(userId, exerciseName.trim())
+        // Process sets for this exercise
+        let sets = exercise.sets || []
 
-          // Process sets for this exercise
-          let sets = exercise.sets || []
+        // If no sets provided, create default sets
+        if (!Array.isArray(sets) || sets.length === 0) {
+          sets = [
+            { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
+            { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
+            { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
+          ]
+        }
 
-          // If no sets provided, create default sets
-          if (!Array.isArray(sets) || sets.length === 0) {
-            console.log(`[createRoutine] No sets found for exercise ${exercise.name}, creating default sets`)
-            sets = [
-              { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
-              { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
-              { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
-            ]
+        const mobileSets = sets.map((set: any) => {
+          if (!set || typeof set !== "object") {
+            return {
+              id: uuidv4(),
+              type: "normal",
+              weight: "",
+              reps: "10",
+            }
           }
 
-          console.log(`[createRoutine] Exercise ${exercise.name} has ${sets.length} sets`)
+          const cleanSet = {
+            id: uuidv4(),
+            type: set.warmup ? "warmup" : set.set_type || "normal",
+            weight: set.weight !== undefined && set.weight !== null ? set.weight.toString() : "",
+            reps: set.reps !== undefined && set.reps !== null ? set.reps.toString() : "10",
+          }
 
-          const mobileSets = sets.map((set: any, setIndex: number) => {
-            // Ensure set is an object
-            if (!set || typeof set !== "object") {
-              console.log(
-                `[createRoutine] Warning: invalid set data for exercise ${exercise.name}, set ${setIndex}:`,
-                set,
-              )
-              return {
-                id: uuidv4(),
-                type: "normal",
-                weight: "",
-                reps: "10",
-              }
-            }
+          // Only add notes if they exist
+          const notesParts = []
+          if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") notesParts.push(`RPE: ${set.rpe}`)
+          if (set.rest !== undefined && set.rest !== null && set.rest !== "") notesParts.push(`Rest: ${set.rest}`)
+          if (set.notes !== undefined && set.notes !== null && set.notes !== "") notesParts.push(set.notes)
 
-            // Create clean set with no undefined values
-            const cleanSet = {
-              id: uuidv4(),
-              type: set.warmup ? "warmup" : set.set_type || "normal",
-              weight: set.weight !== undefined && set.weight !== null ? set.weight.toString() : "",
-              reps: set.reps !== undefined && set.reps !== null ? set.reps.toString() : "10",
-            }
+          if (notesParts.length > 0) {
+            cleanSet.notes = notesParts.join(" | ")
+          }
 
-            // Only add notes if they exist and are not undefined
-            const notesParts = []
-            if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") notesParts.push(`RPE: ${set.rpe}`)
-            if (set.rest !== undefined && set.rest !== null && set.rest !== "") notesParts.push(`Rest: ${set.rest}`)
-            if (set.notes !== undefined && set.notes !== null && set.notes !== "") notesParts.push(set.notes)
+          return cleanSet
+        })
 
-            if (notesParts.length > 0) {
-              cleanSet.notes = notesParts.join(" | ")
-            }
-
-            return cleanSet
-          })
-
-          exercises.push({
-            id: exerciseId,
-            name: exerciseName.trim(), // Use the resolved name
-            sets: mobileSets,
-          })
-
-          console.log(`[createRoutine] ✅ Added exercise: ${exerciseName} with ${mobileSets.length} sets`)
-        } catch (exerciseError) {
-          console.error(`[createRoutine] Error processing exercise ${exercise.name}:`, exerciseError)
-          // Continue with other exercises instead of failing completely
-          continue
-        }
+        exercises.push({
+          id: exerciseId,
+          name: exerciseName.trim(),
+          sets: mobileSets,
+        })
       }
-    } else {
-      console.log(`[createRoutine] No exercises provided or exercises is not an array - creating empty routine`)
     }
 
-    console.log(`[createRoutine] Total exercises processed: ${exercises.length}`)
-
-    // CRITICAL FIX: Always create routine even if no exercises
-    // The mobile app can handle empty routines and trainers can add exercises later
+    // Create routine document
     const routineDoc: MobileRoutine = {
       id: routineId,
       name: routineName,
@@ -340,37 +325,20 @@ export class ProgramConversionService {
       exercises,
     }
 
-    // Log the routine document before saving
-    console.log(`[createRoutine] Routine document to save:`, {
-      id: routineDoc.id,
-      name: routineDoc.name,
-      notes: routineDoc.notes,
-      exerciseCount: routineDoc.exercises.length,
-      type: routineDoc.type,
-    })
-
-    // Final validation
-    if (!routineDoc.name || typeof routineDoc.name !== "string") {
-      throw new Error(`Routine name must be a non-empty string, got: ${typeof routineDoc.name} - "${routineDoc.name}"`)
-    }
-
-    // Clean the routine document to remove any undefined values
+    // Clean and save routine
     const cleanRoutineDoc = this.removeUndefinedValues(routineDoc)
-
-    // Save routine to Firestore
     const routinesRef = collection(db, "users", userId, "routines")
     const routineDocRef = doc(routinesRef, routineId)
 
-    console.log(`[createRoutine] Saving routine to: users/${userId}/routines/${routineId}`)
     await setDoc(routineDocRef, cleanRoutineDoc)
 
-    console.log(`[createRoutine] ✅ Successfully created routine: "${routineName}" with ID: ${routineId}`)
+    console.log(`[createRoutine] ✅ Created routine: "${routineName}" with ${exercises.length} exercises`)
 
     return { routineId, routineDoc: cleanRoutineDoc }
   }
 
   /**
-   * Recursively remove undefined values from an object to prevent Firestore errors
+   * Recursively remove undefined values from an object
    */
   private removeUndefinedValues(obj: any): any {
     if (obj === null || obj === undefined) {
@@ -396,18 +364,51 @@ export class ProgramConversionService {
 
   /**
    * Main function to convert and send program to client
-   * FIXED: Better error handling and always create routines
+   * OPTIMIZED: Batch operations and reduce Firebase calls
    */
   async convertAndSendProgram(programData: any, clientUserId: string): Promise<string> {
     try {
-      console.log(`[convertAndSendProgram] === STARTING PROGRAM CONVERSION ===`)
+      console.log(`[convertAndSendProgram] === STARTING OPTIMIZED PROGRAM CONVERSION ===`)
       console.log(`[convertAndSendProgram] Client User ID: ${clientUserId}`)
-      console.log(`[convertAndSendProgram] Program data:`, JSON.stringify(programData, null, 2))
 
       const timestamp = Timestamp.now()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
-      // Handle periodized programs (with weeks array)
+      // OPTIMIZATION: Collect all exercise names first for batch processing
+      const allExerciseNames: string[] = []
+
+      if (programData.weeks && Array.isArray(programData.weeks)) {
+        programData.weeks.forEach((week: any) => {
+          if (week.routines && Array.isArray(week.routines)) {
+            week.routines.forEach((routine: any) => {
+              if (routine.exercises && Array.isArray(routine.exercises)) {
+                routine.exercises.forEach((exercise: any) => {
+                  const exerciseName = exercise.name || exercise.id
+                  if (exerciseName && typeof exerciseName === "string") {
+                    allExerciseNames.push(exerciseName.trim())
+                  }
+                })
+              }
+            })
+          }
+        })
+      } else if (programData.routines && Array.isArray(programData.routines)) {
+        programData.routines.forEach((routine: any) => {
+          if (routine.exercises && Array.isArray(routine.exercises)) {
+            routine.exercises.forEach((exercise: any) => {
+              const exerciseName = exercise.name || exercise.id
+              if (exerciseName && typeof exerciseName === "string") {
+                allExerciseNames.push(exerciseName.trim())
+              }
+            })
+          }
+        })
+      }
+
+      // Batch process all exercises
+      const exerciseMap = await this.ensureExercisesExist(clientUserId, allExerciseNames)
+
+      // Handle periodized programs
       if (programData.weeks && Array.isArray(programData.weeks) && programData.weeks.length > 0) {
         console.log(`[convertAndSendProgram] Processing ${programData.weeks.length} weeks (PERIODIZED)`)
 
@@ -415,136 +416,94 @@ export class ProgramConversionService {
           const week = programData.weeks[weekIndex]
           const weekNumber = week.week_number || weekIndex + 1
 
-          console.log(`[convertAndSendProgram] Processing week ${weekNumber} (index ${weekIndex})`)
-
           if (week.routines && Array.isArray(week.routines)) {
-            console.log(`[convertAndSendProgram] Week ${weekNumber} has ${week.routines.length} routines`)
-
             for (let routineIndex = 0; routineIndex < week.routines.length; routineIndex++) {
               const routine = week.routines[routineIndex]
 
               try {
-                console.log(`[convertAndSendProgram] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
-                const { routineId } = await this.createRoutine(clientUserId, routine, weekNumber, routineIndex)
+                const { routineId } = await this.createRoutine(
+                  clientUserId,
+                  routine,
+                  weekNumber,
+                  routineIndex,
+                  exerciseMap,
+                )
 
                 routineMap.push({
                   routineId,
                   week: weekNumber,
                   order: routineIndex + 1,
                 })
-
-                console.log(
-                  `[convertAndSendProgram] ✅ Added routine ${routineId} to week ${weekNumber}, order ${routineIndex + 1}`,
-                )
               } catch (routineError) {
-                console.error(
-                  `[convertAndSendProgram] Error creating routine ${routineIndex + 1} for week ${weekNumber}:`,
-                  routineError,
+                console.error(`[convertAndSendProgram] Error creating routine:`, routineError)
+                // Create empty fallback routine
+                const { routineId } = await this.createRoutine(
+                  clientUserId,
+                  { exercises: [] },
+                  weekNumber,
+                  routineIndex,
+                  exerciseMap,
                 )
-                // CRITICAL: Don't skip routines, create empty ones instead
-                console.log(`[convertAndSendProgram] Creating empty routine as fallback...`)
-                try {
-                  const { routineId } = await this.createRoutine(
-                    clientUserId,
-                    { exercises: [] },
-                    weekNumber,
-                    routineIndex,
-                  )
-                  routineMap.push({
-                    routineId,
-                    week: weekNumber,
-                    order: routineIndex + 1,
-                  })
-                  console.log(`[convertAndSendProgram] ✅ Created fallback routine ${routineId}`)
-                } catch (fallbackError) {
-                  console.error(`[convertAndSendProgram] Failed to create fallback routine:`, fallbackError)
-                }
+                routineMap.push({
+                  routineId,
+                  week: weekNumber,
+                  order: routineIndex + 1,
+                })
               }
             }
-          } else {
-            console.log(`[convertAndSendProgram] ⚠️ Week ${weekNumber} has no routines or routines is not an array`)
           }
         }
       }
-      // Handle non-periodized programs (direct routines array)
+      // Handle non-periodized programs
       else if (programData.routines && Array.isArray(programData.routines) && programData.routines.length > 0) {
         console.log(`[convertAndSendProgram] Processing ${programData.routines.length} routines (NON-PERIODIZED)`)
 
-        // For non-periodized, repeat the same routines for each week
         const totalWeeks = programData.program_weeks || programData.duration_weeks || 1
 
-        console.log(`[convertAndSendProgram] Will create routines for ${totalWeeks} weeks`)
-
         for (let week = 1; week <= totalWeeks; week++) {
-          console.log(`[convertAndSendProgram] Creating routines for week ${week}`)
-
           for (let routineIndex = 0; routineIndex < programData.routines.length; routineIndex++) {
             const routine = programData.routines[routineIndex]
 
             try {
-              console.log(`[convertAndSendProgram] Creating routine ${routineIndex + 1} for week ${week}`)
-              const { routineId } = await this.createRoutine(clientUserId, routine, week, routineIndex)
+              const { routineId } = await this.createRoutine(clientUserId, routine, week, routineIndex, exerciseMap)
 
               routineMap.push({
                 routineId,
                 week,
                 order: routineIndex + 1,
               })
-
-              console.log(
-                `[convertAndSendProgram] ✅ Added routine ${routineId} to week ${week}, order ${routineIndex + 1}`,
-              )
             } catch (routineError) {
-              console.error(
-                `[convertAndSendProgram] Error creating routine ${routineIndex + 1} for week ${week}:`,
-                routineError,
+              console.error(`[convertAndSendProgram] Error creating routine:`, routineError)
+              // Create empty fallback routine
+              const { routineId } = await this.createRoutine(
+                clientUserId,
+                { exercises: [] },
+                week,
+                routineIndex,
+                exerciseMap,
               )
-              // CRITICAL: Don't skip routines, create empty ones instead
-              console.log(`[convertAndSendProgram] Creating empty routine as fallback...`)
-              try {
-                const { routineId } = await this.createRoutine(clientUserId, { exercises: [] }, week, routineIndex)
-                routineMap.push({
-                  routineId,
-                  week,
-                  order: routineIndex + 1,
-                })
-                console.log(`[convertAndSendProgram] ✅ Created fallback routine ${routineId}`)
-              } catch (fallbackError) {
-                console.error(`[convertAndSendProgram] Failed to create fallback routine:`, fallbackError)
-              }
+              routineMap.push({
+                routineId,
+                week,
+                order: routineIndex + 1,
+              })
             }
           }
         }
       } else {
-        console.log(`[convertAndSendProgram] ❌ No valid program structure found`)
-        console.log(`[convertAndSendProgram] Program structure analysis:`, {
-          hasWeeks: !!programData.weeks,
-          weeksLength: programData.weeks?.length || 0,
-          hasRoutines: !!programData.routines,
-          routinesLength: programData.routines?.length || 0,
-          isPeriodized: programData.is_periodized,
-        })
         throw new Error("Program must have either weeks array with routines or routines array")
       }
 
       console.log(`[convertAndSendProgram] Total routines created: ${routineMap.length}`)
-      console.log(`[convertAndSendProgram] Routine map:`, routineMap)
 
-      // CRITICAL FIX: Don't fail if no routines, create a default program structure
       if (routineMap.length === 0) {
-        console.log(`[convertAndSendProgram] No routines were created, creating default empty routine...`)
-        try {
-          const { routineId } = await this.createRoutine(clientUserId, { exercises: [] }, 1, 0)
-          routineMap.push({
-            routineId,
-            week: 1,
-            order: 1,
-          })
-          console.log(`[convertAndSendProgram] ✅ Created default routine ${routineId}`)
-        } catch (defaultError) {
-          console.error(`[convertAndSendProgram] Failed to create default routine:`, defaultError)
-          throw new Error("No routines were created for the program and failed to create default routine")
-        }
+        // Create default routine as fallback
+        const { routineId } = await this.createRoutine(clientUserId, { exercises: [] }, 1, 0, exerciseMap)
+        routineMap.push({
+          routineId,
+          week: 1,
+          order: 1,
+        })
       }
 
       // Create the program document
@@ -568,37 +527,14 @@ export class ProgramConversionService {
         routines: routineMap,
       }
 
-      console.log(`[convertAndSendProgram] Program document to create:`, {
-        id: program.id,
-        name: program.name,
-        duration: program.duration,
-        routinesCount: program.routines.length,
-      })
-
-      // Clean the program document
+      // Clean and save program
       const cleanProgram = this.removeUndefinedValues(program)
-
-      // Save program to Firestore
       const programsRef = collection(db, "users", clientUserId, "programs")
       const programDocRef = doc(programsRef, programId)
 
-      console.log(`[convertAndSendProgram] Saving program to: users/${clientUserId}/programs/${programId}`)
       await setDoc(programDocRef, cleanProgram)
 
       console.log(`[convertAndSendProgram] ✅ Successfully created program: ${program.name} with ID: ${programId}`)
-
-      // Verification: Check that the program was saved correctly
-      const savedProgramDoc = await getDoc(programDocRef)
-      if (savedProgramDoc.exists()) {
-        const savedData = savedProgramDoc.data()
-        console.log(`[convertAndSendProgram] ✅ VERIFICATION: Program saved successfully with routines:`, {
-          id: savedData.id,
-          name: savedData.name,
-          routinesCount: savedData.routines?.length || 0,
-        })
-      } else {
-        console.log(`[convertAndSendProgram] ❌ VERIFICATION FAILED: Program document not found after save`)
-      }
 
       return programId
     } catch (error) {
@@ -620,17 +556,6 @@ export class ProgramConversionService {
         const userId = clientData.userId || null
 
         console.log(`[getClientUserId] Found userId: ${userId}`)
-
-        if (userId) {
-          const userDoc = await getDoc(doc(db, "users", userId))
-          if (userDoc.exists()) {
-            const userData = userDoc.data()
-            console.log(`[getClientUserId] User document exists with status: ${userData.status}`)
-          } else {
-            console.log(`[getClientUserId] User document does NOT exist at users/${userId}`)
-          }
-        }
-
         return userId
       }
 
