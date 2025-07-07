@@ -229,7 +229,7 @@ export class ProgramConversionService {
     programId: string, // Add programId parameter
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
-    const timestamp = new Date().toISOString()
+    const timestamp = Timestamp.now()
 
     console.log(`[createRoutineBatch] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
 
@@ -304,8 +304,8 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      createdAt: timestamp.toDate().toISOString(), // Keep as string for mobile compatibility
+      updatedAt: timestamp.toDate().toISOString(), // Keep as string for mobile compatibility
       deletedAt: null,
       type: "program",
       programId: programId, // Add this line
@@ -360,7 +360,7 @@ export class ProgramConversionService {
       console.log(`[convertAndSendProgram] === STARTING OPTIMIZED PROGRAM CONVERSION ===`)
       console.log(`[convertAndSendProgram] Client User ID: ${clientUserId}`)
 
-      const timestamp = new Date().toISOString()
+      const timestamp = Timestamp.now()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
       // Generate programId first
@@ -424,9 +424,9 @@ export class ProgramConversionService {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: timestamp,
-        startedAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: timestamp, // Use Firestore Timestamp
+        startedAt: timestamp, // Use Firestore Timestamp
+        updatedAt: timestamp, // Use Firestore Timestamp
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
