@@ -217,168 +217,6 @@ export class ProgramConversionService {
   }
 
   /**
-   * Creates a routine document in the user's routines collection
-   * FIXED: Always create routines, even with empty exercises
-   */
-  private async createRoutine(
-    userId: string,
-    routineData: any,
-    weekNumber: number,
-    routineIndex = 0,
-  ): Promise<{ routineId: string; routineDoc: MobileRoutine }> {
-    const routineId = uuidv4()
-    const timestamp = Timestamp.now()
-
-    console.log(`[createRoutine] === CREATING ROUTINE ===`)
-    console.log(`[createRoutine] User ID: ${userId}`)
-    console.log(`[createRoutine] Routine ID: ${routineId}`)
-    console.log(`[createRoutine] Week Number: ${weekNumber}`)
-    console.log(`[createRoutine] Routine Index: ${routineIndex}`)
-    console.log(`[createRoutine] Routine Data:`, JSON.stringify(routineData, null, 2))
-
-    // Validate routine data
-    if (!routineData) {
-      console.log(`[createRoutine] No routine data provided, creating empty routine`)
-      routineData = { exercises: [] }
-    }
-
-    // Generate a meaningful routine name
-    const routineName = this.generateRoutineName(routineData, weekNumber, routineIndex)
-    console.log(`[createRoutine] Generated routine name: "${routineName}"`)
-
-    // Process exercises - ALWAYS CREATE ROUTINE EVEN IF NO EXERCISES
-    const exercises = []
-    const exercisesArray = routineData.exercises || []
-
-    console.log(`[createRoutine] Processing ${exercisesArray.length} exercises for routine: ${routineName}`)
-
-    if (Array.isArray(exercisesArray) && exercisesArray.length > 0) {
-      for (let exerciseIndex = 0; exerciseIndex < exercisesArray.length; exerciseIndex++) {
-        const exercise = exercisesArray[exerciseIndex]
-
-        if (!exercise || !exercise.name || typeof exercise.name !== "string" || exercise.name.trim() === "") {
-          console.log(`[createRoutine] Skipping exercise ${exerciseIndex} with invalid name:`, exercise)
-          continue
-        }
-
-        console.log(`[createRoutine] Processing exercise ${exerciseIndex + 1}: ${exercise.name}`)
-
-        try {
-          const exerciseId = await this.ensureExerciseExists(userId, exercise.name.trim())
-
-          // Process sets for this exercise
-          let sets = exercise.sets || []
-
-          // If no sets provided, create default sets
-          if (!Array.isArray(sets) || sets.length === 0) {
-            console.log(`[createRoutine] No sets found for exercise ${exercise.name}, creating default sets`)
-            sets = [
-              { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
-              { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
-              { reps: "10", weight: "", rpe: "", rest: "60s", notes: "" },
-            ]
-          }
-
-          console.log(`[createRoutine] Exercise ${exercise.name} has ${sets.length} sets`)
-
-          const mobileSets = sets.map((set: any, setIndex: number) => {
-            // Ensure set is an object
-            if (!set || typeof set !== "object") {
-              console.log(
-                `[createRoutine] Warning: invalid set data for exercise ${exercise.name}, set ${setIndex}:`,
-                set,
-              )
-              return {
-                id: uuidv4(),
-                type: "normal",
-                weight: "",
-                reps: "10",
-              }
-            }
-
-            // Create clean set with no undefined values
-            const cleanSet = {
-              id: uuidv4(),
-              type: set.warmup ? "warmup" : set.set_type || "normal",
-              weight: set.weight !== undefined && set.weight !== null ? set.weight.toString() : "",
-              reps: set.reps !== undefined && set.reps !== null ? set.reps.toString() : "10",
-            }
-
-            // Only add notes if they exist and are not undefined
-            const notesParts = []
-            if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") notesParts.push(`RPE: ${set.rpe}`)
-            if (set.rest !== undefined && set.rest !== null && set.rest !== "") notesParts.push(`Rest: ${set.rest}`)
-            if (set.notes !== undefined && set.notes !== null && set.notes !== "") notesParts.push(set.notes)
-
-            if (notesParts.length > 0) {
-              cleanSet.notes = notesParts.join(" | ")
-            }
-
-            return cleanSet
-          })
-
-          exercises.push({
-            id: exerciseId,
-            name: exercise.name.trim(),
-            sets: mobileSets,
-          })
-
-          console.log(`[createRoutine] ✅ Added exercise: ${exercise.name} with ${mobileSets.length} sets`)
-        } catch (exerciseError) {
-          console.error(`[createRoutine] Error processing exercise ${exercise.name}:`, exerciseError)
-          // Continue with other exercises instead of failing completely
-          continue
-        }
-      }
-    } else {
-      console.log(`[createRoutine] No exercises provided or exercises is not an array - creating empty routine`)
-    }
-
-    console.log(`[createRoutine] Total exercises processed: ${exercises.length}`)
-
-    // CRITICAL FIX: Always create routine even if no exercises
-    // The mobile app can handle empty routines and trainers can add exercises later
-    const routineDoc: MobileRoutine = {
-      id: routineId,
-      name: routineName,
-      notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: timestamp.toDate().toISOString(),
-      updatedAt: timestamp.toDate().toISOString(),
-      deletedAt: null,
-      type: "program",
-      exercises,
-    }
-
-    // Log the routine document before saving
-    console.log(`[createRoutine] Routine document to save:`, {
-      id: routineDoc.id,
-      name: routineDoc.name,
-      notes: routineDoc.notes,
-      exerciseCount: routineDoc.exercises.length,
-      type: routineDoc.type,
-    })
-
-    // Final validation
-    if (!routineDoc.name || typeof routineDoc.name !== "string") {
-      throw new Error(`Routine name must be a non-empty string, got: ${typeof routineDoc.name} - "${routineDoc.name}"`)
-    }
-
-    // Clean the routine document to remove any undefined values
-    const cleanRoutineDoc = this.removeUndefinedValues(routineDoc)
-
-    // Save routine to Firestore
-    const routinesRef = collection(db, "users", userId, "routines")
-    const routineDocRef = doc(routinesRef, routineId)
-
-    console.log(`[createRoutine] Saving routine to: users/${userId}/routines/${routineId}`)
-    await setDoc(routineDocRef, cleanRoutineDoc)
-
-    console.log(`[createRoutine] ✅ Successfully created routine: "${routineName}" with ID: ${routineId}`)
-
-    return { routineId, routineDoc: cleanRoutineDoc }
-  }
-
-  /**
    * Creates a routine document using batch operations for better performance
    */
   private async createRoutineBatch(
@@ -611,41 +449,74 @@ export class ProgramConversionService {
 
   /**
    * Get client's userId from trainer's client document
+   * FIXED: Enhanced logging and validation
    */
   async getClientUserId(trainerId: string, clientId: string): Promise<string | null> {
     try {
-      console.log(`[getClientUserId] Getting userId for client ${clientId} of trainer ${trainerId}`)
+      console.log(`[getClientUserId] === GETTING CLIENT USER ID ===`)
+      console.log(`[getClientUserId] Trainer ID: ${trainerId}`)
+      console.log(`[getClientUserId] Client ID: ${clientId}`)
+
+      // Get the client document from trainer's clients collection
+      const clientDocPath = `users/${trainerId}/clients/${clientId}`
+      console.log(`[getClientUserId] Looking up client at: ${clientDocPath}`)
 
       const clientDoc = await getDoc(doc(db, "users", trainerId, "clients", clientId))
-      if (clientDoc.exists()) {
-        const clientData = clientDoc.data()
-        const userId = clientData.userId || null
 
-        console.log(`[getClientUserId] Found userId: ${userId}`)
-
-        if (userId) {
-          const userDoc = await getDoc(doc(db, "users", userId))
-          if (userDoc.exists()) {
-            const userData = userDoc.data()
-            console.log(`[getClientUserId] User document exists with status: ${userData.status}`)
-          } else {
-            console.log(`[getClientUserId] User document does NOT exist at users/${userId}`)
-          }
-        }
-
-        return userId
+      if (!clientDoc.exists()) {
+        console.log(`[getClientUserId] ❌ Client document not found at: ${clientDocPath}`)
+        return null
       }
 
-      console.log(`[getClientUserId] Client document not found`)
-      return null
+      const clientData = clientDoc.data()
+      console.log(`[getClientUserId] Client document data:`, {
+        hasUserId: !!clientData.userId,
+        userId: clientData.userId,
+        name: clientData.name,
+        email: clientData.email,
+        status: clientData.status,
+        hasLinkedAccount: clientData.hasLinkedAccount,
+      })
+
+      const userId = clientData.userId || null
+
+      if (!userId) {
+        console.log(`[getClientUserId] ❌ No userId found in client document`)
+        return null
+      }
+
+      console.log(`[getClientUserId] Found userId: ${userId}`)
+
+      // Verify the user document exists
+      const userDocPath = `users/${userId}`
+      console.log(`[getClientUserId] Verifying user document at: ${userDocPath}`)
+
+      const userDoc = await getDoc(doc(db, "users", userId))
+      if (userDoc.exists()) {
+        const userData = userDoc.data()
+        console.log(`[getClientUserId] ✅ User document exists:`, {
+          id: userData.id,
+          email: userData.email,
+          status: userData.status,
+          hasFirebaseAuth: userData.hasFirebaseAuth,
+          firebaseUid: userData.firebaseUid,
+        })
+      } else {
+        console.log(`[getClientUserId] ❌ User document does NOT exist at: ${userDocPath}`)
+        return null
+      }
+
+      console.log(`[getClientUserId] ✅ Successfully resolved client ${clientId} to user ${userId}`)
+      return userId
     } catch (error) {
-      console.error("[getClientUserId] Error getting client user ID:", error)
+      console.error("[getClientUserId] ❌ Error getting client user ID:", error)
       return null
     }
   }
 
   /**
    * Send program to client - main method called by the API
+   * FIXED: Better error handling and validation
    */
   async sendProgramToClient(clientId: string, programData: any, customMessage?: string): Promise<any> {
     try {
@@ -659,10 +530,12 @@ export class ProgramConversionService {
       const clientUserId = await this.getClientUserId(trainerId, clientId)
 
       if (!clientUserId) {
-        throw new Error("Client not found or client does not have a linked user account")
+        const errorMessage = "Client not found or client does not have a linked user account"
+        console.log(`[sendProgramToClient] ❌ ${errorMessage}`)
+        throw new Error(errorMessage)
       }
 
-      console.log(`[sendProgramToClient] Client user ID: ${clientUserId}`)
+      console.log(`[sendProgramToClient] ✅ Client user ID resolved: ${clientUserId}`)
 
       // Convert and send the program
       const programId = await this.convertAndSendProgram(programData, clientUserId)
