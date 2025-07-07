@@ -304,8 +304,8 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: timestamp.toDate().toISOString(),
-      updatedAt: timestamp.toDate().toISOString(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
       deletedAt: null,
       type: "program",
       programId: programId, // Add this line
@@ -424,9 +424,9 @@ export class ProgramConversionService {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: timestamp.toDate().toISOString(),
-        startedAt: timestamp.toDate().toISOString(),
-        updatedAt: timestamp.toDate().toISOString(),
+        createdAt: timestamp,
+        startedAt: timestamp,
+        updatedAt: timestamp,
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
