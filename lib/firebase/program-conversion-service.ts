@@ -245,15 +245,17 @@ export class ProgramConversionService {
       for (let exerciseIndex = 0; exerciseIndex < exercisesArray.length; exerciseIndex++) {
         const exercise = exercisesArray[exerciseIndex]
 
-        if (!exercise || !exercise.name || typeof exercise.name !== "string" || exercise.name.trim() === "") {
-          console.log(`[createRoutine] Skipping exercise ${exerciseIndex} with invalid name:`, exercise)
+        // NEW CODE - Handle both 'name' and 'id' fields:
+        const exerciseName = exercise.name || exercise.id
+        if (!exercise || !exerciseName || typeof exerciseName !== "string" || exerciseName.trim() === "") {
+          console.log(`[createRoutine] Skipping exercise ${exerciseIndex} with invalid name/id:`, exercise)
           continue
         }
 
-        console.log(`[createRoutine] Processing exercise ${exerciseIndex + 1}: ${exercise.name}`)
+        console.log(`[createRoutine] Processing exercise ${exerciseIndex + 1}: ${exerciseName}`)
 
         try {
-          const exerciseId = await this.ensureExerciseExists(userId, exercise.name.trim())
+          const exerciseId = await this.ensureExerciseExists(userId, exerciseName.trim())
 
           // Process sets for this exercise
           let sets = exercise.sets || []
@@ -308,11 +310,11 @@ export class ProgramConversionService {
 
           exercises.push({
             id: exerciseId,
-            name: exercise.name.trim(),
+            name: exerciseName.trim(), // Use the resolved name
             sets: mobileSets,
           })
 
-          console.log(`[createRoutine] ✅ Added exercise: ${exercise.name} with ${mobileSets.length} sets`)
+          console.log(`[createRoutine] ✅ Added exercise: ${exerciseName} with ${mobileSets.length} sets`)
         } catch (exerciseError) {
           console.error(`[createRoutine] Error processing exercise ${exercise.name}:`, exerciseError)
           // Continue with other exercises instead of failing completely
