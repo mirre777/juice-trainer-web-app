@@ -22,160 +22,128 @@ if (!admin.apps.length) {
 
 const db = admin.firestore()
 
-async function diagnoseProgramRoutines() {
+async function testProgramConversion() {
   try {
-    console.log("🔍 === DIAGNOSING PROGRAM ROUTINES ===")
+    console.log("🔍 === TESTING PROGRAM CONVERSION ===")
 
-    const userId = "HN2QjNvnWKQ37nVXCSkhXdCwMEH2"
-    const programId = "3cbb183b-8146-43f4-b044-d67a679ad29e"
-
-    console.log(`👤 User ID: ${userId}`)
-    console.log(`📋 Program ID: ${programId}`)
-
-    // 1. Check if program document exists
-    console.log("\n📋 === CHECKING PROGRAM DOCUMENT ===")
-    const programRef = db.collection("users").doc(userId).collection("programs").doc(programId)
-    const programDoc = await programRef.get()
-
-    if (!programDoc.exists) {
-      console.log("❌ Program document does not exist")
-      return
+    // Test with the exact same data structure from the failed request
+    const testProgramData = {
+      name: "ivysaur test",
+      program_title: "ivysaur test",
+      description: "hello",
+      duration_weeks: 4,
+      is_periodized: false,
+      routines: [
+        {
+          name: "Day 1",
+          order: 1,
+          exercises: [
+            { name: "Bench", order: 1 },
+            { name: "squat", order: 2 },
+          ],
+        },
+        {
+          order: 2,
+          exercises: [],
+        },
+        {
+          order: 3,
+          name: "Day 3",
+          exercises: [],
+        },
+      ],
+      weeks: [],
     }
 
-    const programData = programDoc.data()
-    console.log("✅ Program document exists")
-    console.log("📊 Program data:", {
-      id: programData.id,
-      name: programData.name,
-      duration: programData.duration,
-      routinesCount: programData.routines?.length || 0,
-      createdAt: programData.createdAt,
-      startedAt: programData.startedAt,
-      updatedAt: programData.updatedAt,
-      notes: programData.notes,
-      program_URL: programData.program_URL,
-    })
+    const testUserId = "HN2QjNvnWKQ37nVXCSkhXdCwMEH2"
 
-    // 2. Check each routine document
-    console.log("\n🏋️ === CHECKING ROUTINE DOCUMENTS ===")
-    if (!programData.routines || programData.routines.length === 0) {
-      console.log("❌ Program has no routines array or it is empty")
-      return
-    }
+    console.log("📋 Test program data:", JSON.stringify(testProgramData, null, 2))
+    console.log("👤 Test user ID:", testUserId)
 
-    console.log(`📝 Program references ${programData.routines.length} routines:`)
+    // Simulate the conversion logic
+    console.log("\n🔄 === SIMULATING CONVERSION LOGIC ===")
 
-    for (let i = 0; i < programData.routines.length; i++) {
-      const routineRef = programData.routines[i]
-      console.log(`\n--- Routine ${i + 1} ---`)
-      console.log("📋 Routine reference:", routineRef)
+    // Check if it's periodized
+    const hasWeeks = testProgramData.weeks && Array.isArray(testProgramData.weeks)
+    const hasRoutines = testProgramData.routines && Array.isArray(testProgramData.routines)
 
-      // Check if routine document exists
-      const routineDocRef = db.collection("users").doc(userId).collection("routines").doc(routineRef.routineId)
-      const routineDoc = await routineDocRef.get()
+    console.log("📊 Program structure analysis:")
+    console.log(`- hasWeeks: ${hasWeeks} (length: ${testProgramData.weeks?.length || 0})`)
+    console.log(`- hasRoutines: ${hasRoutines} (length: ${testProgramData.routines?.length || 0})`)
+    console.log(`- is_periodized: ${testProgramData.is_periodized}`)
 
-      if (!routineDoc.exists) {
-        console.log(`❌ Routine document ${routineRef.routineId} does NOT exist`)
-        console.log(`🔍 Expected path: users/${userId}/routines/${routineRef.routineId}`)
-        continue
+    if (hasWeeks && testProgramData.weeks.length > 0) {
+      console.log("📅 Would process as PERIODIZED program")
+      for (let weekIndex = 0; weekIndex < testProgramData.weeks.length; weekIndex++) {
+        const week = testProgramData.weeks[weekIndex]
+        console.log(`Week ${weekIndex + 1}:`, week)
       }
+    } else if (hasRoutines && testProgramData.routines.length > 0) {
+      console.log("📝 Would process as NON-PERIODIZED program")
+      const totalWeeks = testProgramData.program_weeks || testProgramData.duration_weeks || 1
+      console.log(`Total weeks to create: ${totalWeeks}`)
 
-      const routineData = routineDoc.data()
-      console.log(`✅ Routine document ${routineRef.routineId} exists`)
-      console.log("📊 Routine data:", {
-        id: routineData.id,
-        name: routineData.name,
-        type: routineData.type,
-        exercisesCount: routineData.exercises?.length || 0,
-        createdAt: routineData.createdAt,
-        updatedAt: routineData.updatedAt,
-        deletedAt: routineData.deletedAt,
-        notes: routineData.notes,
+      for (let week = 1; week <= totalWeeks; week++) {
+        console.log(`\n--- Week ${week} ---`)
+        for (let routineIndex = 0; routineIndex < testProgramData.routines.length; routineIndex++) {
+          const routine = testProgramData.routines[routineIndex]
+          console.log(`Routine ${routineIndex + 1}:`, {
+            name: routine.name || `Routine ${routineIndex + 1}`,
+            exercises: routine.exercises?.length || 0,
+            hasExercises: routine.exercises && Array.isArray(routine.exercises),
+            exerciseDetails: routine.exercises,
+          })
+
+          // Check if routine has valid exercises
+          if (!routine.exercises || !Array.isArray(routine.exercises)) {
+            console.log(`❌ Routine ${routineIndex + 1} has invalid exercises structure`)
+          } else if (routine.exercises.length === 0) {
+            console.log(`⚠️ Routine ${routineIndex + 1} has no exercises`)
+          } else {
+            console.log(`✅ Routine ${routineIndex + 1} has ${routine.exercises.length} exercises`)
+          }
+        }
+      }
+    } else {
+      console.log("❌ No valid program structure found")
+    }
+
+    // Check existing user data
+    console.log("\n👤 === CHECKING USER DATA ===")
+    const userDoc = await db.collection("users").doc(testUserId).get()
+    if (userDoc.exists()) {
+      console.log("✅ User document exists")
+      const userData = userDoc.data()
+      console.log("User data:", {
+        name: userData.name,
+        email: userData.email,
+        status: userData.status,
       })
-
-      // Check exercises in routine
-      if (routineData.exercises && routineData.exercises.length > 0) {
-        console.log(`🏋️ Routine has ${routineData.exercises.length} exercises:`)
-        routineData.exercises.forEach((exercise, idx) => {
-          console.log(`  ${idx + 1}. ${exercise.name} (${exercise.sets?.length || 0} sets)`)
-        })
-      } else {
-        console.log("⚠️ Routine has no exercises")
-      }
+    } else {
+      console.log("❌ User document does not exist")
     }
 
-    // 3. Check all programs for this user to compare
-    console.log("\n📚 === CHECKING ALL USER PROGRAMS ===")
-    const allProgramsRef = db.collection("users").doc(userId).collection("programs")
-    const allProgramsSnapshot = await allProgramsRef.get()
+    // Check user's existing programs and routines
+    const programsSnapshot = await db.collection("users").doc(testUserId).collection("programs").get()
+    const routinesSnapshot = await db.collection("users").doc(testUserId).collection("routines").get()
 
-    console.log(`📊 User has ${allProgramsSnapshot.size} total programs:`)
-
-    allProgramsSnapshot.forEach((doc, index) => {
-      const data = doc.data()
-      console.log(`${index + 1}. ${doc.id}:`)
-      console.log(`   Name: ${data.name}`)
-      console.log(`   Duration: ${data.duration}`)
-      console.log(`   Routines: ${data.routines?.length || 0}`)
-      console.log(`   Created: ${data.createdAt?.toDate?.() || data.createdAt}`)
-      console.log(
-        `   Type: ${typeof data.createdAt} (${data.createdAt instanceof admin.firestore.Timestamp ? "Timestamp" : "Other"})`,
-      )
-    })
-
-    // 4. Check all routines for this user
-    console.log("\n🏋️ === CHECKING ALL USER ROUTINES ===")
-    const allRoutinesRef = db.collection("users").doc(userId).collection("routines")
-    const allRoutinesSnapshot = await allRoutinesRef.get()
-
-    console.log(`📊 User has ${allRoutinesSnapshot.size} total routines:`)
-
-    allRoutinesSnapshot.forEach((doc, index) => {
-      const data = doc.data()
-      console.log(`${index + 1}. ${doc.id}:`)
-      console.log(`   Name: ${data.name}`)
-      console.log(`   Type: ${data.type}`)
-      console.log(`   Exercises: ${data.exercises?.length || 0}`)
-      console.log(`   Created: ${data.createdAt}`)
-      console.log(`   Deleted: ${data.deletedAt}`)
-    })
-
-    // 5. Compare with working program structure
-    console.log("\n🔍 === COMPARING WITH WORKING PROGRAM STRUCTURE ===")
-    console.log("Expected mobile app program structure:")
-    console.log("- id: string")
-    console.log("- name: string")
-    console.log("- notes: string (empty string, not null)")
-    console.log("- duration: number")
-    console.log("- createdAt: Firestore Timestamp")
-    console.log("- startedAt: Firestore Timestamp")
-    console.log("- updatedAt: Firestore Timestamp (not updated_at)")
-    console.log("- program_URL: string (empty string, not null)")
-    console.log("- routines: Array<{routineId: string, week: number, order: number}>")
-
-    console.log("\nExpected mobile app routine structure:")
-    console.log("- id: string")
-    console.log("- name: string")
-    console.log("- notes: string")
-    console.log('- type: "program"')
-    console.log("- createdAt: ISO string")
-    console.log("- updatedAt: ISO string")
-    console.log("- deletedAt: null")
-    console.log("- exercises: Array<{id: string, name: string, sets: Array}>")
+    console.log(`📊 User currently has:`)
+    console.log(`- ${programsSnapshot.size} programs`)
+    console.log(`- ${routinesSnapshot.size} routines`)
 
     console.log("\n✅ === DIAGNOSIS COMPLETE ===")
   } catch (error) {
-    console.error("❌ Error during diagnosis:", error)
+    console.error("❌ Error during test:", error)
   }
 }
 
-// Run the diagnosis
-diagnoseProgramRoutines()
+// Run the test
+testProgramConversion()
   .then(() => {
-    console.log("🏁 Diagnosis finished")
+    console.log("🏁 Test finished")
     process.exit(0)
   })
   .catch((error) => {
-    console.error("💥 Diagnosis failed:", error)
+    console.error("💥 Test failed:", error)
     process.exit(1)
   })
