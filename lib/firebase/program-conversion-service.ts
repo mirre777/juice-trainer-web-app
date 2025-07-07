@@ -19,10 +19,10 @@ export interface MobileProgram {
   id: string
   name: string
   notes: string
-  startedAt: Timestamp
+  startedAt: string
   duration: number
-  createdAt: Timestamp
-  updatedAt: Timestamp
+  createdAt: string
+  updatedAt: string
   program_URL: string
   routines: Array<{
     routineId: string
@@ -389,7 +389,7 @@ export class ProgramConversionService {
     batch: WriteBatch,
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
-    const timestamp = Timestamp.now()
+    const timestamp = new Date().toISOString()
 
     console.log(`[createRoutineBatch] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
 
@@ -464,8 +464,8 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: timestamp.toDate().toISOString(),
-      updatedAt: timestamp.toDate().toISOString(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
       deletedAt: null,
       type: "program",
       exercises,
@@ -519,7 +519,7 @@ export class ProgramConversionService {
       console.log(`[convertAndSendProgram] === STARTING OPTIMIZED PROGRAM CONVERSION ===`)
       console.log(`[convertAndSendProgram] Client User ID: ${clientUserId}`)
 
-      const timestamp = Timestamp.now()
+      const timestamp = new Date().toISOString()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
       // Batch all Firebase operations to reduce timeout risk
