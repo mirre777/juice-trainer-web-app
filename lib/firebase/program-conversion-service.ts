@@ -207,7 +207,7 @@ export class ProgramConversionService {
 
   /**
    * Creates a routine document in the user's routines collection
-   * FIXED: Better error handling and validation
+   * FIXED: Always create routines, even with empty exercises
    */
   private async createRoutine(
     userId: string,
@@ -227,38 +227,35 @@ export class ProgramConversionService {
 
     // Validate routine data
     if (!routineData) {
-      throw new Error("Routine data is required")
+      console.log(`[createRoutine] No routine data provided, creating empty routine`)
+      routineData = { exercises: [] }
     }
 
     // Generate a meaningful routine name
     const routineName = this.generateRoutineName(routineData, weekNumber, routineIndex)
     console.log(`[createRoutine] Generated routine name: "${routineName}"`)
 
-    // Process exercises - FIXED: Handle empty exercises arrays
+    // Process exercises - ALWAYS CREATE ROUTINE EVEN IF NO EXERCISES
     const exercises = []
     const exercisesArray = routineData.exercises || []
 
-    if (!Array.isArray(exercisesArray)) {
-      console.log(`[createRoutine] Warning: exercises is not an array for routine ${routineName}:`, exercisesArray)
-      // Don't throw error, just create empty exercises array
-      console.log(`[createRoutine] Creating routine with empty exercises array`)
-    } else {
-      console.log(`[createRoutine] Processing ${exercisesArray.length} exercises for routine: ${routineName}`)
+    console.log(`[createRoutine] Processing ${exercisesArray.length} exercises for routine: ${routineName}`)
 
+    if (Array.isArray(exercisesArray) && exercisesArray.length > 0) {
       for (let exerciseIndex = 0; exerciseIndex < exercisesArray.length; exerciseIndex++) {
         const exercise = exercisesArray[exerciseIndex]
 
-        if (!exercise || !exercise.name) {
-          console.log(`[createRoutine] Warning: skipping exercise ${exerciseIndex} with no name:`, exercise)
+        if (!exercise || !exercise.name || typeof exercise.name !== "string" || exercise.name.trim() === "") {
+          console.log(`[createRoutine] Skipping exercise ${exerciseIndex} with invalid name:`, exercise)
           continue
         }
 
         console.log(`[createRoutine] Processing exercise ${exerciseIndex + 1}: ${exercise.name}`)
 
         try {
-          const exerciseId = await this.ensureExerciseExists(userId, exercise.name)
+          const exerciseId = await this.ensureExerciseExists(userId, exercise.name.trim())
 
-          // Process sets for this exercise - FIXED: Handle missing sets
+          // Process sets for this exercise
           let sets = exercise.sets || []
 
           // If no sets provided, create default sets
@@ -306,13 +303,12 @@ export class ProgramConversionService {
               cleanSet.notes = notesParts.join(" | ")
             }
 
-            console.log(`[createRoutine] Created set ${setIndex + 1} for ${exercise.name}:`, cleanSet)
             return cleanSet
           })
 
           exercises.push({
             id: exerciseId,
-            name: exercise.name,
+            name: exercise.name.trim(),
             sets: mobileSets,
           })
 
@@ -323,11 +319,14 @@ export class ProgramConversionService {
           continue
         }
       }
+    } else {
+      console.log(`[createRoutine] No exercises provided or exercises is not an array - creating empty routine`)
     }
 
     console.log(`[createRoutine] Total exercises processed: ${exercises.length}`)
 
-    // FIXED: Always create routine even if no exercises (mobile app can handle empty routines)
+    // CRITICAL FIX: Always create routine even if no exercises
+    // The mobile app can handle empty routines and trainers can add exercises later
     const routineDoc: MobileRoutine = {
       id: routineId,
       name: routineName,
@@ -395,7 +394,7 @@ export class ProgramConversionService {
 
   /**
    * Main function to convert and send program to client
-   * FIXED: Better error handling and validation
+   * FIXED: Better error handling and always create routines
    */
   async convertAndSendProgram(programData: any, clientUserId: string): Promise<string> {
     try {
@@ -440,8 +439,24 @@ export class ProgramConversionService {
                   `[convertAndSendProgram] Error creating routine ${routineIndex + 1} for week ${weekNumber}:`,
                   routineError,
                 )
-                // Continue with other routines instead of failing completely
-                continue
+                // CRITICAL: Don't skip routines, create empty ones instead
+                console.log(`[convertAndSendProgram] Creating empty routine as fallback...`)
+                try {
+                  const { routineId } = await this.createRoutine(
+                    clientUserId,
+                    { exercises: [] },
+                    weekNumber,
+                    routineIndex,
+                  )
+                  routineMap.push({
+                    routineId,
+                    week: weekNumber,
+                    order: routineIndex + 1,
+                  })
+                  console.log(`[convertAndSendProgram] ✅ Created fallback routine ${routineId}`)
+                } catch (fallbackError) {
+                  console.error(`[convertAndSendProgram] Failed to create fallback routine:`, fallbackError)
+                }
               }
             }
           } else {
@@ -482,8 +497,19 @@ export class ProgramConversionService {
                 `[convertAndSendProgram] Error creating routine ${routineIndex + 1} for week ${week}:`,
                 routineError,
               )
-              // Continue with other routines instead of failing completely
-              continue
+              // CRITICAL: Don't skip routines, create empty ones instead
+              console.log(`[convertAndSendProgram] Creating empty routine as fallback...`)
+              try {
+                const { routineId } = await this.createRoutine(clientUserId, { exercises: [] }, week, routineIndex)
+                routineMap.push({
+                  routineId,
+                  week,
+                  order: routineIndex + 1,
+                })
+                console.log(`[convertAndSendProgram] ✅ Created fallback routine ${routineId}`)
+              } catch (fallbackError) {
+                console.error(`[convertAndSendProgram] Failed to create fallback routine:`, fallbackError)
+              }
             }
           }
         }
@@ -502,8 +528,21 @@ export class ProgramConversionService {
       console.log(`[convertAndSendProgram] Total routines created: ${routineMap.length}`)
       console.log(`[convertAndSendProgram] Routine map:`, routineMap)
 
+      // CRITICAL FIX: Don't fail if no routines, create a default program structure
       if (routineMap.length === 0) {
-        throw new Error("No routines were created for the program")
+        console.log(`[convertAndSendProgram] No routines were created, creating default empty routine...`)
+        try {
+          const { routineId } = await this.createRoutine(clientUserId, { exercises: [] }, 1, 0)
+          routineMap.push({
+            routineId,
+            week: 1,
+            order: 1,
+          })
+          console.log(`[convertAndSendProgram] ✅ Created default routine ${routineId}`)
+        } catch (defaultError) {
+          console.error(`[convertAndSendProgram] Failed to create default routine:`, defaultError)
+          throw new Error("No routines were created for the program and failed to create default routine")
+        }
       }
 
       // Create the program document
