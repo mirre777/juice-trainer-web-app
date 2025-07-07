@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Exercise {
   name: string
@@ -89,7 +89,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const router = useRouter()
   const { toast } = useToast()
   const [programState, setProgramState] = useState<Program | null>(null)
-  const [originalProgramState, setOriginalProgramState = useState<Program | null>(null)
+  const [originalProgramState, setOriginalProgramState] = useState<Program | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>(initialClients)

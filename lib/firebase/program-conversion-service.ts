@@ -88,10 +88,10 @@ interface RoutineData {
 interface Exercise {
   name: string
   sets?: Array<{
-    reps?: string
-    weight?: string
-    rpe?: string
-    rest?: string
+    reps?: string | number
+    weight?: string | number
+    rpe?: string | number
+    rest?: string | number
     notes?: string
     set_number?: number
   }>
@@ -928,101 +928,6 @@ export class ProgramConversionService {
       }
     }
   }
-
-  /**
-   * Converts and sends a program to a client
-   */
-  async convertAndSendProgramToClient(
-    clientId: string,
-    programData: Program,
-    trainerId: string,
-    customMessage?: string,
-  ): Promise<{ success: boolean; programId?: string; error?: string }> {
-    try {
-      console.log("[convertAndSendProgramToClient] Starting conversion:", {
-        clientId,
-        programName: programData.name,
-        trainerId,
-        hasCustomMessage: !!customMessage,
-      })
-
-      // Generate program ID
-      const programId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      const now = Timestamp.now()
-
-      // Create the program document for the client
-      const programDoc = {
-        id: programId,
-        name: programData.name || "Untitled Program",
-        notes: programData.notes || "",
-        duration: programData.duration_weeks || 1,
-        createdAt: now,
-        updatedAt: now,
-        program_URL: "", // Keep this field as it was in working version
-        // Remove isActive and status fields as they weren't in working version
-      }
-
-      // Save program to client's programs collection
-      const clientProgramRef = doc(db, "users", clientId, "programs", programId)
-      await setDoc(clientProgramRef, programDoc)
-
-      console.log("[convertAndSendProgramToClient] Program document created:", programId)
-
-      // Create routines from the program data
-      const routines = programData.routines || programData.weeks?.[0]?.routines || []
-
-      for (let routineIndex = 0; routineIndex < routines.length; routineIndex++) {
-        const routine = routines[routineIndex]
-
-        // Generate routine ID
-        const routineId = `${programId}-routine-${routineIndex}`
-
-        // Create routine document
-        const routineDoc = {
-          id: routineId,
-          name: routine.name || `Routine ${routineIndex + 1}`,
-          notes: "",
-          type: "program", // Critical field for mobile app filtering
-          updatedAt: now, // Use updatedAt, not updated_at
-          exercises:
-            routine.exercises?.map((exercise, exerciseIndex) => ({
-              id: `${routineId}-exercise-${exerciseIndex}`,
-              name: exercise.name,
-              notes: exercise.notes || "",
-              sets: Array.from({ length: exercise.sets?.length || 1 }, (_, setIndex) => {
-                const set = exercise.sets?.[setIndex] || {}
-                return {
-                  id: `${routineId}-exercise-${exerciseIndex}-set-${setIndex}`,
-                  notes: set.rpe ? `RPE: ${set.rpe} | Rest: ${set.rest || "-"}` : `Rest: ${set.rest || "-"}`,
-                  reps: set.reps || "",
-                  type: "normal",
-                  weight: set.weight || "",
-                }
-              }),
-            })) || [],
-        }
-
-        // Save routine to client's routines collection
-        const clientRoutineRef = doc(db, "users", clientId, "routines", routineId)
-        await setDoc(clientRoutineRef, routineDoc)
-
-        console.log("[convertAndSendProgramToClient] Routine created:", routineId)
-      }
-
-      console.log("[convertAndSendProgramToClient] Conversion completed successfully")
-
-      return {
-        success: true,
-        programId,
-      }
-    } catch (error) {
-      console.error("[convertAndSendProgramToClient] Error:", error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-      }
-    }
-  }
 }
 
 // Helper functions
@@ -1032,6 +937,239 @@ function generateProgramId(): string {
 
 function generateRoutineId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+function removeUndefinedValues(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return null
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefinedValues).filter((item) => item !== undefined)
+  }
+
+  if (typeof obj === "object") {
+    const cleaned: any = {}
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = removeUndefinedValues(value)
+      }
+    }
+    return cleaned
+  }
+
+  return obj
+}
+
+function ensureString(value: any): string {
+  if (value === null || value === undefined) {
+    return ""
+  }
+  return String(value)
+}
+
+function ensureNumber(value: any): number {
+  if (value === null || value === undefined || isNaN(Number(value))) {
+    return 0
+  }
+  return Number(value)
+}
+
+export async function convertAndSendProgramToClient(
+  clientId: string,
+  programData: Program,
+  customMessage?: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log("🚀 Starting program conversion for client:", clientId)
+    console.log("📋 Program data:", programData)
+
+    if (!clientId) {
+      throw new Error("Client ID is required")
+    }
+
+    if (!programData) {
+      throw new Error("Program data is required")
+    }
+
+    // Validate program structure
+    const hasRoutines = programData.routines && programData.routines.length > 0
+    const hasWeeks = programData.weeks && programData.weeks.length > 0
+
+    if (!hasRoutines && !hasWeeks) {
+      throw new Error("Program must have either routines or weeks with routines")
+    }
+
+    console.log("✅ Program validation passed")
+
+    // Create program document for the client
+    const programId = uuidv4()
+    const programDocRef = doc(db, "users", clientId, "programs", programId)
+
+    // Clean program data
+    const cleanProgramData = {
+      id: programId,
+      name: ensureString(programData.name || programData.program_title || programData.title || "Untitled Program"),
+      description: ensureString(programData.description || ""),
+      duration_weeks: ensureNumber(programData.duration_weeks || 1),
+      is_periodized: Boolean(programData.is_periodized),
+      created_at: new Date(),
+      updated_at: new Date(),
+      status: "active",
+      custom_message: ensureString(customMessage || ""),
+    }
+
+    // Remove any undefined values
+    const finalProgramData = removeUndefinedValues(cleanProgramData)
+
+    console.log("💾 Saving program document:", finalProgramData)
+    await setDoc(programDocRef, finalProgramData)
+
+    // Convert and save routines
+    if (programData.is_periodized && programData.weeks) {
+      console.log("📅 Processing periodized program with", programData.weeks.length, "weeks")
+
+      for (const week of programData.weeks) {
+        if (!week.routines || week.routines.length === 0) {
+          console.log(`⚠️ Skipping week ${week.week_number} - no routines`)
+          continue
+        }
+
+        for (const routine of week.routines) {
+          await createRoutineForClient(clientId, programId, routine, week.week_number)
+        }
+      }
+    } else if (programData.routines) {
+      console.log("📝 Processing non-periodized program with", programData.routines.length, "routines")
+
+      for (const routine of programData.routines) {
+        await createRoutineForClient(clientId, programId, routine)
+      }
+    } else if (programData.weeks && programData.weeks.length > 0) {
+      // Fallback: use first week's routines for non-periodized
+      console.log("🔄 Using first week's routines for non-periodized program")
+      const firstWeek = programData.weeks[0]
+
+      if (firstWeek.routines && firstWeek.routines.length > 0) {
+        for (const routine of firstWeek.routines) {
+          await createRoutineForClient(clientId, programId, routine)
+        }
+      }
+    }
+
+    console.log("✅ Program conversion completed successfully")
+    return { success: true }
+  } catch (error) {
+    console.error("❌ Error converting program:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    }
+  }
+}
+
+async function createRoutineForClient(
+  clientId: string,
+  programId: string,
+  routine: Routine,
+  weekNumber?: number,
+): Promise<void> {
+  try {
+    const routineId = uuidv4()
+    const routineDocRef = doc(db, "users", clientId, "routines", routineId)
+
+    console.log(`📝 Creating routine: ${routine.name || routine.title || "Untitled"} for client ${clientId}`)
+
+    // Process exercises
+    const processedExercises =
+      routine.exercises?.map((exercise, exerciseIndex) => {
+        const processedSets =
+          exercise.sets?.map((set, setIndex) => {
+            const processedSet: any = {
+              set_number: setIndex + 1,
+              reps: ensureString(set.reps || ""),
+              weight: ensureString(set.weight || ""),
+              rpe: ensureString(set.rpe || ""),
+              rest: ensureString(set.rest || ""),
+              completed: false,
+            }
+
+            // Only add notes if they exist and are not empty
+            if (set.notes && set.notes.trim() !== "") {
+              processedSet.notes = ensureString(set.notes)
+            }
+
+            return processedSet
+          }) || []
+
+        const processedExercise: any = {
+          name: ensureString(exercise.name || `Exercise ${exerciseIndex + 1}`),
+          sets: processedSets,
+          completed: false,
+        }
+
+        // Only add notes if they exist and are not empty
+        if (exercise.notes && exercise.notes.trim() !== "") {
+          processedExercise.notes = ensureString(exercise.notes)
+        }
+
+        return processedExercise
+      }) || []
+
+    // Create routine document
+    const routineData = {
+      id: routineId,
+      program_id: programId,
+      name: ensureString(routine.name || routine.title || "Untitled Routine"),
+      exercises: processedExercises,
+      completed: false,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }
+
+    // Add week number if provided (for periodized programs)
+    if (weekNumber !== undefined) {
+      routineData.week_number = weekNumber
+    }
+
+    // Clean the routine data to remove any undefined values
+    const finalRoutineData = removeUndefinedValues(routineData)
+
+    console.log(`💾 Saving routine document:`, finalRoutineData)
+    await setDoc(routineDocRef, finalRoutineData)
+
+    console.log(`✅ Routine created successfully: ${routineId}`)
+  } catch (error) {
+    console.error(`❌ Error creating routine for client ${clientId}:`, error)
+    throw error
+  }
+}
+
+export async function createProgramFromImport(
+  clientId: string,
+  importData: any,
+): Promise<{ success: boolean; programId?: string; error?: string }> {
+  try {
+    console.log("🔄 Creating program from import data for client:", clientId)
+
+    if (!importData || !importData.program) {
+      throw new Error("Invalid import data")
+    }
+
+    const result = await convertAndSendProgramToClient(clientId, importData.program, importData.customMessage)
+
+    if (result.success) {
+      return { success: true }
+    } else {
+      return { success: false, error: result.error }
+    }
+  } catch (error) {
+    console.error("❌ Error creating program from import:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    }
+  }
 }
 
 // Export singleton instance
