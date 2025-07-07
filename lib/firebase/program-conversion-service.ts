@@ -291,23 +291,28 @@ export class ProgramConversionService {
             type: "normal",
             weight: "",
             reps: "",
-            notes: undefined,
           }
         }
 
-        // Combine RPE, rest, and notes into a single notes field like your example
-        const notesParts = []
-        if (set.rpe) notesParts.push(`RPE: ${set.rpe}`)
-        if (set.rest) notesParts.push(`Rest: ${set.rest}`)
-        if (set.notes) notesParts.push(set.notes)
-
-        return {
+        // CRITICAL FIX: Ensure no undefined values are passed to Firestore
+        const cleanSet = {
           id: uuidv4(),
           type: set.warmup ? "warmup" : set.set_type || "normal",
-          weight: set.weight?.toString() || "",
-          reps: set.reps?.toString() || "",
-          notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+          weight: set.weight !== undefined && set.weight !== null ? set.weight.toString() : "",
+          reps: set.reps !== undefined && set.reps !== null ? set.reps.toString() : "",
         }
+
+        // Only add notes if they exist and are not undefined
+        const notesParts = []
+        if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") notesParts.push(`RPE: ${set.rpe}`)
+        if (set.rest !== undefined && set.rest !== null && set.rest !== "") notesParts.push(`Rest: ${set.rest}`)
+        if (set.notes !== undefined && set.notes !== null && set.notes !== "") notesParts.push(set.notes)
+
+        if (notesParts.length > 0) {
+          cleanSet.notes = notesParts.join(" | ")
+        }
+
+        return cleanSet
       })
 
       exercises.push({
@@ -342,13 +347,41 @@ export class ProgramConversionService {
       throw new Error(`Routine name must be a non-empty string, got: ${typeof routineDoc.name} - "${routineDoc.name}"`)
     }
 
+    // CRITICAL FIX: Deep clean the routine document to remove any undefined values
+    const cleanRoutineDoc = this.removeUndefinedValues(routineDoc)
+
     // Save routine to Firestore
     const routinesRef = collection(db, "users", userId, "routines")
-    await setDoc(doc(routinesRef, routineId), routineDoc)
+    await setDoc(doc(routinesRef, routineId), cleanRoutineDoc)
 
     console.log(`[createRoutine] ✅ Created routine: "${routineName}" with ID: ${routineId}`)
 
-    return { routineId, routineDoc }
+    return { routineId, routineDoc: cleanRoutineDoc }
+  }
+
+  /**
+   * Recursively remove undefined values from an object to prevent Firestore errors
+   */
+  private removeUndefinedValues(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return null
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.removeUndefinedValues(item))
+    }
+
+    if (typeof obj === "object") {
+      const cleaned: any = {}
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          cleaned[key] = this.removeUndefinedValues(value)
+        }
+      }
+      return cleaned
+    }
+
+    return obj
   }
 
   /**
@@ -397,7 +430,7 @@ export class ProgramConversionService {
         console.log(`[convertAndSendProgram] Processing ${programData.routines.length} routines (non-periodized)`)
 
         // For non-periodized, repeat the same routines for each week
-        const totalWeeks = programData.program_weeks || 1
+        const totalWeeks = programData.program_weeks || programData.duration_weeks || 1
 
         for (let week = 1; week <= totalWeeks; week++) {
           for (let routineIndex = 0; routineIndex < programData.routines.length; routineIndex++) {
@@ -423,20 +456,29 @@ export class ProgramConversionService {
       const program: MobileProgram = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
-        notes: "", // Always empty string, never null
+        notes: "", // Always empty string, never null or undefined
         // Use Firestore Timestamp objects to match working program
         createdAt: firestoreTimestamp,
         startedAt: firestoreTimestamp,
         updatedAt: firestoreTimestamp,
-        duration: Number(programData.program_weeks || programData.weeks?.length || programData.duration || 4),
+        duration: Number(
+          programData.program_weeks ||
+            programData.duration_weeks ||
+            programData.weeks?.length ||
+            programData.duration ||
+            4,
+        ),
         program_URL: "", // Keep this field - it exists in working programs
         routines: routineMap,
         // DO NOT include isActive or status - they don't exist in working programs
       }
 
+      // CRITICAL FIX: Clean the program document to remove any undefined values
+      const cleanProgram = this.removeUndefinedValues(program)
+
       // Save program to Firestore
       const programsRef = collection(db, "users", clientUserId, "programs")
-      await setDoc(doc(programsRef, programId), program)
+      await setDoc(doc(programsRef, programId), cleanProgram)
 
       console.log(`[convertAndSendProgram] ✅ Created program: ${program.name} with ID: ${programId}`)
       console.log(`[convertAndSendProgram] Program structure matches working program from user 8oga:`, {
