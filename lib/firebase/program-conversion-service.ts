@@ -39,6 +39,7 @@ export interface MobileRoutine {
   updatedAt: string
   deletedAt: null
   type: "program"
+  programId: string // Add this field
   exercises: Array<{
     id: string
     name: string
@@ -225,6 +226,7 @@ export class ProgramConversionService {
     weekNumber: number,
     routineIndex = 0,
     batch: WriteBatch,
+    programId: string, // Add programId parameter
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
     const timestamp = new Date().toISOString()
@@ -306,6 +308,7 @@ export class ProgramConversionService {
       updatedAt: timestamp,
       deletedAt: null,
       type: "program",
+      programId: programId, // Add this line
       exercises,
     }
 
@@ -360,6 +363,9 @@ export class ProgramConversionService {
       const timestamp = new Date().toISOString()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
+      // Generate programId first
+      const programId = uuidv4()
+
       // Batch all Firebase operations to reduce timeout risk
       const batch = writeBatch(db)
       const routinePromises: Promise<{ routineId: string; week: number; order: number }>[] = []
@@ -376,8 +382,10 @@ export class ProgramConversionService {
             for (let routineIndex = 0; routineIndex < week.routines.length; routineIndex++) {
               const routine = week.routines[routineIndex]
 
-              // Create routine promise instead of awaiting immediately
-              routinePromises.push(this.createRoutineBatch(clientUserId, routine, weekNumber, routineIndex, batch))
+              // Pass programId to createRoutineBatch
+              routinePromises.push(
+                this.createRoutineBatch(clientUserId, routine, weekNumber, routineIndex, batch, programId),
+              )
             }
           }
         }
@@ -392,7 +400,8 @@ export class ProgramConversionService {
           for (let routineIndex = 0; routineIndex < programData.routines.length; routineIndex++) {
             const routine = programData.routines[routineIndex]
 
-            routinePromises.push(this.createRoutineBatch(clientUserId, routine, week, routineIndex, batch))
+            // Pass programId to createRoutineBatch
+            routinePromises.push(this.createRoutineBatch(clientUserId, routine, week, routineIndex, batch, programId))
           }
         }
       }
@@ -410,8 +419,7 @@ export class ProgramConversionService {
 
       console.log(`[convertAndSendProgram] Total routines created: ${routineMap.length}`)
 
-      // Create the program document
-      const programId = uuidv4()
+      // Create the program document (programId already generated above)
       const program: MobileProgram = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
