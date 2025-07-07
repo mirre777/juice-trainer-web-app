@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -388,7 +390,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
         throw new Error(errorData.error || "Failed to send program")
       }
 
@@ -800,17 +802,20 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     router.back()
   }
 
-  // Create safe click handlers to prevent the "j is not a function" error
-  const createSafeClickHandler = (handler: () => void, handlerName: string) => {
-    return () => {
+  const createSafeClickHandler = useCallback((handler: () => void, handlerName: string) => {
+    return (event?: React.MouseEvent) => {
       try {
+        if (event) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
         debugLog(`Executing safe click handler: ${handlerName}`)
         handler()
       } catch (err) {
         errorLog(`Error in ${handlerName}:`, err)
       }
     }
-  }
+  }, [])
 
   // Add this useEffect to debug hasChanges state
   useEffect(() => {
