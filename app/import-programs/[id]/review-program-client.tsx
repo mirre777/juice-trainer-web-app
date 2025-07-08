@@ -385,21 +385,17 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         body: JSON.stringify({
           clientId: selectedClientId,
           programData: programState,
+          customMessage: customMessage || "",
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-        throw new Error(errorData.error || "Failed to send program")
-      }
-
       const result = await response.json()
-      debugLog("Program sent successfully:", result)
 
-      // Log the timestamp debugging information
-      if (result.timestampDebug) {
-        console.log("Timestamp debugging info:", result.timestampDebug)
+      if (!response.ok) {
+        throw new Error(result.error || `Server error: ${response.status}`)
       }
+
+      debugLog("Program sent successfully:", result)
 
       toast({
         title: "Program Sent Successfully!",
@@ -419,7 +415,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     } finally {
       setIsSending(false)
     }
-  }, [selectedClientId, programState, clients, toast])
+  }, [selectedClientId, programState, clients, customMessage, toast])
 
   const handleTogglePeriodization = useCallback(
     (checked: boolean) => {

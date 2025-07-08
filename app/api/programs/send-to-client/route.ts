@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📋 Request body:", body)
 
-    const { clientId, programData } = body
+    const { clientId, programData, customMessage } = body
 
     if (!clientId) {
       console.error("❌ Missing clientId in request")

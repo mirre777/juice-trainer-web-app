@@ -1,197 +1,87 @@
-import { getFirestore, doc, setDoc, collection, Timestamp, getDoc } from "firebase/firestore"
-import { v4 as uuidv4 } from "uuid"
-import { clientService } from "./client-service"
+import { initializeApp } from "firebase/app"
+import { getFirestore } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
+import { getStorage } from "firebase/storage"
+import { getFunctions } from "firebase/functions"
 
-const db = getFirestore()
-
-interface ExerciseSet {
-  reps: string
-  weight: string
-  notes: string
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-interface Exercise {
-  name: string
-  sets: ExerciseSet[]
-}
-
-interface Routine {
-  name: string
-  exercises: Exercise[]
-}
-
-interface ProgramData {
-  name: string
-  program_title?: string
-  duration_weeks: number
-  routines: Routine[]
-}
-
-interface ConvertedProgram {
-  id: string
-  name: string
-  notes: string
-  createdAt: Timestamp
-  startedAt: Timestamp
-  updatedAt: Timestamp
-  duration: number
-  program_URL: string
-  routines: Array<{
-    routineId: string
-    week: number
-    order: number
-  }>
-}
+// Initialize Firebase
+const app = initializeApp(firebaseConfig)
+const db = getFirestore(app)
+const auth = getAuth(app)
+const storage = getStorage(app)
+const functions = getFunctions(app)
 
 class ProgramConversionService {
-  async sendProgramToClient(clientId: string, programData: ProgramData) {
-    try {
-      console.log("🔄 Starting program conversion for client:", clientId)
+  private db: any // Using 'any' type for simplicity, consider a more specific type
+  private auth: any
+  private storage: any
+  private functions: any
 
-      // Get client data to find the linked user
-      const client = await clientService.getClient(clientId)
-      if (!client) {
-        throw new Error(`Client not found: ${clientId}`)
-      }
-
-      if (!client.linkedUserId) {
-        throw new Error(`Client ${clientId} is not linked to a user account`)
-      }
-
-      const clientUserId = client.linkedUserId
-      console.log("📱 Client linked to user:", clientUserId)
-
-      // Create timestamps using Timestamp.now() for immediate timestamp creation
-      const now = Timestamp.now()
-      console.log("⏰ Created timestamp:", now)
-      console.log("⏰ Timestamp type:", typeof now)
-      console.log("⏰ Timestamp seconds:", now.seconds)
-      console.log("⏰ Timestamp nanoseconds:", now.nanoseconds)
-
-      // Generate unique IDs
-      const programId = uuidv4()
-      const routineIds = programData.routines.map(() => uuidv4())
-
-      console.log("🆔 Generated program ID:", programId)
-      console.log("🆔 Generated routine IDs:", routineIds)
-
-      // Convert program data to the format expected by mobile app
-      const convertedProgram: ConvertedProgram = {
-        id: programId,
-        name: programData.name || programData.program_title || "Untitled Program",
-        notes: "",
-        createdAt: now,
-        startedAt: now,
-        updatedAt: now,
-        duration: programData.duration_weeks || 4,
-        program_URL: "",
-        routines: routineIds.map((routineId, index) => ({
-          routineId,
-          week: Math.floor(index / 7) + 1, // Distribute routines across weeks
-          order: (index % 7) + 1,
-        })),
-      }
-
-      console.log("📋 Converted program structure:", {
-        id: convertedProgram.id,
-        name: convertedProgram.name,
-        duration: convertedProgram.duration,
-        routinesCount: convertedProgram.routines.length,
-        createdAt: convertedProgram.createdAt,
-        startedAt: convertedProgram.startedAt,
-        updatedAt: convertedProgram.updatedAt,
-      })
-
-      // Save program to user's programs collection
-      const programRef = doc(collection(db, "users", clientUserId, "programs"), programId)
-
-      console.log("💾 Saving program to:", `users/${clientUserId}/programs/${programId}`)
-      await setDoc(programRef, convertedProgram)
-      console.log("✅ Program saved successfully")
-
-      // Fetch the saved program to see how timestamps are actually stored
-      const savedProgramDoc = await getDoc(programRef)
-      const savedProgramData = savedProgramDoc.data()
-
-      console.log("📖 Fetched saved program data:", {
-        createdAt: savedProgramData?.createdAt,
-        startedAt: savedProgramData?.startedAt,
-        updatedAt: savedProgramData?.updatedAt,
-        createdAtType: typeof savedProgramData?.createdAt,
-        startedAtType: typeof savedProgramData?.startedAt,
-        updatedAtType: typeof savedProgramData?.updatedAt,
-      })
-
-      // Save individual routines
-      for (let i = 0; i < programData.routines.length; i++) {
-        const routine = programData.routines[i]
-        const routineId = routineIds[i]
-
-        const convertedRoutine = {
-          id: routineId,
-          name: routine.name,
-          exercises: routine.exercises.map((exercise, exerciseIndex) => ({
-            id: uuidv4(),
-            name: exercise.name,
-            order: exerciseIndex + 1,
-            sets: exercise.sets.map((set, setIndex) => ({
-              id: uuidv4(),
-              reps: set.reps,
-              weight: set.weight,
-              notes: set.notes,
-              order: setIndex + 1,
-              completed: false,
-            })),
-          })),
-          createdAt: now,
-          updatedAt: now,
-        }
-
-        const routineRef = doc(collection(db, "users", clientUserId, "routines"), routineId)
-        console.log(`💾 Saving routine ${i + 1}:`, routine.name)
-        await setDoc(routineRef, convertedRoutine)
-      }
-
-      console.log("✅ All routines saved successfully")
-
-      return {
-        success: true,
-        programId,
-        clientUserId,
-        routineIds,
-        message: `Program "${convertedProgram.name}" sent to client successfully`,
-        // Return the actual timestamp values to see how they're stored
-        timestamps: {
-          createdAt: savedProgramData?.createdAt,
-          startedAt: savedProgramData?.startedAt,
-          updatedAt: savedProgramData?.updatedAt,
-          originalTimestamp: now,
-        },
-      }
-    } catch (error) {
-      console.error("❌ Error sending program to client:", error)
-      throw error
-    }
+  constructor(db: any, auth: any, storage: any, functions: any) {
+    this.db = db
+    this.auth = auth
+    this.storage = storage
+    this.functions = functions
   }
 
-  async getProgramById(userId: string, programId: string) {
+  async sendProgramToClient(clientId: string, programData: any) {
     try {
-      const programRef = doc(db, "users", userId, "programs", programId)
-      const programDoc = await getDoc(programRef)
+      console.log("🔄 Converting program for client:", clientId)
+      console.log("📋 Program data:", programData)
 
-      if (!programDoc.exists()) {
-        return null
+      // Get client information
+      const clientDoc = await this.db.collection("clients").doc(clientId).get()
+      if (!clientDoc.exists) {
+        throw new Error(`Client with ID ${clientId} not found`)
       }
+
+      const clientData = clientDoc.data()
+      console.log("👤 Client data:", clientData)
+
+      // Convert the program data to the format expected by the client
+      const convertedProgram = {
+        id: `program_${Date.now()}`,
+        name: programData.name || programData.program_title || "Untitled Program",
+        description: programData.description || "",
+        duration_weeks: programData.duration_weeks || 1,
+        is_periodized: programData.is_periodized || false,
+        weeks: programData.weeks || [],
+        routines: programData.routines || [],
+        created_at: new Date().toISOString(),
+        sent_at: new Date().toISOString(),
+        status: "active",
+      }
+
+      // Save the program to the client's programs collection
+      const programRef = this.db.collection("clients").doc(clientId).collection("programs").doc()
+      await programRef.set(convertedProgram)
+
+      console.log("✅ Program saved to client's collection:", programRef.id)
 
       return {
-        id: programDoc.id,
-        ...programDoc.data(),
+        programId: programRef.id,
+        clientId: clientId,
+        clientName: clientData?.name || "Unknown Client",
+        programName: convertedProgram.name,
       }
     } catch (error) {
-      console.error("❌ Error getting program:", error)
+      console.error("❌ Error in sendProgramToClient:", error)
       throw error
     }
   }
 }
 
-export const programConversionService = new ProgramConversionService()
+const programConversionService = new ProgramConversionService(db, auth, storage, functions)
+
+export default programConversionService
