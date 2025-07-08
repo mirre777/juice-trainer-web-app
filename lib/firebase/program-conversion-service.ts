@@ -144,8 +144,8 @@ export class ProgramConversionService {
         isCardio: false,
         isFullBody: false,
         isMobility: false,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
+        updatedAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
         deletedAt: null,
       }
 
@@ -304,11 +304,11 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      createdAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
+      updatedAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
       deletedAt: null,
       type: "program",
-      programId: programId, // Add this line
+      programId: programId,
       exercises,
     }
 
@@ -424,9 +424,9 @@ export class ProgramConversionService {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: timestamp, // Use Firestore Timestamp directly
-        startedAt: timestamp, // Use Firestore Timestamp directly
-        updatedAt: timestamp, // Use Firestore Timestamp directly
+        createdAt: Timestamp.fromDate(new Date()), // Use fromDate to ensure proper Firestore Timestamp
+        startedAt: Timestamp.fromDate(new Date()), // Use fromDate to ensure proper Firestore Timestamp
+        updatedAt: Timestamp.fromDate(new Date()), // Use fromDate to ensure proper Firestore Timestamp
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
