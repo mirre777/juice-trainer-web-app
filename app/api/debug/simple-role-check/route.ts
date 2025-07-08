@@ -1,45 +1,47 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
 import { NextResponse } from "next/server"
 import { getUserProfile } from "@/lib/firebase/user-service"
 
 export async function GET() {
   try {
-    console.log("🔍 Simple role check starting...")
+    console.log("[DEBUG] Simple role check starting...")
 
-    const email = "mirresnelting@gmail.com"
+    // Test with your email
+    const testEmail = "mirresnelting@gmail.com"
 
-    console.log("📧 Checking user profile for:", email)
+    console.log(`[DEBUG] Testing with email: ${testEmail}`)
 
-    const userProfile = await getUserProfile(email)
+    const userProfile = await getUserProfile(testEmail)
 
-    const result = {
-      timestamp: new Date().toISOString(),
-      email: email,
-      found: !!userProfile,
-      profile: userProfile
-        ? {
-            uid: userProfile.uid,
-            email: userProfile.email,
-            name: userProfile.name,
-            role: userProfile.role,
-            user_type: userProfile.user_type,
-            roleType: typeof userProfile.role,
-            rawRole: JSON.stringify(userProfile.role),
-          }
-        : null,
+    if (!userProfile) {
+      return NextResponse.json({
+        success: false,
+        message: "User not found",
+        email: testEmail,
+      })
     }
 
-    console.log("✅ Role check result:", result)
+    return NextResponse.json({
+      success: true,
+      message: "User found successfully",
+      user: {
+        uid: userProfile.uid,
+        email: userProfile.email,
+        name: userProfile.name,
+        role: userProfile.role,
+        user_type: userProfile.user_type,
+        roleType: typeof userProfile.role,
+        rawRole: JSON.stringify(userProfile.role),
+      },
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error: any) {
+    console.error("[DEBUG] Error in simple role check:", error)
 
-    return NextResponse.json(result, { status: 200 })
-  } catch (error) {
-    console.error("❌ Role check failed:", error)
     return NextResponse.json(
       {
-        error: "Role check failed",
-        details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
+        error: error.message,
+        stack: error.stack,
         timestamp: new Date().toISOString(),
       },
       { status: 500 },

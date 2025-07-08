@@ -1,73 +1,102 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { verifyToken } from "@/lib/auth/token-service"
 import { getUserProfile } from "@/lib/firebase/user-service"
 
-export async function GET(request: NextRequest) {
-  try {
-    console.log("[/api/auth/me] Starting user profile fetch...")
+function generateErrorId() {
+  return `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
 
+export async function GET(request: NextRequest) {
+  const errorId = generateErrorId()
+
+  try {
+    console.log(`[API:me] 🔄 Fetching user profile (ID: ${errorId})`)
+
+    // Get token from cookies
     const cookieStore = cookies()
-    const token = cookieStore.get("auth-token")?.value
+    const token =
+      cookieStore.get("auth-token")?.value ||
+      cookieStore.get("auth_token")?.value ||
+      cookieStore.get("session_token")?.value
 
     if (!token) {
-      console.log("[/api/auth/me] No auth token found")
-      return NextResponse.json({ error: "No token provided" }, { status: 401 })
+      console.log(`[API:me] ❌ No authentication token found`)
+      return NextResponse.json({ error: "No authentication token found", errorId }, { status: 401 })
     }
 
-    console.log("[/api/auth/me] Token found, verifying...")
+    console.log(`[API:me] 🔑 Token found: ${token.substring(0, 20)}...`)
 
-    // Verify the token
-    const decoded = await verifyToken(token)
-    if (!decoded || !decoded.uid) {
-      console.log("[/api/auth/me] Token verification failed")
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    // Verify token
+    let tokenData
+    try {
+      tokenData = await verifyToken(token)
+      console.log(`[API:me] ✅ Token verified for user: ${tokenData.email}`)
+    } catch (tokenError: any) {
+      console.log(`[API:me] ❌ Token verification failed:`, tokenError.message)
+      return NextResponse.json({ error: "Invalid or expired token", errorId }, { status: 401 })
     }
 
-    console.log("[/api/auth/me] Token verified for user:", decoded.email)
+    // Fetch fresh user data from Firestore
+    let userProfile
+    try {
+      console.log(`[API:me] 🔄 Fetching fresh user data from Firestore for: ${tokenData.email}`)
+      userProfile = await getUserProfile(tokenData.email)
 
-    // Always fetch fresh data from Firestore
-    console.log("[/api/auth/me] Fetching fresh user data from Firestore...")
-    const userProfile = await getUserProfile(decoded.email)
+      if (!userProfile) {
+        console.log(`[API:me] ❌ User profile not found in Firestore for: ${tokenData.email}`)
+        return NextResponse.json({ error: "User profile not found", errorId }, { status: 404 })
+      }
 
-    if (!userProfile) {
-      console.log("[/api/auth/me] User profile not found in Firestore for:", decoded.email)
-      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
+      console.log(`[API:me] ✅ User profile fetched successfully:`, {
+        email: userProfile.email,
+        role: userProfile.role,
+        name: userProfile.name,
+      })
+    } catch (firestoreError: any) {
+      console.error(`[API:me] ❌ Firestore error:`, firestoreError)
+      return NextResponse.json(
+        {
+          error: "Failed to retrieve user profile. Please try again.",
+          errorId,
+        },
+        { status: 500 },
+      )
     }
 
-    console.log("[/api/auth/me] User profile fetched successfully:", {
-      email: userProfile.email,
-      role: userProfile.role,
-      name: userProfile.name,
-    })
-
-    // Return the fresh user data
+    // Return user data
     const response = {
       user: {
-        uid: decoded.uid,
+        uid: userProfile.uid,
         email: userProfile.email,
-        name: userProfile.name || decoded.name,
-        role: userProfile.role || "user", // Default to "user" if no role
+        name: userProfile.name,
+        role: userProfile.role,
         user_type: userProfile.user_type,
-        hasFirebaseAuth: userProfile.hasFirebaseAuth,
         profilePicture: userProfile.profilePicture,
-        createdAt: userProfile.createdAt,
-        updatedAt: userProfile.updatedAt,
+        isApproved: userProfile.isApproved,
+        subscriptionStatus: userProfile.subscriptionStatus,
       },
     }
 
-    console.log("[/api/auth/me] Returning user data with role:", response.user.role)
+    console.log(`[API:me] 🎉 Returning user data:`, {
+      email: response.user.email,
+      role: response.user.role,
+      name: response.user.name,
+    })
 
-    return NextResponse.json(response, { status: 200 })
-  } catch (error) {
-    console.error("[/api/auth/me] Error fetching user profile:", error)
+    return NextResponse.json(response)
+  } catch (error: any) {
+    console.error(`[API:me] ❌ Unexpected error (ID: ${errorId}):`, error)
     return NextResponse.json(
       {
-        error: "Failed to fetch user profile",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to retrieve user profile. Please try again.",
+        errorId,
+        ...(process.env.NODE_ENV === "development" && {
+          debug: {
+            message: error.message,
+            stack: error.stack,
+          },
+        }),
       },
       { status: 500 },
     )
