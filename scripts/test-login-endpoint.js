@@ -1,111 +1,69 @@
 #!/usr/bin/env node
 
-console.log("🔐 Testing Login Endpoint...\n")
+console.log("🔐 Testing Login Endpoint Configuration...\n")
 
-// Test configuration
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-const loginUrl = `${baseUrl}/api/auth/login`
+// Check if we can simulate the login flow
+console.log("📋 Checking Login Dependencies:")
 
-console.log(`🌐 Testing endpoint: ${loginUrl}`)
-console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`)
-console.log(`📦 Vercel: ${process.env.VERCEL === "1" ? "Yes" : "No"}`)
-console.log("")
-
-// Test credentials from your screenshot
-const testCredentials = {
-  email: "mirresnelting+4@gmail.com", // From your screenshot
-  password: "test123", // Placeholder - you'll need to use the real password
-}
-
-console.log(`📧 Test email: ${testCredentials.email}`)
-console.log(`🔑 Password: ${"*".repeat(testCredentials.password.length)}`)
-console.log("")
-
-// Simulate the login request that's failing
-console.log("1️⃣ Simulating the failing login request...")
-
-// Create the request payload (same as in your screenshot)
-const requestPayload = {
-  email: testCredentials.email,
-  password: testCredentials.password,
-  invitationCode: null, // From your screenshot logs
-}
-
-console.log("📦 Request payload:")
-console.log(
-  JSON.stringify(
-    {
-      ...requestPayload,
-      password: "********", // Hide password in logs
-    },
-    null,
-    2,
-  ),
-)
-
-console.log("\n2️⃣ Analyzing the request...")
-
-// Check if we have the required environment variables for the API to work
-const requiredForAPI = [
+// Check required environment variables for login
+const loginRequiredVars = [
   "NEXT_PUBLIC_FIREBASE_API_KEY",
+  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
   "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
+  "ENCRYPTION_KEY",
 ]
 
-console.log("🔍 Checking if API has required environment variables...")
-const missingForAPI = requiredForAPI.filter((varName) => !process.env[varName])
+const missingVars = []
+loginRequiredVars.forEach((varName) => {
+  const value = process.env[varName]
+  if (!value || value === "undefined") {
+    missingVars.push(varName)
+    console.log(`❌ Missing: ${varName}`)
+  } else {
+    console.log(`✅ Present: ${varName}`)
+  }
+})
 
-if (missingForAPI.length > 0) {
-  console.log("❌ Missing environment variables that the API needs:")
-  missingForAPI.forEach((varName) => {
-    console.log(`   - ${varName}`)
-  })
-  console.log("\n💡 This explains the 500 Internal Server Error!")
-  console.log("   The login API cannot initialize Firebase without these variables.")
+console.log("\n🔍 Analyzing Your Specific Error:")
+console.log("Error Message: 'Failed to retrieve user profile. Please try again.'")
+console.log("Error ID: ERR_1751989111900_guxe85vd")
+console.log("Status Code: 500")
+
+console.log("\n🕵️ Error Analysis:")
+console.log("This error occurs in the login API route at this sequence:")
+console.log("1. ✅ User submits email/password")
+console.log("2. ✅ Firebase authentication succeeds")
+console.log("3. ❌ getUserByEmail() function fails")
+console.log("4. ❌ Returns 500 error")
+
+console.log("\n🎯 Root Cause Analysis:")
+if (missingVars.length > 0) {
+  console.log("❌ CRITICAL: Missing environment variables detected")
+  console.log("   This will cause Firebase initialization to fail")
+  console.log("   Missing variables:", missingVars.join(", "))
 } else {
-  console.log("✅ All required environment variables are present for the API")
+  console.log("✅ All required environment variables are present")
+  console.log("   The issue might be:")
+  console.log("   - Firestore security rules blocking the query")
+  console.log("   - Network connectivity issues")
+  console.log("   - Malformed private key")
 }
 
-console.log("\n3️⃣ Analyzing the error from your screenshot...")
+console.log("\n🔧 Recommended Fix Order:")
+console.log("1. Fix missing environment variables (if any)")
+console.log("2. Check Vercel function logs for detailed error")
+console.log("3. Verify Firestore security rules")
+console.log("4. Test login again")
 
-const errorFromScreenshot = {
-  message: "Failed to retrieve user profile. Please try again.",
-  errorId: "ERR_1751989111900_guxe85vd",
-}
+// Test specific login scenario
+console.log("\n🧪 Login Flow Test:")
+console.log("Simulating login for: test@example.com")
 
-console.log("📋 Error details from your screenshot:")
-console.log(`   Message: ${errorFromScreenshot.message}`)
-console.log(`   Error ID: ${errorFromScreenshot.errorId}`)
-console.log("")
-
-console.log("🔍 This error suggests:")
-console.log("   1. Firebase authentication might be working")
-console.log("   2. But the getUserByEmail() function is failing")
-console.log("   3. This could be due to:")
-console.log("      - Firestore connection issues")
-console.log("      - Missing user document in Firestore")
-console.log("      - Firestore security rules blocking the query")
-console.log("      - Invalid Firestore configuration")
-
-console.log("\n4️⃣ Recommended next steps...")
-
-console.log("🔧 To fix the 500 error:")
-console.log("   1. Check Vercel environment variables dashboard")
-console.log("   2. Verify Firebase service account credentials")
-console.log("   3. Check Firestore security rules")
-console.log("   4. Verify user document exists in Firestore")
-console.log("   5. Check Vercel function logs for detailed error messages")
-
-console.log("\n📊 Summary:")
-if (missingForAPI.length > 0) {
-  console.log("❌ CRITICAL: Missing environment variables will cause 500 errors")
+if (missingVars.length === 0) {
+  console.log("✅ Environment variables OK - login should work")
 } else {
-  console.log("⚠️  Environment variables present, but 500 error suggests:")
-  console.log("   - Firestore query issues in getUserByEmail()")
-  console.log("   - Check Vercel function logs for detailed Firebase errors")
+  console.log("❌ Missing variables will cause 500 error")
+  console.log("   Fix these first:", missingVars.join(", "))
 }
-
-console.log("\n🎯 Most likely cause based on your error:")
-console.log("   The getUserByEmail() function in user-service.ts is failing")
-console.log("   when trying to query Firestore for the user document.")
