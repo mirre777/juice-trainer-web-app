@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
     console.log("[send-to-client API] ✅ Program structure validation passed")
     console.log("[send-to-client API] Calling programConversionService.sendProgramToClient...")
 
-    // Call the service method
-    const result = await programConversionService.sendProgramToClient(clientId, programData, customMessage)
+    // Call the service method - remove the customMessage parameter since the service doesn't expect it
+    const result = await programConversionService.sendProgramToClient(clientId, programData)
 
     console.log("[send-to-client API] ✅ Program sent successfully:", result)
 

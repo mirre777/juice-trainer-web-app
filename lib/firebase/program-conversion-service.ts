@@ -1,5 +1,6 @@
 import { getFirestore, doc, setDoc, collection, Timestamp, getDoc } from "firebase/firestore"
 import { v4 as uuidv4 } from "uuid"
+import { clientService } from "../client/client-service"
 
 const db = getFirestore()
 
@@ -47,9 +48,18 @@ class ProgramConversionService {
     try {
       console.log("🔄 Starting program conversion for client:", clientId)
 
-      // For now, let's hardcode a test client user ID to see if timestamps work
-      const clientUserId = "HN2QjNvnWKQ37nVXCSkhXdCwMEH2" // From your API response
-      console.log("📱 Using client user ID:", clientUserId)
+      // Get client data to find the linked user
+      const client = await clientService.getClient(clientId)
+      if (!client) {
+        throw new Error(`Client not found: ${clientId}`)
+      }
+
+      if (!client.linkedUserId) {
+        throw new Error(`Client ${clientId} is not linked to a user account`)
+      }
+
+      const clientUserId = client.linkedUserId
+      console.log("📱 Client linked to user:", clientUserId)
 
       // Create timestamps using Timestamp.now() for immediate timestamp creation
       const now = Timestamp.now()

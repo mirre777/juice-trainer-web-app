@@ -349,6 +349,21 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     }
   }, [originalProgramState, toast])
 
+  const createSafeClickHandler = useCallback((handler: () => void, handlerName: string) => {
+    return (event?: React.MouseEvent) => {
+      try {
+        if (event) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        debugLog(`Executing safe click handler: ${handlerName}`)
+        handler()
+      } catch (err) {
+        errorLog(`Error in ${handlerName}:`, err)
+      }
+    }
+  }, [])
+
   const handleSendToClient = useCallback(async () => {
     debugLog("Sending program to client:", selectedClientId)
 
@@ -385,7 +400,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         body: JSON.stringify({
           clientId: selectedClientId,
           programData: programState,
-          customMessage,
         }),
       })
 
@@ -396,6 +410,11 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
       const result = await response.json()
       debugLog("Program sent successfully:", result)
+
+      // Log the timestamp debugging information
+      if (result.timestampDebug) {
+        console.log("Timestamp debugging info:", result.timestampDebug)
+      }
 
       toast({
         title: "Program Sent Successfully!",
@@ -415,7 +434,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     } finally {
       setIsSending(false)
     }
-  }, [selectedClientId, programState, clients, customMessage, toast])
+  }, [selectedClientId, programState, clients, toast])
 
   const handleTogglePeriodization = useCallback(
     (checked: boolean) => {
@@ -801,21 +820,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     setShowConfirmDialog(false)
     router.back()
   }
-
-  const createSafeClickHandler = useCallback((handler: () => void, handlerName: string) => {
-    return (event?: React.MouseEvent) => {
-      try {
-        if (event) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        debugLog(`Executing safe click handler: ${handlerName}`)
-        handler()
-      } catch (err) {
-        errorLog(`Error in ${handlerName}:`, err)
-      }
-    }
-  }, [])
 
   // Add this useEffect to debug hasChanges state
   useEffect(() => {
