@@ -1,3 +1,4 @@
+"use client";
 import type React from "react"
 export default function ClientWorkout2Layout({
   children,

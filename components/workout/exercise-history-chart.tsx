@@ -21,59 +21,77 @@ export function ExerciseHistoryChart({
   const [visibleEntries, setVisibleEntries] = useState<ExerciseHistoryEntry[]>([])
   const [currentRange, setCurrentRange] = useState<"1m" | "3m" | "6m" | "1y" | "all">(timeRange)
 
-  // Filter entries based on time range
+  // Helper to format date as dd.mm.yyyy
+  function formatDateDMY(date: string) {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}.${month}.${year}`;
+  }
+
+  // Filter entries based on time range and sort by date ascending
   useEffect(() => {
-    const now = new Date()
-    let cutoffDate = new Date()
+    const now = new Date();
+    let cutoffDate = new Date();
 
     switch (currentRange) {
       case "1m":
-        cutoffDate.setMonth(now.getMonth() - 1)
-        break
+        cutoffDate.setMonth(now.getMonth() - 1);
+        break;
       case "3m":
-        cutoffDate.setMonth(now.getMonth() - 3)
-        break
+        cutoffDate.setMonth(now.getMonth() - 3);
+        break;
       case "6m":
-        cutoffDate.setMonth(now.getMonth() - 6)
-        break
+        cutoffDate.setMonth(now.getMonth() - 6);
+        break;
       case "1y":
-        cutoffDate.setFullYear(now.getFullYear() - 1)
-        break
+        cutoffDate.setFullYear(now.getFullYear() - 1);
+        break;
       case "all":
       default:
-        cutoffDate = new Date(0) // Beginning of time
+        cutoffDate = new Date(0); // Beginning of time
     }
 
-    const filtered = entries.filter((entry) => new Date(entry.date) >= cutoffDate)
-    setVisibleEntries(filtered)
-  }, [entries, currentRange])
+    const filtered = entries
+      .filter((entry) => new Date(entry.date) >= cutoffDate)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    setVisibleEntries(filtered);
+  }, [entries, currentRange]);
 
   // Calculate chart dimensions and data points
   const getChartPoints = () => {
-    if (!visibleEntries.length) return []
+    if (!visibleEntries.length) return [];
 
     // Extract weights as numbers
-    const weights = visibleEntries.map((entry) => Number.parseInt(entry.weight.split(" ")[0]))
+    const weights = visibleEntries.map((entry) => Number.parseInt(entry.weight.split(" ")[0]));
 
     // Find min and max for scaling
-    const minWeight = Math.min(...weights) * 0.9 // Add 10% padding
-    const maxWeight = Math.max(...weights) * 1.1
+    const minWeight = Math.min(...weights) * 0.9; // Add 10% padding
+    const maxWeight = Math.max(...weights) * 1.1;
+
+    // Handle single data point: center it
+    if (visibleEntries.length === 1) {
+      const entry = visibleEntries[0];
+      const weight = Number.parseInt(entry.weight.split(" ")[0]);
+      return [{ entry, x: 0.5, y: 0.5, weight }];
+    }
 
     // Calculate points
     return visibleEntries.map((entry, index) => {
-      const weight = Number.parseInt(entry.weight.split(" ")[0])
+      const weight = Number.parseInt(entry.weight.split(" ")[0]);
       // X position is based on index, Y position is scaled between 0-1 based on weight
-      const x = index / (visibleEntries.length - 1)
-      const y = 1 - (weight - minWeight) / (maxWeight - minWeight)
+      const x = index / (visibleEntries.length - 1);
+      const y = 1 - (weight - minWeight) / (maxWeight - minWeight);
 
       return {
         entry,
         x,
         y,
         weight,
-      }
-    })
-  }
+      };
+    });
+  };
 
   const chartPoints = getChartPoints()
 
@@ -121,23 +139,8 @@ export function ExerciseHistoryChart({
 
   return (
     <div className="bg-white rounded-lg p-4 shadow-sm">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex items-center mb-4">
         <h3 className="text-lg font-semibold">{title}</h3>
-
-        <div className="flex gap-2">
-          {/* Time range selector */}
-          <div className="flex bg-gray-100 rounded-lg overflow-hidden">
-            {(["1m", "3m", "6m", "1y", "all"] as const).map((range) => (
-              <button
-                key={range}
-                className={`px-2 py-1 text-xs ${currentRange === range ? "bg-primary text-black" : "text-darkgray"}`}
-                onClick={() => setCurrentRange(range)}
-              >
-                {range === "all" ? "All" : range}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div ref={chartRef} className="relative h-[300px] w-full">
@@ -149,19 +152,21 @@ export function ExerciseHistoryChart({
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
-          {/* Background gradient */}
+          {/* Blue background gradient */}
           <defs>
-            <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+            <linearGradient id="chartBlueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
             </linearGradient>
           </defs>
 
-          {/* Area under the line */}
-          <path d={`${generatePath()} L ${chartPoints.length ? 100 : 0} 100 L 0 100 Z`} fill="url(#chartGradient)" />
-
-          {/* Line */}
-          <path d={generatePath()} fill="none" stroke="var(--primary)" strokeWidth="2" />
+          {/* Area under the line and line only if enough points */}
+          {chartPoints.length >= 2 && (
+            <>
+              <path d={`${generatePath()} L 100 100 L 0 100 Z`} fill="url(#chartBlueGradient)" />
+              <path d={generatePath()} fill="none" stroke="#2563eb" strokeWidth="0.8" />
+            </>
+          )}
 
           {/* Data points */}
           {chartPoints.map((point, i) => (
@@ -169,13 +174,27 @@ export function ExerciseHistoryChart({
               key={i}
               cx={point.x * 100}
               cy={point.y * 100}
-              r="2"
-              fill={hoverPoint?.id === point.entry.id ? "#000" : "#D2FF28"}
-              stroke={hoverPoint?.id === point.entry.id ? "#D2FF28" : "none"}
-              strokeWidth="1"
-              // Ensure perfect circles by setting shapeRendering
+              r="1.0"
+              fill="#3b82f6"
+              stroke="#fff"
+              strokeWidth={hoverPoint?.id === point.entry.id ? 2 : 0}
               shapeRendering="geometricPrecision"
             />
+          ))}
+
+          {/* X-axis date labels */}
+          {chartPoints.map((point, i) => (
+            <text
+              key={"label-" + i}
+              x={point.x * 100}
+              y={102}
+              textAnchor="middle"
+              fontSize="3"
+              fill="#888"
+              style={{ pointerEvents: "none" }}
+            >
+              {formatDateDMY(point.entry.date)}
+            </text>
           ))}
 
           {/* Hover point */}
@@ -184,8 +203,10 @@ export function ExerciseHistoryChart({
               <circle
                 cx={chartPoints.find((p) => p.entry.id === hoverPoint.id)!.x * 100}
                 cy={chartPoints.find((p) => p.entry.id === hoverPoint.id)!.y * 100}
-                r="4"
-                fill="#D2FF28"
+                r="1.6"
+                fill="#fff"
+                stroke="#2563eb"
+                strokeWidth="2"
                 shapeRendering="geometricPrecision"
               />
               <line
@@ -193,11 +214,25 @@ export function ExerciseHistoryChart({
                 y1={chartPoints.find((p) => p.entry.id === hoverPoint.id)!.y * 100}
                 x2={chartPoints.find((p) => p.entry.id === hoverPoint.id)!.x * 100}
                 y2="100"
-                stroke="#D2FF28"
+                stroke="#2563eb"
                 strokeWidth="1"
                 strokeDasharray="2,2"
               />
             </g>
+          )}
+
+          {/* Placeholder for no data */}
+          {chartPoints.length === 0 && (
+            <text
+              x="50"
+              y="50"
+              textAnchor="middle"
+              alignmentBaseline="middle"
+              fontSize="7"
+              fill="#bbb"
+            >
+              No data yet
+            </text>
           )}
         </svg>
 
@@ -233,6 +268,11 @@ export function ExerciseHistoryChart({
               <div>{visibleEntries[visibleEntries.length - 1].formattedDate}</div>
             </>
           )}
+        </div>
+
+        {/* Info field below x-axis */}
+        <div className="mt-2 text-xs text-gray-500 text-center">
+          1RM is estimated using Epley's formula: <span className="font-mono">weight × (1 + reps / 30)</span>
         </div>
       </div>
     </div>
