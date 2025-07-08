@@ -134,9 +134,6 @@ importers:
       date-fns:
         specifier: latest
         version: 4.1.0
-      dotenv:
-        specifier: latest
-        version: 17.1.0
       embla-carousel-react:
         specifier: latest
         version: 8.6.0(react@18.0.0)
@@ -2713,10 +2710,6 @@ packages:
     resolution: {integrity: sha512-A2is4PLG+eeSfoTMA95/s4pvAoSo2mKtiM5jlHkAVewmiO8ISFTFKZjH7UAM1Atli/OT/7JHOrJRJiMKUZKYBw==}
     engines: {node: '>=12'}
     deprecated: Use your platform's native DOMException instead
-
-  dotenv@17.1.0:
-    resolution: {integrity: sha512-tG9VUTJTuju6GcXgbdsOuRhupE8cb4mRgY5JLRCh4MtGoVo3/gfGUtOMwmProM6d0ba2mCFvv+WrpYJV6qgJXQ==}
-    engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -7990,8 +7983,6 @@ snapshots:
   domexception@4.0.0:
     dependencies:
       webidl-conversions: 7.0.0
-
-  dotenv@17.1.0: {}
 
   dunder-proto@1.0.1:
     dependencies:
