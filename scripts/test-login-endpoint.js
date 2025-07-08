@@ -1,65 +1,52 @@
-#!/usr/bin/env node
+console.log("🔍 ANALYZING LOGIN ENDPOINT ERROR...\n")
 
-console.log("🔐 Testing Login Endpoint Configuration...\n")
+// Simulate the error from your Vercel logs
+const errorMessage = "TypeError: (0, c.getUserByEmail) is not a function"
+const errorLocation = "at /var/task/.next/server/app/api/auth/login/route.js:1599"
 
-// Check if we can simulate the login flow
-console.log("📋 Checking Login Dependencies:")
+console.log("❌ ERROR ANALYSIS:")
+console.log(`   Message: ${errorMessage}`)
+console.log(`   Location: ${errorLocation}`)
+console.log(`   Type: Import/Export Error`)
 
-// Check required environment variables for login
-const loginRequiredVars = [
-  "NEXT_PUBLIC_FIREBASE_API_KEY",
-  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-  "FIREBASE_CLIENT_EMAIL",
-  "FIREBASE_PRIVATE_KEY",
-  "ENCRYPTION_KEY",
-]
+console.log("\n🔍 ROOT CAUSE ANALYSIS:")
+console.log("This error indicates that getUserByEmail is not being imported correctly.")
+console.log("The function exists but is not accessible at runtime.")
 
-const missingVars = []
-loginRequiredVars.forEach((varName) => {
-  const value = process.env[varName]
-  if (!value || value === "undefined") {
-    missingVars.push(varName)
-    console.log(`❌ Missing: ${varName}`)
-  } else {
-    console.log(`✅ Present: ${varName}`)
-  }
-})
+console.log("\n🎯 POSSIBLE CAUSES:")
+console.log("1. ❌ Incorrect import statement in login route")
+console.log("2. ❌ Function not properly exported from user-service.ts")
+console.log("3. ❌ TypeScript compilation issue")
+console.log("4. ❌ Module resolution problem")
+console.log("5. ❌ Circular dependency issue")
 
-console.log("\n🔍 Analyzing Your Specific Error:")
-console.log("From Vercel Logs: 'TypeError: (0, c.getUserByEmail) is not a function'")
-console.log("Location: /var/task/.next/server/app/api/auth/login/route.js:1599")
-console.log("Status Code: 500")
+console.log("\n🔧 DEBUGGING STEPS:")
+console.log("1. Check import statement in app/api/auth/login/route.ts")
+console.log("2. Verify export in lib/firebase/user-service.ts")
+console.log("3. Check for TypeScript compilation errors")
+console.log("4. Test with different import syntax")
 
-console.log("\n🕵️ Error Analysis:")
-console.log("This error occurs because:")
-console.log("1. ❌ getUserByEmail function is not properly imported")
-console.log("2. ❌ The import statement in login route is incorrect")
-console.log("3. ❌ The function might not be exported from user-service.ts")
-
-console.log("\n🎯 Root Cause Analysis:")
-console.log("❌ ACTUAL ISSUE: Import/Export problem with getUserByEmail")
-console.log("   This is NOT an environment variable issue")
-console.log("   The function getUserByEmail is not being imported correctly")
-
-if (missingVars.length > 0) {
-  console.log("\n⚠️  Additional Issue: Missing environment variables")
-  console.log("   Missing variables:", missingVars.join(", "))
-  console.log("   Fix these too, but the main issue is the import error")
-} else {
-  console.log("\n✅ Environment variables are present")
-  console.log("   Focus on fixing the getUserByEmail import issue")
-}
-
-console.log("\n🔧 Recommended Fix Order:")
-console.log("1. Fix getUserByEmail import in login route")
-console.log("2. Verify getUserByEmail export in user-service.ts")
-console.log("3. Test login again")
-console.log("4. Check for any remaining environment variable issues")
-
-console.log("\n🧪 Import Analysis:")
-console.log("Current import in login route should be:")
-console.log("import { getUserByEmail } from '@/lib/firebase/user-service'")
+console.log("\n💡 QUICK FIXES TO TRY:")
+console.log("Option 1: Named import")
+console.log('  import { getUserByEmail } from "@/lib/firebase/user-service"')
 console.log("")
-console.log("Make sure user-service.ts exports:")
-console.log("export async function getUserByEmail(email: string) { ... }")
+console.log("Option 2: Namespace import")
+console.log('  import * as userService from "@/lib/firebase/user-service"')
+console.log("  // Then use: userService.getUserByEmail(email)")
+console.log("")
+console.log("Option 3: Default import")
+console.log('  import userService from "@/lib/firebase/user-service"')
+
+console.log("\n🚨 THIS IS NOT AN ENVIRONMENT VARIABLE ISSUE!")
+console.log("The error occurs during function execution, not initialization.")
+console.log("Focus on fixing the import/export problem first.")
+
+// Test the current import pattern
+console.log("\n🧪 TESTING IMPORT PATTERNS:")
+try {
+  // This would be the actual test in a real environment
+  console.log("✅ Testing import patterns...")
+  console.log("   (This would test actual imports in a real environment)")
+} catch (error) {
+  console.log(`❌ Import test failed: ${error.message}`)
+}

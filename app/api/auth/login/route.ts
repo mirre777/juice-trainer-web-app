@@ -1,10 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
-import { getUserByEmail } from "@/lib/firebase/user-service"
-// If that doesn't work, try:
-// import * as userService from "@/lib/firebase/user-service"
-// Then use: userService.getUserByEmail(email)
+// Change this import to be more explicit
+import * as userService from "@/lib/firebase/user-service"
 import { generateToken } from "@/lib/auth/token-service"
 import { createUserSession } from "@/lib/auth/auth-service"
 
@@ -128,7 +126,7 @@ export async function POST(request: NextRequest) {
     let userData
     try {
       console.log(`[API:login] 🔄 Fetching user data from Firestore...`)
-      userData = await getUserByEmail(email)
+      userData = await userService.getUserByEmail(email)
 
       if (!userData) {
         console.log(`[API:login] ❌ User data not found in Firestore for email: ${email}`)

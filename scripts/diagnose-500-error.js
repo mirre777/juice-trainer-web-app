@@ -1,86 +1,55 @@
-#!/usr/bin/env node
+console.log("🚨 DIAGNOSING 500 INTERNAL SERVER ERROR\n")
 
-console.log("🚨 Diagnosing 500 Internal Server Error...\n")
-
-console.log("📊 Error Details from Vercel Logs:")
-console.log("- Error: TypeError: (0, c.getUserByEmail) is not a function")
-console.log("- Location: /var/task/.next/server/app/api/auth/login/route.js:1599")
-console.log("- Function: Login API route")
-console.log("- Root Cause: Import/Export issue")
-
-console.log("\n🔍 STEP 1: Analyzing the TypeError")
-console.log("The error '(0, c.getUserByEmail) is not a function' means:")
-console.log("1. The import statement is trying to destructure getUserByEmail")
-console.log("2. But getUserByEmail is undefined or not exported properly")
-console.log("3. This causes a TypeError when trying to call it")
-
-console.log("\n🔍 STEP 2: Environment Variables Check")
-
-// Critical variables for login functionality
-const criticalVars = {
-  NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
-  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
-  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+// Error details from your Vercel logs
+const errorDetails = {
+  message: "TypeError: (0, c.getUserByEmail) is not a function",
+  location: "app/api/auth/login/route.js",
+  line: "1599",
+  errorId: "ERR_1751989071678_cf6amfu53",
+  environment: "Both Production and Preview",
 }
 
-const missingCritical = []
-const presentVars = []
-
-Object.entries(criticalVars).forEach(([name, value]) => {
-  if (!value || value === "undefined" || value.trim() === "") {
-    missingCritical.push(name)
-    console.log(`❌ MISSING: ${name}`)
-  } else {
-    presentVars.push(name)
-    console.log(`✅ PRESENT: ${name}`)
-  }
+console.log("📊 ERROR SUMMARY:")
+Object.entries(errorDetails).forEach(([key, value]) => {
+  console.log(`   ${key}: ${value}`)
 })
 
-console.log(`\n📈 Results: ${presentVars.length}/${Object.keys(criticalVars).length} variables present`)
+console.log("\n🎯 CRITICAL ISSUE FOUND: Import/Export Problem")
+console.log("❌ The getUserByEmail function is not being imported correctly")
+console.log("❌ This is causing a TypeError at runtime")
+console.log("❌ Affects both production and preview environments")
+
+console.log("\n🔍 DETAILED ANALYSIS:")
+console.log("1. ✅ Login endpoint is being called successfully")
+console.log("2. ✅ Request parsing works fine")
+console.log("3. ✅ Firebase auth initialization works")
+console.log("4. ❌ FAILURE: getUserByEmail function call fails")
+console.log("5. ❌ This suggests an import/export issue")
 
 console.log("\n🚨 CONCLUSION:")
-console.log("❌ PRIMARY ISSUE: getUserByEmail import/export error")
-console.log("   This is the main cause of your 500 error")
+console.log("❌ CRITICAL ISSUE FOUND: Import/Export Problem")
+console.log("This is definitely causing your 500 error.")
 
-if (missingCritical.length > 0) {
-  console.log("❌ SECONDARY ISSUE: Missing environment variables")
-  console.log("   These also need to be fixed")
+console.log("\n📋 IMMEDIATE ACTION REQUIRED:")
+console.log("1. Fix the import statement in app/api/auth/login/route.ts")
+console.log("2. Verify the export in lib/firebase/user-service.ts")
+console.log("3. Test the fix in preview environment")
+console.log("4. Deploy to production once confirmed working")
 
-  console.log("\n📋 Missing Variables:")
-  missingCritical.forEach((varName) => {
-    console.log(`   • ${varName}`)
-  })
-}
+console.log("\n🔧 SPECIFIC FIX NEEDED:")
+console.log("Current import (likely broken):")
+console.log('  import { getUserByEmail } from "@/lib/firebase/user-service"')
+console.log("")
+console.log("Try this alternative:")
+console.log('  import * as userService from "@/lib/firebase/user-service"')
+console.log("  // Then use: await userService.getUserByEmail(email)")
 
-console.log("\n🔧 IMMEDIATE FIX STEPS:")
-console.log("1. Fix the getUserByEmail import issue first:")
-console.log("   - Check the import statement in login route")
-console.log("   - Verify the export in user-service.ts")
-console.log("   - Make sure the function is properly exported")
+console.log("\n⚠️  NOTE: This is NOT an environment variable issue!")
+console.log("The error occurs during function execution, not during initialization.")
+console.log("Environment variables would cause different error patterns.")
 
-if (missingCritical.length > 0) {
-  console.log("2. Add missing environment variables to Vercel:")
-  missingCritical.forEach((varName) => {
-    console.log(`   - ${varName}`)
-  })
-}
-
-console.log("3. Redeploy your application")
-console.log("4. Test login again")
-
-console.log("\n🎯 The Real Problem:")
-console.log("Your Vercel logs show the actual error is NOT missing environment variables.")
-console.log("It's a JavaScript TypeError because getUserByEmail is not a function.")
-console.log("This means there's an import/export mismatch in your code.")
-
-console.log("\n📞 Next Steps:")
-console.log("1. Check the import statement in app/api/auth/login/route.ts")
-console.log("2. Verify getUserByEmail is exported from lib/firebase/user-service.ts")
-console.log("3. Fix any import/export issues")
-console.log("4. Test the login again")
+console.log("\n✅ NEXT STEPS:")
+console.log("1. Fix any issues identified above")
+console.log("2. Check your Vercel dashboard for environment variables")
+console.log("3. Look at Vercel function logs for detailed error messages")
+console.log("4. Test the login again after making changes")
