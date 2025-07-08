@@ -1,185 +1,40 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
-// Change this import to be more explicit
-import * as userService from "@/lib/firebase/user-service"
+import { getUserByEmail } from "@/lib/firebase/user-service"
 import { generateToken } from "@/lib/auth/token-service"
-import { createUserSession } from "@/lib/auth/auth-service"
-
-// Generate unique error ID for tracking
-function generateErrorId() {
-  return `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-}
-
-// Enhanced error logging function
-function logError(errorId: string, context: string, error: any, additionalData?: any) {
-  console.error(`[API:login] ❌ ${context} (ID: ${errorId})`)
-  console.error(`[API:login] Error type: ${error.constructor.name}`)
-  console.error(`[API:login] Error message: ${error.message}`)
-  console.error(`[API:login] Error code: ${error.code || "N/A"}`)
-
-  if (error.stack) {
-    console.error(`[API:login] Stack trace:`, error.stack)
-  }
-
-  if (additionalData) {
-    console.error(`[API:login] Additional context:`, JSON.stringify(additionalData, null, 2))
-  }
-
-  // Log environment info for debugging
-  console.error(`[API:login] Environment: ${process.env.NODE_ENV}`)
-  console.error(`[API:login] Vercel: ${process.env.VERCEL === "1" ? "Yes" : "No"}`)
-  console.error(`[API:login] Timestamp: ${new Date().toISOString()}`)
-}
 
 export async function POST(request: NextRequest) {
-  const errorId = generateErrorId()
-
   try {
-    console.log(`[API:login] 🔄 Login attempt started (ID: ${errorId})`)
+    console.log("🔄 Login attempt started")
 
-    // Parse request body
-    let body
-    try {
-      body = await request.json()
-      console.log(`[API:login] ✅ Request body parsed successfully`)
-    } catch (parseError) {
-      logError(errorId, "Failed to parse request body", parseError)
-      return NextResponse.json({ error: "Invalid JSON in request body", errorId }, { status: 400 })
-    }
+    const body = await request.json()
+    const { email, password } = body
 
-    const { email, password, invitationCode } = body
-
-    // Validate required fields
     if (!email || !password) {
-      console.log(`[API:login] ❌ Missing required fields - email: ${!!email}, password: ${!!password}`)
-      return NextResponse.json({ error: "Email and password are required", errorId }, { status: 400 })
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      console.log(`[API:login] ❌ Invalid email format: ${email}`)
-      return NextResponse.json({ error: "Invalid email format", errorId }, { status: 400 })
-    }
+    console.log(`📧 Attempting login for email: ${email}`)
 
-    console.log(`[API:login] 📧 Attempting login for email: ${email}`)
-    console.log(`[API:login] 🎫 Invitation code: ${invitationCode || "None"}`)
-
-    // Test Firebase configuration before attempting authentication
-    try {
-      if (!auth) {
-        throw new Error("Firebase auth instance is not initialized")
-      }
-      console.log(`[API:login] ✅ Firebase auth instance available`)
-      console.log(`[API:login] 🔥 Firebase project: ${auth.app.options.projectId}`)
-    } catch (firebaseConfigError) {
-      logError(errorId, "Firebase configuration error", firebaseConfigError, {
-        hasAuth: !!auth,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "Present" : "Missing",
-      })
-      return NextResponse.json({ error: "Authentication service configuration error", errorId }, { status: 500 })
-    }
-
-    // Attempt Firebase authentication
-    let userCredential
-    try {
-      console.log(`[API:login] 🔄 Attempting Firebase authentication...`)
-      userCredential = await signInWithEmailAndPassword(auth, email, password)
-      console.log(`[API:login] ✅ Firebase authentication successful`)
-      console.log(`[API:login] 👤 User ID: ${userCredential.user.uid}`)
-    } catch (authError: any) {
-      console.log(`[API:login] ❌ Firebase authentication failed`)
-      logError(errorId, "Firebase authentication failed", authError, {
-        email,
-        errorCode: authError.code,
-        hasInvitationCode: !!invitationCode,
-      })
-
-      // Handle specific Firebase auth errors
-      switch (authError.code) {
-        case "auth/user-not-found":
-          return NextResponse.json({ error: "No account found with this email address", errorId }, { status: 404 })
-        case "auth/wrong-password":
-          return NextResponse.json({ error: "Incorrect password", errorId }, { status: 401 })
-        case "auth/invalid-email":
-          return NextResponse.json({ error: "Invalid email address", errorId }, { status: 400 })
-        case "auth/user-disabled":
-          return NextResponse.json({ error: "This account has been disabled", errorId }, { status: 403 })
-        case "auth/too-many-requests":
-          return NextResponse.json(
-            { error: "Too many failed login attempts. Please try again later.", errorId },
-            { status: 429 },
-          )
-        case "auth/network-request-failed":
-          return NextResponse.json(
-            { error: "Network error. Please check your connection and try again.", errorId },
-            { status: 503 },
-          )
-        default:
-          return NextResponse.json({ error: "Authentication failed. Please try again.", errorId }, { status: 401 })
-      }
-    }
+    // Firebase authentication
+    const userCredential = await signInWithEmailAndPassword(auth, email, password)
+    console.log(`✅ Firebase authentication successful for: ${userCredential.user.uid}`)
 
     // Get user data from Firestore
-    let userData
-    try {
-      console.log(`[API:login] 🔄 Fetching user data from Firestore...`)
-      userData = await userService.getUserByEmail(email)
-
-      if (!userData) {
-        console.log(`[API:login] ❌ User data not found in Firestore for email: ${email}`)
-        return NextResponse.json({ error: "User profile not found. Please contact support.", errorId }, { status: 404 })
-      }
-
-      console.log(`[API:login] ✅ User data retrieved from Firestore`)
-      console.log(`[API:login] 👤 User role: ${userData.role || "Not set"}`)
-    } catch (firestoreError) {
-      logError(errorId, "Failed to fetch user data from Firestore", firestoreError, {
-        email,
-        userId: userCredential.user.uid,
-      })
-      return NextResponse.json(
-        { error: "Failed to retrieve user profile. Please try again.", errorId },
-        { status: 500 },
-      )
+    const userData = await getUserByEmail(email)
+    if (!userData) {
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
     }
 
     // Generate JWT token
-    let token
-    try {
-      console.log(`[API:login] 🔄 Generating JWT token...`)
-      token = await generateToken({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email!,
-        role: userData.role || "user",
-      })
-      console.log(`[API:login] ✅ JWT token generated successfully`)
-    } catch (tokenError) {
-      logError(errorId, "Failed to generate JWT token", tokenError, {
-        userId: userCredential.user.uid,
-        email: userCredential.user.email,
-      })
-      return NextResponse.json({ error: "Failed to create session. Please try again.", errorId }, { status: 500 })
-    }
+    const token = await generateToken({
+      uid: userCredential.user.uid,
+      email: userCredential.user.email!,
+      role: userData.role || "user",
+    })
 
-    // Create user session
-    try {
-      console.log(`[API:login] 🔄 Creating user session...`)
-      await createUserSession(userCredential.user.uid, token)
-      console.log(`[API:login] ✅ User session created successfully`)
-    } catch (sessionError) {
-      logError(errorId, "Failed to create user session", sessionError, {
-        userId: userCredential.user.uid,
-        email: userCredential.user.email,
-      })
-      // Don't fail the login for session creation errors, just log them
-      console.log(`[API:login] ⚠️  Session creation failed, but continuing with login`)
-    }
-
-    // Successful login
-    console.log(`[API:login] 🎉 Login successful for user: ${email}`)
+    console.log("🎉 Login successful, setting cookies")
 
     const response = NextResponse.json({
       success: true,
@@ -188,59 +43,33 @@ export async function POST(request: NextRequest) {
         email: userCredential.user.email,
         role: userData.role || "user",
       },
-      token,
     })
 
-    // Set HTTP-only cookie for the token
-    response.cookies.set("auth-token", token, {
+    // Set multiple cookie formats for compatibility
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "lax" as const,
       maxAge: 60 * 60 * 24 * 7, // 7 days
-    })
+      path: "/",
+    }
+
+    // Set both cookie names for compatibility
+    response.cookies.set("auth-token", token, cookieOptions)
+    response.cookies.set("auth_token", token, cookieOptions)
+    response.cookies.set("user_id", userCredential.user.uid, cookieOptions)
 
     return response
   } catch (error: any) {
-    // Catch-all error handler
-    logError(errorId, "Unexpected error in login route", error, {
-      url: request.url,
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
-    })
+    console.error("💥 Login error:", error)
 
-    // Determine error type and return appropriate response
-    if (error.name === "TypeError" && error.message.includes("fetch")) {
-      return NextResponse.json({ error: "Network connectivity issue. Please try again.", errorId }, { status: 503 })
+    if (error.code === "auth/user-not-found") {
+      return NextResponse.json({ error: "No account found with this email" }, { status: 404 })
+    }
+    if (error.code === "auth/wrong-password") {
+      return NextResponse.json({ error: "Incorrect password" }, { status: 401 })
     }
 
-    if (error.name === "TimeoutError" || error.message.includes("timeout")) {
-      return NextResponse.json({ error: "Request timeout. Please try again.", errorId }, { status: 408 })
-    }
-
-    if (error.message.includes("Firebase") || error.message.includes("auth")) {
-      return NextResponse.json(
-        { error: "Authentication service error. Please try again later.", errorId },
-        { status: 503 },
-      )
-    }
-
-    // Generic server error
-    return NextResponse.json(
-      {
-        error: "An unexpected error occurred. Please try again later.",
-        errorId,
-        ...(process.env.NODE_ENV === "development" && {
-          debug: {
-            message: error.message,
-            type: error.constructor.name,
-          },
-        }),
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 })
   }
-}
-
-export async function GET() {
-  return NextResponse.json({ message: "Login endpoint - use POST method" }, { status: 405 })
 }
