@@ -11,37 +11,59 @@ import {
   serverTimestamp,
   onSnapshot,
 } from "firebase/firestore"
+import { getAuth, onAuthStateChanged, type User } from "firebase/auth"
 import { db } from "@/lib/firebase/firebase"
 
-// Get user by ID
-export async function getUserById(userId: string) {
-  try {
-    console.log(`[getUserById] 🔍 Fetching user with ID: ${userId}`)
-    const userDoc = await getDoc(doc(db, "users", userId))
+// Get current authenticated user
+export async function getCurrentUser(): Promise<User | null> {
+  return new Promise((resolve) => {
+    const auth = getAuth()
 
-    if (!userDoc.exists()) {
-      console.log(`[getUserById] ❌ No user found with ID: ${userId}`)
+    if (auth.currentUser) {
+      console.log("[getCurrentUser] User already available:", auth.currentUser.uid)
+      resolve(auth.currentUser)
+      return
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("[getCurrentUser] Auth state changed:", user?.uid || "null")
+      unsubscribe()
+      resolve(user)
+    })
+  })
+}
+
+// Get user data by ID from Firestore
+export async function getUserById(userId: string): Promise<any> {
+  try {
+    if (!userId) {
+      console.error("[getUserById] No user ID provided")
       return null
     }
 
-    const userData = userDoc.data()
-    console.log(`[getUserById] ✅ Found user:`, {
-      id: userDoc.id,
-      email: userData.email,
-      role: userData.role || "user",
-    })
+    console.log(`[getUserById] Fetching user data for ID: ${userId}`)
+    const userRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userRef)
 
-    return {
-      id: userDoc.id,
-      ...userData,
+    if (userDoc.exists()) {
+      const userData = userDoc.data()
+      console.log(`[getUserById] Found user data:`, {
+        id: userId,
+        name: userData.name || "NO_NAME",
+        email: userData.email || "NO_EMAIL",
+      })
+      return { id: userId, ...userData }
+    } else {
+      console.log(`[getUserById] User document does not exist for ID: ${userId}`)
+      return null
     }
-  } catch (error: any) {
-    console.error(`[getUserById] ❌ Error fetching user data for ${userId}:`, error)
-    throw error
+  } catch (error) {
+    console.error(`[getUserById] Error fetching user data for ${userId}:`, error)
+    return null
   }
 }
 
-// Get user by email - THIS WAS MISSING
+// Get user data by email from Firestore - THIS WAS MISSING!
 export async function getUserByEmail(email: string): Promise<any> {
   try {
     if (!email) {
@@ -55,7 +77,6 @@ export async function getUserByEmail(email: string): Promise<any> {
 
     console.log(`[getUserByEmail] 📋 Executing Firestore query...`)
     const querySnapshot = await getDocs(q)
-
     console.log(`[getUserByEmail] 📊 Query returned ${querySnapshot.size} documents`)
 
     if (querySnapshot.empty) {
@@ -70,6 +91,7 @@ export async function getUserByEmail(email: string): Promise<any> {
       id: userDoc.id,
       email: userData.email,
       role: userData.role || "user",
+      hasFirebaseAuth: userData.hasFirebaseAuth || false,
     })
 
     return {
@@ -82,127 +104,175 @@ export async function getUserByEmail(email: string): Promise<any> {
   }
 }
 
-// Update user - THIS WAS MISSING
-export async function updateUser(userId: string, userData: any) {
+// Get current user's Firestore data
+export async function getCurrentUserData(): Promise<any> {
   try {
-    console.log(`[updateUser] 📝 Updating user ${userId}:`, userData)
-    const userRef = doc(db, "users", userId)
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      console.log("[getCurrentUserData] No authenticated user")
+      return null
+    }
+
+    return await getUserById(currentUser.uid)
+  } catch (error) {
+    console.error("[getCurrentUserData] Error getting current user data:", error)
+    return null
+  }
+}
+
+// Create or update user document
+export async function createOrUpdateUser(userData: any): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!userData.id) {
+      return { success: false, error: "User ID is required" }
+    }
+
+    const userRef = doc(db, "users", userData.id)
     await updateDoc(userRef, {
       ...userData,
       updatedAt: serverTimestamp(),
     })
-    console.log(`[updateUser] ✅ User ${userId} updated successfully`)
-    return true
-  } catch (error: any) {
-    console.error(`[updateUser] ❌ Error updating user ${userId}:`, error)
-    throw error
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error creating/updating user:", error)
+    return { success: false, error }
   }
 }
 
-// Store invitation code - THIS WAS MISSING
-export async function storeInvitationCode(userId: string, invitationCode: string) {
+// Update user profile
+export async function updateUserProfile(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
   try {
-    console.log(`[storeInvitationCode] 💌 Storing invitation code for user ${userId}`)
+    if (!userId) {
+      return { success: false, error: "User ID is required" }
+    }
+
     const userRef = doc(db, "users", userId)
     await updateDoc(userRef, {
-      invitationCode: invitationCode,
-      invitationCodeStoredAt: serverTimestamp(),
+      ...updates,
+      updatedAt: serverTimestamp(),
     })
-    console.log(`[storeInvitationCode] ✅ Invitation code stored for user ${userId}`)
-    return true
-  } catch (error: any) {
-    console.error(`[storeInvitationCode] ❌ Error storing invitation code for ${userId}:`, error)
-    // Don't throw error - this is not critical
-    return false
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error updating user profile:", error)
+    return { success: false, error }
   }
 }
 
-// Get current user data
-export async function getCurrentUserData(userId: string) {
+// Update user document - ADDED THIS MISSING FUNCTION
+export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
   try {
-    console.log(`[getCurrentUserData] 🔍 Fetching current user data for: ${userId}`)
-    const userDoc = await getDoc(doc(db, "users", userId))
-
-    if (!userDoc.exists()) {
-      console.log(`[getCurrentUserData] ❌ No user found with ID: ${userId}`)
-      return null
+    if (!userId) {
+      return { success: false, error: "User ID is required" }
     }
 
-    const userData = userDoc.data()
-    console.log(`[getCurrentUserData] ✅ Found current user:`, {
-      id: userDoc.id,
-      email: userData.email,
-      role: userData.role || "user",
+    const userRef = doc(db, "users", userId)
+    await updateDoc(userRef, {
+      ...updates,
+      updatedAt: serverTimestamp(),
     })
 
-    return {
-      id: userDoc.id,
-      ...userData,
-    }
-  } catch (error: any) {
-    console.error(`[getCurrentUserData] ❌ Error fetching current user data:`, error)
-    throw error
-  }
-}
-
-// Delete user
-export async function deleteUser(userId: string) {
-  try {
-    console.log(`[deleteUser] 🗑️ Deleting user: ${userId}`)
-    await deleteDoc(doc(db, "users", userId))
-    console.log(`[deleteUser] ✅ User ${userId} deleted successfully`)
-    return true
-  } catch (error: any) {
-    console.error(`[deleteUser] ❌ Error deleting user ${userId}:`, error)
-    throw error
+    return { success: true }
+  } catch (error) {
+    console.error("Error updating user:", error)
+    return { success: false, error }
   }
 }
 
 // Get all users (admin function)
-export async function getAllUsers() {
+export async function getAllUsers(): Promise<any[]> {
   try {
-    console.log(`[getAllUsers] 📋 Fetching all users`)
     const usersRef = collection(db, "users")
     const q = query(usersRef, orderBy("createdAt", "desc"))
     const querySnapshot = await getDocs(q)
 
-    const users = querySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
+    const users: any[] = []
+    querySnapshot.forEach((doc) => {
+      users.push({ id: doc.id, ...doc.data() })
+    })
 
-    console.log(`[getAllUsers] ✅ Found ${users.length} users`)
     return users
-  } catch (error: any) {
-    console.error(`[getAllUsers] ❌ Error fetching all users:`, error)
-    throw error
+  } catch (error) {
+    console.error("Error getting all users:", error)
+    return []
   }
 }
 
-// Listen to user changes
-export function listenToUserChanges(userId: string, callback: (userData: any) => void) {
+// Delete user
+export async function deleteUser(userId: string): Promise<{ success: boolean; error?: any }> {
   try {
-    console.log(`[listenToUserChanges] 👂 Setting up listener for user: ${userId}`)
+    if (!userId) {
+      return { success: false, error: "User ID is required" }
+    }
+
+    const userRef = doc(db, "users", userId)
+    await deleteDoc(userRef)
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error deleting user:", error)
+    return { success: false, error }
+  }
+}
+
+// Subscribe to user changes
+export function subscribeToUser(userId: string, callback: (userData: any, error?: any) => void) {
+  if (!userId) {
+    callback(null, "User ID is required for subscription")
+    return () => {}
+  }
+
+  try {
     const userRef = doc(db, "users", userId)
 
-    return onSnapshot(
+    const unsubscribe = onSnapshot(
       userRef,
       (doc) => {
         if (doc.exists()) {
           const userData = { id: doc.id, ...doc.data() }
-          console.log(`[listenToUserChanges] 🔄 User data changed:`, userData)
           callback(userData)
         } else {
-          console.log(`[listenToUserChanges] ❌ User ${userId} no longer exists`)
           callback(null)
         }
       },
       (error) => {
-        console.error(`[listenToUserChanges] ❌ Error listening to user changes:`, error)
+        console.error("Error in user subscription:", error)
+        callback(null, error)
       },
     )
-  } catch (error: any) {
-    console.error(`[listenToUserChanges] ❌ Error setting up user listener:`, error)
-    throw error
+
+    return unsubscribe
+  } catch (error) {
+    console.error("Error setting up user subscription:", error)
+    callback(null, error)
+    return () => {}
+  }
+}
+
+// Store invitation code for user - ADDED THIS MISSING FUNCTION
+export async function storeInvitationCode(
+  userId: string,
+  invitationCode: string,
+): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!userId || !invitationCode) {
+      return { success: false, error: "User ID and invitation code are required" }
+    }
+
+    console.log(`[storeInvitationCode] Storing invitation code ${invitationCode} for user ${userId}`)
+
+    const userRef = doc(db, "users", userId)
+    await updateDoc(userRef, {
+      inviteCode: invitationCode,
+      inviteCodeStoredAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+
+    console.log(`[storeInvitationCode] Successfully stored invitation code for user ${userId}`)
+    return { success: true }
+  } catch (error) {
+    console.error("Error storing invitation code:", error)
+    return { success: false, error }
   }
 }
