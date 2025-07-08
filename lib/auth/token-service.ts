@@ -1,8 +1,8 @@
-import { sign, verify } from "jsonwebtoken"
 import { cookies } from "next/headers"
 import { encrypt, decrypt } from "@/lib/utils/crypto"
 import { ErrorType, handleServerError, tryCatch } from "@/lib/utils/error-handler"
 import { OAuth2Client } from "google-auth-library"
+import jwt from "jsonwebtoken"
 
 // Types for tokens
 export interface TokenData {
@@ -20,8 +20,6 @@ const TOKEN_EXPIRY_COOKIE = "google_token_expiry"
 const TOKEN_SCOPE_COOKIE = "google_token_scope"
 const GOOGLE_TOKEN_COOKIE = "google_token"
 
-const JWT_SECRET = process.env.JWT_SECRET || "default_jwt_secret_key" // Replace with a strong, secret key in production
-
 interface User {
   id: string
   email: string
@@ -29,14 +27,26 @@ interface User {
   role: string
 }
 
-// Generate JWT token
-export const generateToken = (uid: string): string => {
-  // Sign the token with the user ID
-  const token = sign({ uid }, JWT_SECRET, {
-    expiresIn: "7d", // Token expires in 7 days
-  })
+interface TokenPayload {
+  uid: string
+  email: string
+  role: string
+}
 
-  return token
+// Generate JWT token
+export const generateToken = async (payload: TokenPayload): Promise<string> => {
+  const secret = process.env.JWT_SECRET || "fallback-secret-key"
+
+  return jwt.sign(
+    {
+      uid: payload.uid,
+      email: payload.email,
+      role: payload.role,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7, // 7 days
+    },
+    secret,
+  )
 }
 
 // Store tokens securely in cookies
@@ -242,34 +252,18 @@ export async function getTokenFromServer(): Promise<OAuth2Client | null> {
 }
 
 // JWT Token Service
-export const verifyToken = async (token: string): Promise<{ uid: string; email: string; role: string } | null> => {
-  return tryCatch(
-    () => {
-      return new Promise((resolve, reject) => {
-        verify(token, JWT_SECRET, (err, decoded: any) => {
-          if (err) {
-            console.error("Token verification error:", err)
-            return resolve(null)
-          }
+export async function verifyToken(token: string): Promise<TokenPayload | null> {
+  try {
+    const secret = process.env.JWT_SECRET || "fallback-secret-key"
+    const decoded = jwt.verify(token, secret) as any
 
-          if (!decoded || typeof decoded === "string") {
-            return resolve(null)
-          }
-
-          resolve({ uid: decoded.uid, email: decoded.email, role: decoded.role })
-        })
-      })
-    },
-    (error) => {
-      // Don't throw here, just return null and log the error
-      handleServerError(error, {
-        service: "TokenService",
-        operation: "verifyToken",
-        message: "Token verification failed",
-        errorType: ErrorType.AUTH_ERROR,
-        logOnly: true,
-      })
-      return null
-    },
-  )
+    return {
+      uid: decoded.uid,
+      email: decoded.email,
+      role: decoded.role,
+    }
+  } catch (error) {
+    console.error("Token verification failed:", error)
+    return null
+  }
 }

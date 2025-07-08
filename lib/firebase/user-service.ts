@@ -63,7 +63,7 @@ export async function getUserById(userId: string): Promise<any> {
   }
 }
 
-// Get user data by email from Firestore - THIS WAS MISSING!
+// Get user data by email from Firestore
 export async function getUserByEmail(email: string): Promise<any> {
   try {
     if (!email) {
@@ -160,7 +160,7 @@ export async function updateUserProfile(userId: string, updates: any): Promise<{
   }
 }
 
-// Update user document - ADDED THIS MISSING FUNCTION
+// Update user document
 export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
   try {
     if (!userId) {
@@ -250,7 +250,7 @@ export function subscribeToUser(userId: string, callback: (userData: any, error?
   }
 }
 
-// Store invitation code for user - ADDED THIS MISSING FUNCTION
+// Store invitation code for user
 export async function storeInvitationCode(
   userId: string,
   invitationCode: string,
