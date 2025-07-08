@@ -1,4 +1,4 @@
-import { auth, db } from "./firebase" // Revert to client-side db and auth
+import { auth, db } from "./firebase"
 import {
   collection,
   doc,
@@ -12,7 +12,7 @@ import {
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore"
-import { createUserWithEmailAndPassword } from "firebase/auth" // Re-add client-side auth functions
+import { createUserWithEmailAndPassword } from "firebase/auth"
 
 // Simplified user creation - no complex role logic
 export async function createUser(userData: {
@@ -26,11 +26,11 @@ export async function createUser(userData: {
 
     // Create Firebase Auth user if password provided
     if (userData.password) {
-      const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password) // Use client-side auth
+      const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password)
       userId = userCredential.user.uid
     } else {
       // Create Firestore-only user
-      const usersRef = collection(db, "users") // Use client-side db
+      const usersRef = collection(db, "users")
       const docRef = await addDoc(usersRef, { email: userData.email.toLowerCase() })
       userId = docRef.id
     }
@@ -51,14 +51,14 @@ export async function createUser(userData: {
         userDocData.status = "pending_approval"
 
         // Add to trainer's pending list
-        const trainerRef = doc(db, "users", trainer.id) // Use client-side db
+        const trainerRef = doc(db, "users", trainer.id)
         await updateDoc(trainerRef, {
           pendingUsers: arrayUnion(userId),
         })
       }
     }
 
-    const userRef = doc(db, "users", userId) // Use client-side db
+    const userRef = doc(db, "users", userId)
     await setDoc(userRef, userDocData)
 
     return { success: true, userId }
@@ -70,7 +70,7 @@ export async function createUser(userData: {
 
 // Find trainer by their universal invite code
 async function getTrainerByInviteCode(inviteCode: string) {
-  const usersRef = collection(db, "users") // Use client-side db
+  const usersRef = collection(db, "users")
   const q = query(usersRef, where("universalInviteCode", "==", inviteCode.toUpperCase()))
   const querySnapshot = await getDocs(q)
 
@@ -88,8 +88,8 @@ export async function approveUser(
   action: "approve" | "reject",
 ): Promise<{ success: boolean; error?: any }> {
   try {
-    const userRef = doc(db, "users", userId) // Use client-side db
-    const trainerRef = doc(db, "users", trainerId) // Use client-side db
+    const userRef = doc(db, "users", userId)
+    const trainerRef = doc(db, "users", trainerId)
 
     if (action === "approve") {
       // Update user status

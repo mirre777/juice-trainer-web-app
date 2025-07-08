@@ -1,1155 +1,1583 @@
 "use client"
 
 import type React from "react"
-import {
-  ChevronLeft,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Trash2,
-  Calendar,
-  RotateCcw,
-  Plus,
-  Check,
-  User,
-  MessageSquare,
-  Info,
-  Save,
-  Send,
-  Loader2,
-  ChevronUp,
-} from "lucide-react"
-import { useState, useEffect, useMemo } from "react"
+
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { doc, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase/firebase"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { useCurrentUser } from "@/hooks/use-current-user"
-import { sendProgramToClient } from "@/app/actions/program-assignment-actions"
-import type { WorkoutProgram, WorkoutRoutine, ExerciseWeek, WorkoutSet } from "@/types/workout-program"
-import type { Client } from "@/types/client"
+import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
+
+interface Exercise {
+  name: string
+  sets?: Array<{
+    reps?: string
+    weight?: string
+    rpe?: string
+    rest?: string
+    notes?: string
+    set_number?: number
+  }>
+  notes?: string
+}
+
+interface Routine {
+  name?: string
+  title?: string
+  exercises: Exercise[]
+}
+
+interface Week {
+  week_number: number
+  routines: Routine[]
+}
+
+interface Program {
+  name?: string
+  program_title?: string
+  title?: string
+  description?: string
+  duration_weeks?: number
+  program_weeks?: number // Keep for backward compatibility
+  is_periodized?: boolean
+  weeks?: Week[]
+  routines?: Routine[]
+  notes?: string
+}
+
+interface Client {
+  id: string
+  name: string
+  email?: string
+  status?: string
+  initials?: string
+}
 
 interface ReviewProgramClientProps {
   importData: any
+  importId?: string
+  initialClients?: Client[]
 }
 
-export default function ReviewProgramClient({ importData }: ReviewProgramClientProps) {
-  console.log("[ReviewProgramClient] --- Component Render Cycle Started ---")
-  const router = useRouter()
-  const { toast } = useToast()
-  const { user: trainer, loading: isTrainerLoading } = useCurrentUser() // Get loading state
+interface AvailableFields {
+  hasReps: boolean
+  hasWeight: boolean
+  hasRpe: boolean
+  hasRest: boolean
+  hasNotes: boolean
+}
 
-  const [programState, setProgramState] = useState<WorkoutProgram | null>(null)
-  const [currentWeek, setCurrentWeek] = useState(1)
-  const [isSaving, setIsSaving] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
-  const [showSendProgramDialog, setShowSendProgramDialog] = useState(false)
-  const [messageToClient, setMessageToClient] = useState("")
-  const [showSelectWeekDialog, setShowSelectWeekDialog] = useState(false)
-  const [selectedWeekForNonPeriodized, setSelectedWeekForNonPeriodized] = useState<number | null>(null)
-  const [expandedRoutines, setExpandedRoutines] = useState<{ [key: string]: boolean }>({ "0": true })
+const debugLog = (message: string, data?: any) => {
+  console.log(`[ReviewProgramClient] ${message}`, data || "")
+}
 
-  const [clients, setClients] = useState<Client[]>([])
-  const [loadingClients, setLoadingClients] = useState(false)
-  const [selectedClientId, setSelectedClientId] = useState<string>("")
-  const [isAssigning, setIsAssigning] = useState(false)
+const errorLog = (message: string, error?: any) => {
+  console.error(`[ReviewProgramClient ERROR] ${message}`, error || "")
+}
 
-  const clientNameForModal = selectedClientId
-    ? clients.find((c) => c.id === selectedClientId)?.name || "Selected Client"
-    : "Select a Client"
-  const dateForModal = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+export default function ReviewProgramClient({ importData, importId, initialClients = [] }: ReviewProgramClientProps) {
+  debugLog("Component initialized with props:", {
+    importData: !!importData,
+    importId,
+    clientCount: initialClients.length,
   })
 
-  // Log trainer and loading state on every render
-  console.log("[ReviewProgramClient] Current trainer state from useCurrentUser:", { trainer, isTrainerLoading })
+  const router = useRouter()
+  const { toast } = useToast()
+  const [programState, setProgramState] = useState<Program | null>(null)
+  const [originalProgramState, setOriginalProgramState] = useState<Program | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [clients, setClients] = useState<Client[]>(initialClients)
+  const [selectedClientId, setSelectedClientId] = useState<string>("")
+  const [customMessage, setCustomMessage] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const [isSending, setIsSending] = useState(isSaving)
+  const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
+  const [showSendDialog, setShowSendDialog] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showPeriodizationDialog, setShowPeriodizationDialog] = useState(false)
+  const [periodizationAction, setPeriodizationAction] = useState<"to-periodized" | "to-non-periodized" | null>(null)
+  const [selectedWeekToKeep, setSelectedWeekToKeep] = useState<number>(1)
+  const [numberOfWeeks, setNumberOfWeeks] = useState<number>(4)
+  const [currentWeekIndex, setCurrentWeekIndex] = useState<number>(0)
 
-  useEffect(() => {
-    if (importData?.program) {
-      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
-
-      initialProgram.program_weeks =
-        Number.isInteger(initialProgram.program_weeks) && initialProgram.program_weeks > 0
-          ? initialProgram.program_weeks
-          : 4
-
-      initialProgram.program_title = importData.name || initialProgram.program_title || "Untitled Program"
-
-      let normalizedWeeks: ExerciseWeek[] = []
-
-      if (initialProgram.is_periodized) {
-        if (initialProgram.weeks && initialProgram.weeks.length > 0) {
-          normalizedWeeks = initialProgram.weeks
-        } else if (initialProgram.routines && initialProgram.routines.length > 0) {
-          for (let i = 0; i < initialProgram.program_weeks; i++) {
-            normalizedWeeks.push({
-              week_number: i + 1,
-              set_count: 0,
-              sets: [],
-              routines: JSON.parse(JSON.stringify(initialProgram.routines)),
-            })
-          }
-        } else {
-          for (let i = 0; i < initialProgram.program_weeks; i++) {
-            normalizedWeeks.push({
-              week_number: i + 1,
-              set_count: 0,
-              sets: [],
-              routines: [],
-            })
-          }
-        }
-      } else {
-        if (initialProgram.weeks && initialProgram.weeks.length > 0) {
-          normalizedWeeks = [initialProgram.weeks[0]]
-        } else if (initialProgram.routines && initialProgram.routines.length > 0) {
-          normalizedWeeks = [
-            {
-              week_number: 1,
-              set_count: 0,
-              sets: [],
-              routines: JSON.parse(JSON.stringify(initialProgram.routines)),
-            },
-          ]
-        } else {
-          normalizedWeeks = [
-            {
-              week_number: 1,
-              set_count: 0,
-              sets: [],
-              routines: [],
-            },
-          ]
-        }
-        initialProgram.program_weeks = 1
-      }
-
-      normalizedWeeks.forEach((week) => {
-        week.routines?.forEach((routine) => {
-          routine.exercises.forEach((exercise) => {
-            if (exercise.weeks && exercise.weeks.length > 0) {
-              exercise.weeks.forEach((exWeek) => {
-                if (exWeek.sets) {
-                  exWeek.sets.forEach((set, setIndex) => {
-                    if (typeof set.set_number !== "number" || set.set_number <= 0) {
-                      set.set_number = setIndex + 1
-                    }
-                  })
-                }
-              })
-            } else if (exercise.sets) {
-              exercise.sets.forEach((set, setIndex) => {
-                if (typeof set.set_number !== "number" || set.set_number <= 0) {
-                  set.set_number = setIndex + 1
-                }
-              })
-            }
-          })
-        })
-      })
-
-      setProgramState({
-        ...initialProgram,
-        weeks: normalizedWeeks,
-        routines: [],
-      })
-      setCurrentWeek(1)
-      setHasChanges(false)
-      setJustSaved(false)
+  const goToNextWeek = useCallback(() => {
+    if (programState?.weeks && currentWeekIndex < programState.weeks.length - 1) {
+      setCurrentWeekIndex(currentWeekIndex + 1)
     }
+  }, [currentWeekIndex, programState?.weeks])
+
+  const goToPreviousWeek = useCallback(() => {
+    if (currentWeekIndex > 0) {
+      setCurrentWeekIndex(currentWeekIndex - 1)
+    }
+  }, [currentWeekIndex])
+
+  const goToWeek = useCallback((weekIndex: number) => {
+    setCurrentWeekIndex(weekIndex)
+  }, [])
+
+  // FIXED: Get current routines with fallback logic
+  const currentRoutines = useMemo(() => {
+    if (!programState) return []
+
+    const displayAllWeeks = programState.is_periodized && programState.weeks && programState.weeks.length > 0
+
+    if (displayAllWeeks) {
+      return [] // Will show weeks view instead
+    }
+
+    // For non-periodized, check routines array first
+    let routines = programState.routines || []
+
+    // CRITICAL FIX: If routines array is empty but we have weeks, use weeks[0].routines
+    if (routines.length === 0 && programState.weeks && programState.weeks.length > 0) {
+      routines = programState.weeks[0]?.routines || []
+      debugLog("Using fallback routines from weeks[0]:", routines.length)
+    }
+
+    return routines
+  }, [programState])
+
+  // Analyze available fields in the program data
+  const availableFields = useMemo((): AvailableFields => {
+    debugLog("Computing available fields for program state:", programState)
+
+    if (!programState) {
+      debugLog("No program state, returning default fields")
+      return {
+        hasReps: false,
+        hasWeight: false,
+        hasRpe: false,
+        hasRest: false,
+        hasNotes: false,
+      }
+    }
+
+    // FIXED: Use currentRoutines which handles the fallback logic
+    const routinesToCheck =
+      currentRoutines.length > 0
+        ? currentRoutines
+        : programState.weeks && programState.weeks.length > 0
+          ? programState.weeks[0].routines
+          : []
+
+    debugLog("Routines for field analysis:", routinesToCheck)
+
+    let hasReps = false
+    let hasWeight = false
+    let hasRpe = false
+    let hasRest = false
+    let hasNotes = false
+
+    try {
+      for (const routine of routinesToCheck) {
+        if (routine && routine.exercises) {
+          for (const exercise of routine.exercises) {
+            if (exercise && exercise.sets) {
+              for (const set of exercise.sets) {
+                if (set) {
+                  if (set.reps !== undefined && set.reps !== null && set.reps !== "") hasReps = true
+                  if (set.weight !== undefined && set.weight !== null && set.weight !== "") hasWeight = true
+                  if (set.rpe !== undefined && set.rpe !== null && set.rpe !== "") hasRpe = true
+                  if (set.rest !== undefined && set.rest !== null && set.rest !== "") hasRest = true
+                  if (set.notes !== undefined && set.notes !== null && set.notes !== "") hasNotes = true
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      errorLog("Error analyzing available fields:", err)
+    }
+
+    const fields = { hasReps, hasWeight, hasRpe, hasRest, hasNotes }
+    debugLog("Computed available fields:", fields)
+    return fields
+  }, [programState, currentRoutines])
+
+  // Initialize program state from import data
+  useEffect(() => {
+    const initializeProgram = () => {
+      debugLog("Initializing program from import data")
+
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        if (!importData) {
+          errorLog("No import data provided")
+          setError("No import data provided")
+          setIsLoading(false)
+          return
+        }
+
+        debugLog("Import data structure:", importData)
+
+        if (!importData.program) {
+          errorLog("No program data found in import")
+          setError("No program data found in import")
+          setIsLoading(false)
+          return
+        }
+
+        const program = importData.program
+        debugLog("Program data from import:", program)
+
+        const programState: Program = {
+          name: importData.name || program.program_title || program.title || program.name || "Untitled Program",
+          program_title: program.program_title || program.title || program.name,
+          description: program.description || "",
+          duration_weeks: Number(program.duration_weeks || program.program_weeks || program.weeks?.length || 1),
+          is_periodized: Boolean(program.is_periodized || (program.weeks && program.weeks.length > 1)),
+          weeks: program.weeks || [],
+          routines: program.routines || [],
+          notes: program.notes || "",
+        }
+
+        debugLog("Created program state:", programState)
+        setProgramState(programState)
+        setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Deep copy for comparison
+        setIsLoading(false)
+      } catch (err) {
+        errorLog("Error initializing program state:", err)
+        setError("Failed to load program data")
+        setIsLoading(false)
+      }
+    }
+
+    initializeProgram()
   }, [importData])
 
-  // This useEffect will now only trigger when showSendProgramDialog or trainer changes.
-  // The direct call in the button onClick will ensure fetchClients runs when the button is pressed.
+  // Fetch clients if not provided initially
   useEffect(() => {
-    console.log("[ReviewProgramClient] useEffect for send program dialog triggered.")
-    console.log("[ReviewProgramClient] showSendProgramDialog (inside effect):", showSendProgramDialog)
-    console.log("[ReviewProgramClient] trainer object (inside effect):", trainer)
+    const fetchClients = async () => {
+      debugLog("Fetching clients, initial count:", initialClients.length)
 
-    // This useEffect is primarily for reacting to changes in showSendProgramDialog
-    // and ensuring clients are fetched if the dialog is opened and trainer data is ready.
-    // The direct call in the button handler is the primary trigger.
-    if (showSendProgramDialog && trainer?.uid && clients.length === 0 && !loadingClients) {
-      console.log(
-        `[ReviewProgramClient] Condition met: Dialog opened, trainer UID (${trainer.uid}) available, no clients loaded. Calling fetchClients...`,
-      )
-      fetchClients(trainer.uid)
-    } else if (showSendProgramDialog && !trainer?.uid && !isTrainerLoading) {
-      setLoadingClients(false)
-      console.error(
-        "[ReviewProgramClient] Dialog opened but trainer UID is missing and not loading. Cannot fetch clients.",
-      )
-      toast({
-        title: "Authentication Error",
-        description: "Could not retrieve trainer information. Please log in again.",
-        variant: "destructive",
-      })
-    }
-  }, [showSendProgramDialog, trainer, toast, clients.length, loadingClients, isTrainerLoading])
+      if (initialClients.length === 0) {
+        try {
+          const response = await fetch("/api/clients", {
+            credentials: "include",
+          })
 
-  const fetchClients = async (trainerId: string) => {
-    setLoadingClients(true)
-    setClients([]) // Clear previous clients
-    setSelectedClientId("") // Clear previous selection
-    console.log("[ReviewProgramClient] Starting client fetch for trainerId:", trainerId)
-    try {
-      const response = await fetch(`/api/clients?trainerId=${trainerId}`)
-
-      // Always get raw text first for debugging, regardless of status
-      const rawResponseText = await response.text()
-      console.log("[ReviewProgramClient] Raw API response text:", rawResponseText)
-
-      // NEW: Check if rawResponseText is empty or undefined before parsing
-      if (!rawResponseText) {
-        console.error("[ReviewProgramClient] API response text is empty or undefined. Cannot parse JSON.")
-        toast({
-          title: "Error",
-          description: "Received empty or invalid response from client API. Please try again.",
-          variant: "destructive",
-        })
-        setClients([])
-        return // Exit early
-      }
-
-      if (!response.ok) {
-        console.error("[ReviewProgramClient] API response not OK. Status:", response.status, "Text:", rawResponseText)
-        toast({
-          title: "Error",
-          description: `Failed to load clients: ${response.statusText || "Server error"}. Details: ${rawResponseText.substring(0, 100)}`,
-          variant: "destructive",
-        })
-        setClients([])
-        return // Exit early if response is not OK
-      }
-
-      // Check content type before parsing as JSON
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        console.error(
-          "[ReviewProgramClient] API response is not JSON. Content-Type:",
-          contentType,
-          "Raw response:",
-          rawResponseText,
-        )
-        toast({
-          title: "Error",
-          description: "Received unexpected response from client API. Please try again.",
-          variant: "destructive",
-        })
-        setClients([])
-        return // Exit early if not JSON
-      }
-
-      let data: { clients?: Client[]; error?: string }
-      try {
-        data = JSON.parse(rawResponseText) // Parse the raw text we already got
-        console.log("[ReviewProgramClient] Clients fetched successfully:", data.clients)
-        setClients(data.clients || [])
-        if (data.clients && data.clients.length > 0) {
-          setSelectedClientId(data.clients[0].id)
-          console.log("[ReviewProgramClient] First client selected:", data.clients[0].id)
-        } else {
-          setSelectedClientId("")
-          console.log("[ReviewProgramClient] No clients found, selectedClientId cleared.")
-        }
-      } catch (jsonError) {
-        console.error(
-          "[ReviewProgramClient] Failed to parse JSON response:",
-          jsonError,
-          "Raw response that failed parsing:",
-          rawResponseText,
-        )
-        toast({
-          title: "Error",
-          description: "Failed to parse client data. Please try again.",
-          variant: "destructive",
-        })
-        setClients([])
-      }
-    } catch (error) {
-      console.error("[ReviewProgramClient] Error fetching clients (network/unexpected):", error)
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred while fetching clients.",
-        variant: "destructive",
-      })
-      setClients([])
-    } finally {
-      setLoadingClients(false)
-      console.log("[ReviewProgramClient] Finished fetching clients.")
-    }
-  }
-
-  const currentRoutines: WorkoutRoutine[] = useMemo(() => {
-    if (!programState || !programState.weeks || programState.weeks.length === 0) return []
-    return programState.weeks[currentWeek - 1]?.routines || []
-  }, [programState, currentWeek])
-
-  const goToPreviousWeek = () => setCurrentWeek(Math.max(1, currentWeek - 1))
-  const goToNextWeek = () => setCurrentWeek(Math.min(programState?.program_weeks || 1, currentWeek + 1))
-
-  const handleProgramTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setProgramState((prev) => {
-      if (!prev) return prev
-      return { ...prev, program_title: e.target.value }
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const handleProgramNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setProgramState((prev) => {
-      if (!prev) return prev
-      return { ...prev, program_notes: e.target.value }
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const handleProgramWeeksChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newWeeksCount = Number.parseInt(e.target.value, 10)
-    if (isNaN(newWeeksCount) || newWeeksCount < 1) return
-
-    setProgramState((prev) => {
-      if (!prev) return null
-
-      const updatedProgram = { ...prev, program_weeks: newWeeksCount }
-
-      if (updatedProgram.is_periodized) {
-        const currentWeeks = updatedProgram.weeks || []
-        const newWeeksArray: ExerciseWeek[] = []
-
-        for (let i = 0; i < newWeeksCount; i++) {
-          if (currentWeeks[i]) {
-            newWeeksArray.push(currentWeeks[i])
+          if (response.ok) {
+            const data = await response.json()
+            debugLog("Fetched clients from API:", data.clients)
+            setClients(data.clients || [])
           } else {
-            const lastWeekData = currentWeeks[currentWeeks.length - 1] || { routines: [] }
-            newWeeksArray.push({
-              week_number: i + 1,
-              set_count: 0,
-              sets: [],
-              routines: JSON.parse(JSON.stringify(lastWeekData.routines)),
-            })
+            debugLog("Failed to fetch clients, status:", response.status)
           }
+        } catch (error) {
+          errorLog("Error fetching clients:", error)
         }
-        updatedProgram.weeks = newWeeksArray
-        if (currentWeek > newWeeksCount) {
-          setCurrentWeek(newWeeksCount)
-        }
+      } else {
+        setClients(initialClients)
       }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const togglePeriodization = () => {
-    if (!programState) return
-
-    setHasChanges(true)
-    setJustSaved(false)
-
-    if (programState.is_periodized) {
-      setShowSelectWeekDialog(true)
-    } else {
-      const currentSingleWeekRoutines = programState.weeks?.[0]?.routines || []
-      const newWeeks: ExerciseWeek[] = []
-      const defaultWeeks = programState.program_weeks > 0 ? programState.program_weeks : 4
-
-      for (let i = 0; i < defaultWeeks; i++) {
-        newWeeks.push({
-          week_number: i + 1,
-          set_count: 0,
-          sets: [],
-          routines: JSON.parse(JSON.stringify(currentSingleWeekRoutines)),
-        })
-      }
-
-      setProgramState((prev) => {
-        if (!prev) return null
-        return {
-          ...prev,
-          is_periodized: true,
-          weeks: newWeeks,
-          program_weeks: defaultWeeks,
-        }
-      })
-      setCurrentWeek(1)
     }
-  }
 
-  const handleSelectWeekForNonPeriodized = (weekNumber: number) => {
-    if (!programState || !programState.weeks) return
+    fetchClients()
+  }, [initialClients])
 
-    const selectedWeekData = programState.weeks.find((w) => w.week_number === weekNumber)
-    if (selectedWeekData) {
-      setProgramState((prev) => {
-        if (!prev) return null
-        return {
-          ...prev,
-          is_periodized: false,
-          weeks: [JSON.parse(JSON.stringify(selectedWeekData))],
-          program_weeks: 1,
-        }
-      })
-      setShowSelectWeekDialog(false)
-      setCurrentWeek(1)
-      setHasChanges(true)
-      setJustSaved(false)
+  const handleSaveChanges = useCallback(async () => {
+    debugLog("Saving changes for program:", programState?.name)
+
+    if (!programState || !importId) {
+      debugLog("Cannot save - missing program state or import ID")
+      return
     }
-  }
-
-  const handleSaveChanges = async () => {
-    if (!programState) return
 
     setIsSaving(true)
     try {
-      await updateDoc(doc(db, "sheets_imports", importData.id), {
-        name: programState.program_title,
-        program: programState,
-        status: "reviewed",
-        updatedAt: new Date(),
+      const response = await fetch(`/api/sheets-imports/${importId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          program: programState,
+          name: programState.name || programState.program_title,
+          status: "reviewed",
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save changes")
+      }
+
+      debugLog("Changes saved successfully")
+      toast({
+        title: "Changes Saved",
+        description: "Your program changes have been saved successfully.",
       })
       setHasChanges(false)
-      setJustSaved(true)
-      importData.program = JSON.parse(JSON.stringify(programState))
+      setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Update original state
     } catch (error) {
-      console.error("Error saving program:", error)
+      errorLog("Error saving changes:", error)
       toast({
-        title: "Error",
-        description: "Failed to save changes. Please try again.",
+        title: "Save Failed",
+        description: "Failed to save your changes. Please try again.",
         variant: "destructive",
       })
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [programState, importId, toast])
 
-  const revertChanges = () => {
-    if (importData?.program) {
-      const initialProgram: WorkoutProgram = JSON.parse(JSON.stringify(importData.program))
-      setProgramState(initialProgram)
-      setCurrentWeek(1)
+  const handleCancelChanges = useCallback(() => {
+    debugLog("Canceling changes, reverting to original state")
+
+    if (originalProgramState) {
+      setProgramState(JSON.parse(JSON.stringify(originalProgramState))) // Deep copy to avoid reference issues
       setHasChanges(false)
-      setJustSaved(false)
-      setExpandedRoutines({ "0": true })
-    }
-  }
+      setExpandedRoutines({ 0: true }) // Reset expanded state
+      setCurrentWeekIndex(0) // Reset week index
 
-  const addSet = (routineIndex: number, exerciseIndex: number) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-
-      if (targetExercise) {
-        const newSetNumber = (targetExercise.sets?.length || 0) + 1
-        const newSet: WorkoutSet = {
-          set_number: newSetNumber,
-          warmup: false,
-          reps: "",
-          weight: "",
-          rpe: "",
-          rest: "",
-          duration_sec: null,
-          notes: null,
-        }
-        if (!targetExercise.sets) targetExercise.sets = []
-        targetExercise.sets.push(newSet)
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const duplicateSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-
-      if (targetExercise && targetExercise.sets && targetExercise.sets[setIndex]) {
-        const setToDuplicate = targetExercise.sets[setIndex]
-        const duplicatedSet = {
-          ...setToDuplicate,
-          set_number: setToDuplicate.set_number + 1,
-        }
-
-        targetExercise.sets.splice(setIndex + 1, 0, duplicatedSet)
-        targetExercise.sets.forEach((set, index) => {
-          set.set_number = index + 1
-        })
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const deleteSet = (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const targetExercise = updatedProgram.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[exerciseIndex]
-
-      if (targetExercise && targetExercise.sets) {
-        targetExercise.sets.splice(setIndex, 1)
-        targetExercise.sets.forEach((set, index) => {
-          set.set_number = index + 1
-        })
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const updateSetField = (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
-    setProgramState((prev) => {
-      if (!prev) return null
-      const updatedProgram = JSON.parse(JSON.stringify(prev))
-
-      const weekData = updatedProgram.weeks[currentWeek - 1]
-      if (weekData && weekData.routines[routineIndex]?.exercises[exerciseIndex]?.sets[setIndex]) {
-        weekData.routines[routineIndex].exercises[exerciseIndex].sets[setIndex][field] = value
-      }
-      return updatedProgram
-    })
-    setHasChanges(true)
-    setJustSaved(false)
-  }
-
-  const toggleRoutine = (index: number) => {
-    setExpandedRoutines((prev) => ({ ...prev, [index]: !prev[index] }))
-  }
-
-  const getRoutineColor = (index: number) => {
-    const colors = ["bg-orange-500", "bg-blue-500", "bg-purple-500", "bg-green-500", "bg-pink-500", "bg-yellow-500"]
-    return colors[index % colors.length]
-  }
-
-  const getWeekPhase = (week: number) => {
-    if (week <= 3) return { name: "Volume", color: "bg-blue-100 text-blue-800" }
-    if (week === 4) return { name: "Deload", color: "bg-yellow-100 text-yellow-800" }
-    if (week <= 7) return { name: "Intensity", color: "bg-red-100 text-red-800" }
-    if (week === 8) return { name: "Deload", color: "bg-yellow-100 text-yellow-800" }
-    if (week <= 11) return { name: "Peak", color: "bg-purple-100 text-purple-800" }
-    return { name: "Taper", color: "bg-green-100 text-green-800" }
-  }
-
-  const handleSendProgram = async () => {
-    if (!programState || !selectedClientId) {
       toast({
-        title: "Error",
-        description: "Please select a client to send the program.",
+        title: "Changes Canceled",
+        description: "All changes have been discarded and reverted to the original state.",
+      })
+    }
+  }, [originalProgramState, toast])
+
+  const handleSendToClient = useCallback(async () => {
+    debugLog("Sending program to client:", selectedClientId)
+
+    if (!selectedClientId || !programState) {
+      debugLog("Cannot send - missing client ID or program state")
+      toast({
+        title: "Missing Information",
+        description: "Please select a client and ensure program data is loaded.",
         variant: "destructive",
       })
       return
     }
 
-    setIsAssigning(true)
-    try {
-      const result = await sendProgramToClient(programState, selectedClientId)
-      if (result.success) {
-        toast({
-          title: "Success",
-          description: result.message,
-        })
-        setShowSendProgramDialog(false)
-        setMessageToClient("")
-        setSelectedClientId("")
-      } else {
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error assigning program:", error)
+    const selectedClient = clients.find((c) => c.id === selectedClientId)
+    if (!selectedClient) {
+      debugLog("Selected client not found in clients list")
       toast({
-        title: "Error",
-        description: "An unexpected error occurred during program assignment.",
+        title: "Client Not Found",
+        description: "The selected client could not be found.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSending(true)
+
+    try {
+      const response = await fetch("/api/programs/send-to-client", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          programData: programState,
+          customMessage,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(errorData.error || "Failed to send program")
+      }
+
+      const result = await response.json()
+      debugLog("Program sent successfully:", result)
+
+      toast({
+        title: "Program Sent Successfully!",
+        description: `The program "${programState.name || programState.program_title}" has been sent to ${selectedClient.name}.`,
+      })
+
+      setSelectedClientId("")
+      setCustomMessage("")
+      setShowSendDialog(false)
+    } catch (error) {
+      errorLog("Error sending program:", error)
+      toast({
+        title: "Failed to Send Program",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
         variant: "destructive",
       })
     } finally {
-      setIsAssigning(false)
+      setIsSending(false)
+    }
+  }, [selectedClientId, programState, clients, customMessage, toast])
+
+  const handleTogglePeriodization = useCallback(
+    (checked: boolean) => {
+      debugLog("Toggle periodization called with checked:", checked)
+      debugLog("Current program state:", programState)
+
+      if (!programState) {
+        errorLog("Cannot toggle periodization - no program state")
+        return
+      }
+
+      try {
+        if (checked && !programState.is_periodized) {
+          debugLog("Converting to periodized")
+          setPeriodizationAction("to-periodized")
+          // Use current duration_weeks for the conversion
+          setNumberOfWeeks(programState.duration_weeks || 4)
+          setShowPeriodizationDialog(true)
+        } else if (!checked && programState.is_periodized) {
+          debugLog("Converting to non-periodized")
+          setPeriodizationAction("to-non-periodized")
+          setSelectedWeekToKeep(1)
+          setShowPeriodizationDialog(true)
+        } else {
+          debugLog("No action needed for periodization toggle")
+        }
+      } catch (err) {
+        errorLog("Error in handleTogglePeriodization:", err)
+      }
+    },
+    [programState, setPeriodizationAction, setShowPeriodizationDialog],
+  )
+
+  const confirmPeriodizationChange = useCallback(() => {
+    debugLog("Confirming periodization change:", periodizationAction)
+    debugLog("Program state before conversion:", programState)
+
+    if (!programState || !periodizationAction) {
+      errorLog("Cannot confirm periodization change - missing state or action")
+      return
+    }
+
+    try {
+      if (periodizationAction === "to-periodized") {
+        debugLog("Converting to periodized with weeks:", numberOfWeeks)
+
+        // FIXED: Get base routines with proper fallback logic
+        let baseRoutines: Routine[] = programState.routines || []
+
+        // CRITICAL FIX: If routines array is empty, check weeks[0].routines
+        if (baseRoutines.length === 0 && programState.weeks && programState.weeks.length > 0) {
+          baseRoutines = programState.weeks[0]?.routines || []
+          debugLog("Using fallback routines from weeks[0] for conversion:", baseRoutines.length)
+        }
+
+        debugLog("Base routines for conversion:", baseRoutines)
+
+        if (baseRoutines.length === 0) {
+          debugLog("No routines found for conversion")
+          toast({
+            title: "No Routines Found",
+            description: "Cannot convert to periodized - no routines found in the program.",
+            variant: "destructive",
+          })
+          setShowPeriodizationDialog(false)
+          setPeriodizationAction(null)
+          return
+        }
+
+        const weeks: Week[] = []
+
+        for (let weekNum = 1; weekNum <= numberOfWeeks; weekNum++) {
+          weeks.push({
+            week_number: weekNum,
+            routines: baseRoutines.map((routine, index) => ({
+              ...routine,
+              name: `${routine.name || routine.title || `Routine ${index + 1}`} - Week ${weekNum}`,
+            })),
+          })
+        }
+
+        debugLog("Created weeks for periodized program:", weeks)
+
+        setProgramState((prev) => {
+          if (!prev) {
+            debugLog("Previous state is null, cannot update")
+            return prev
+          }
+          const newState = {
+            ...prev,
+            is_periodized: true,
+            weeks,
+            routines: undefined,
+            duration_weeks: numberOfWeeks, // Keep the selected duration
+          }
+          debugLog("New program state after conversion to periodized:", newState)
+          return newState
+        })
+
+        toast({
+          title: "Converted to Periodized",
+          description: `Program converted to ${numberOfWeeks} weeks using ${baseRoutines.length} base routines`,
+        })
+      } else if (periodizationAction === "to-non-periodized") {
+        debugLog("Converting to non-periodized, keeping week:", selectedWeekToKeep)
+
+        const selectedWeek = programState.weeks?.find((w) => w.week_number === selectedWeekToKeep)
+        const routinesToKeep = selectedWeek?.routines || []
+
+        debugLog("Selected week data:", selectedWeek)
+        debugLog("Routines to keep:", routinesToKeep)
+
+        if (routinesToKeep.length === 0) {
+          debugLog("No routines found in selected week")
+          toast({
+            title: "No Routines Found",
+            description: `No routines found in week ${selectedWeekToKeep}. Please select a different week.`,
+            variant: "destructive",
+          })
+          return
+        }
+
+        // Remove week suffixes from routine names
+        const cleanedRoutines = routinesToKeep.map((routine) => ({
+          ...routine,
+          name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
+        }))
+
+        debugLog("Cleaned routines:", cleanedRoutines)
+
+        setProgramState((prev) => {
+          if (!prev) {
+            debugLog("Previous state is null, cannot update")
+            return prev
+          }
+          const newState = {
+            ...prev,
+            is_periodized: false,
+            routines: cleanedRoutines,
+            weeks: undefined,
+            // FIXED: Keep the original duration_weeks, don't change it to 1
+            duration_weeks: prev.duration_weeks, // Preserve original duration
+          }
+          debugLog("New program state after conversion to non-periodized:", newState)
+          return newState
+        })
+
+        toast({
+          title: "Converted to Non-Periodized",
+          description: `Program converted using routines from Week ${selectedWeekToKeep}. Duration remains ${programState.duration_weeks} weeks.`,
+        })
+      }
+
+      setHasChanges(true)
+      setShowPeriodizationDialog(false)
+      setPeriodizationAction(null)
+      setExpandedRoutines({ 0: true })
+
+      debugLog("Periodization conversion completed successfully")
+    } catch (error) {
+      errorLog("Error in periodization conversion:", error)
+      toast({
+        title: "Conversion Failed",
+        description: "An error occurred during the conversion. Please try again.",
+        variant: "destructive",
+      })
+      setShowPeriodizationDialog(false)
+      setPeriodizationAction(null)
+    }
+  }, [programState, periodizationAction, numberOfWeeks, selectedWeekToKeep, toast])
+
+  const updateProgramField = useCallback(
+    (field: keyof Program, value: any) => {
+      debugLog("Updating program field:", field, "with value:", value)
+
+      if (!programState) {
+        debugLog("Cannot update field - no program state")
+        return
+      }
+
+      setProgramState((prev) => {
+        if (!prev) return prev
+        const newState = {
+          ...prev,
+          [field]: value,
+        }
+        debugLog("Updated program state:", newState)
+        return newState
+      })
+      setHasChanges(true) // This should trigger the Save Changes button to appear
+    },
+    [programState],
+  )
+
+  const toggleRoutineExpansion = useCallback((index: number) => {
+    debugLog("Toggling routine expansion for index:", index)
+
+    setExpandedRoutines((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }))
+  }, [])
+
+  const updateSetField = useCallback(
+    (routineIndex: number, exerciseIndex: number, setIndex: number, field: string, value: any) => {
+      debugLog("Updating set field:", { routineIndex, exerciseIndex, setIndex, field, value })
+
+      setProgramState((prev) => {
+        if (!prev) {
+          debugLog("Cannot update set field - no program state")
+          return prev
+        }
+
+        const newState = { ...prev }
+
+        // Handle both periodized (weeks) and non-periodized structures
+        let targetRoutines: Routine[] = []
+
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          // For periodized programs, update the current week being viewed
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+            debugLog("Using periodized routines from current week:", currentWeekIndex)
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          // For non-periodized programs, use the routines array
+          targetRoutines = newState.routines
+          debugLog("Using non-periodized routines")
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          // Fallback: use first week's routines if routines array is empty
+          targetRoutines = newState.weeks[0].routines
+          debugLog("Using fallback routines from first week")
+        }
+
+        debugLog("Target routines for update:", targetRoutines.length)
+
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+          const currentSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex] = {
+            ...currentSet,
+            [field]: value,
+          }
+          debugLog("Updated set successfully")
+        } else {
+          debugLog("Could not find target set for update")
+        }
+
+        return newState
+      })
+      setHasChanges(true)
+    },
+    [currentWeekIndex], // Add currentWeekIndex as dependency
+  )
+
+  const addSet = useCallback(
+    (routineIndex: number, exerciseIndex: number) => {
+      debugLog("Adding set to routine:", routineIndex, "exercise:", exerciseIndex)
+
+      setProgramState((prev) => {
+        if (!prev) return prev
+
+        const newState = { ...prev }
+
+        let targetRoutines: Routine[] = []
+
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          targetRoutines = newState.routines
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          targetRoutines = newState.weeks[0].routines
+        }
+
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+          const exercise = targetRoutines[routineIndex].exercises[exerciseIndex]
+          if (!exercise.sets) exercise.sets = []
+
+          exercise.sets.push({
+            reps: "",
+            weight: "",
+            rpe: "",
+            rest: "",
+            notes: "",
+            set_number: exercise.sets.length + 1,
+          })
+
+          debugLog("Added new set, total sets now:", exercise.sets.length)
+        }
+
+        return newState
+      })
+      setHasChanges(true)
+    },
+    [currentWeekIndex],
+  )
+
+  const removeSet = useCallback(
+    (routineIndex: number, exerciseIndex: number, setIndex: number) => {
+      debugLog("Removing set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+
+      setProgramState((prev) => {
+        if (!prev) return prev
+
+        const newState = { ...prev }
+
+        let targetRoutines: Routine[] = []
+
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          targetRoutines = newState.routines
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          targetRoutines = newState.weeks[0].routines
+        }
+
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets) {
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex, 1)
+          debugLog("Removed set successfully")
+        }
+
+        return newState
+      })
+      setHasChanges(true)
+    },
+    [currentWeekIndex],
+  )
+
+  const duplicateSet = useCallback(
+    (routineIndex: number, exerciseIndex: number, setIndex: number) => {
+      debugLog("Duplicating set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
+
+      setProgramState((prev) => {
+        if (!prev) return prev
+
+        const newState = { ...prev }
+
+        let targetRoutines: Routine[] = []
+
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          targetRoutines = newState.routines
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          targetRoutines = newState.weeks[0].routines
+        }
+
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]?.sets?.[setIndex]) {
+          const originalSet = targetRoutines[routineIndex].exercises[exerciseIndex].sets![setIndex]
+          const duplicatedSet = { ...originalSet }
+          targetRoutines[routineIndex].exercises[exerciseIndex].sets!.splice(setIndex + 1, 0, duplicatedSet)
+          debugLog("Duplicated set successfully")
+        }
+
+        return newState
+      })
+      setHasChanges(true)
+    },
+    [currentWeekIndex],
+  )
+
+  const handleBackClick = () => {
+    debugLog("Back button clicked, has changes:", hasChanges)
+
+    if (hasChanges) {
+      setShowConfirmDialog(true)
+    } else {
+      router.back()
     }
   }
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2)
+  const confirmLeave = () => {
+    debugLog("Confirmed leaving without saving")
+    setShowConfirmDialog(false)
+    router.back()
   }
 
-  if (!programState) {
+  const createSafeClickHandler = useCallback((handler: () => void, handlerName: string) => {
+    return (event?: React.MouseEvent) => {
+      try {
+        if (event) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        debugLog(`Executing safe click handler: ${handlerName}`)
+        handler()
+      } catch (err) {
+        errorLog(`Error in ${handlerName}:`, err)
+      }
+    }
+  }, [])
+
+  // Add this useEffect to debug hasChanges state
+  useEffect(() => {
+    debugLog("hasChanges state changed:", hasChanges)
+  }, [hasChanges])
+
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500">Loading program...</p>
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading program data...</p>
+          </div>
+        </div>
       </div>
     )
   }
 
-  // THIS LOG SHOULD APPEAR EVERY TIME THE COMPONENT RENDERS, showing the current state of the dialog
-  console.log("[ReviewProgramClient] showSendProgramDialog state at render:", showSendProgramDialog)
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Program</h2>
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={createSafeClickHandler(() => router.back(), "router.back")} variant="outline">
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!programState) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-yellow-800 mb-2">No Program Data</h2>
+            <p className="text-yellow-600 mb-4">No program data was found to review.</p>
+            <Button onClick={createSafeClickHandler(() => router.back(), "router.back")} variant="outline">
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const displayAllWeeks = programState.is_periodized && programState.weeks && programState.weeks.length > 0
+
+  debugLog("Rendering component with:", {
+    displayAllWeeks,
+    currentRoutinesLength: currentRoutines.length,
+    weeksLength: programState.weeks?.length || 0,
+    isPeriodized: programState.is_periodized,
+  })
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={() => {
-            if (hasChanges) {
-              setShowConfirmDialog(true)
-            } else {
-              router.push("/import-programs")
-            }
-          }}
-        >
-          <ChevronLeft className="w-4 h-4 mr-1" />
-          Back
-        </Button>
-      </div>
-
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Review Program</h1>
-          <p className="text-gray-500 text-sm">Review and edit the imported workout program before saving</p>
+    <div className="container mx-auto p-6 max-w-6xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={createSafeClickHandler(handleBackClick, "handleBackClick")}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Review Program</h1>
+            <p className="text-gray-600">Review and edit your imported program before sending to clients</p>
+          </div>
         </div>
         <div className="flex gap-2">
-          {console.log(
-            `[ReviewProgramClient] Button disabled state check: hasChanges=${hasChanges}, isSaving=${isSaving}, isTrainerLoading=${isTrainerLoading}`,
-          )}
           <Button
-            variant="ghost"
-            onClick={revertChanges}
+            onClick={createSafeClickHandler(handleCancelChanges, "handleCancelChanges")}
+            variant="outline"
             disabled={!hasChanges || isSaving}
-            className="flex items-center gap-2 text-gray-700 hover:bg-gray-100"
           >
-            <RotateCcw className="h-4 w-4" />
-            Revert
+            Cancel Changes
           </Button>
           <Button
-            className={
-              justSaved && !hasChanges
-                ? "bg-lime-400 text-gray-800 cursor-not-allowed opacity-75 flex items-center gap-2"
-                : "bg-lime-400 hover:bg-lime-500 text-gray-800 flex items-center gap-2"
-            }
-            onClick={handleSaveChanges}
-            disabled={isSaving || (justSaved && !hasChanges)}
+            onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
+            disabled={!hasChanges || isSaving}
+            variant="outline"
           >
-            {isSaving ? (
-              "Saving..."
-            ) : justSaved && !hasChanges ? (
-              <>
-                <Check className="h-4 w-4" />
-                Saved
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Save Changes
-              </>
-            )}
+            {isSaving ? "Saving..." : "Save Changes"}
           </Button>
           <Button
-            className="bg-gray-900 hover:bg-gray-800 text-white flex items-center gap-2"
-            onClick={() => {
-              console.log("Send to Client button clicked! (Directly from onClick)") // NEW LOG
-              console.log(
-                "[ReviewProgramClient] 'Send to Client' button clicked. showSendProgramDialog will be set to true.",
-              )
-              console.log("[ReviewProgramClient] Trainer UID at click:", trainer?.uid) // Log trainer UID at click
-
-              // Ensure fetchClients is called directly without the conditional block
-              fetchClients(trainer?.uid || "DEBUG_MISSING_UID") // Pass UID or a debug string
-
-              setShowSendProgramDialog(true)
-              console.log("[ReviewProgramClient] showSendProgramDialog set to true.") // NEW LOG
-            }}
-            disabled={hasChanges || isSaving || isTrainerLoading} // Keep disabled if trainer is loading or has unsaved changes
+            onClick={createSafeClickHandler(() => setShowSendDialog(true), "setShowSendDialog")}
+            disabled={!programState}
           >
-            <Send className="h-4 w-4" />
             Send to Client
           </Button>
         </div>
       </div>
 
-      {/* Program Settings */}
+      {/* Program Details */}
       <Card className="p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">Program Details</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="program-title" className="block text-sm font-medium text-gray-700 mb-1">
-              Program Title
-            </label>
+            <Label htmlFor="program-name">Program Name</Label>
             <Input
-              id="program-title"
-              value={programState.program_title}
-              onChange={handleProgramTitleChange}
-              className="w-full border-transparent focus:border-lime-500"
+              id="program-name"
+              value={programState.name || ""}
+              onChange={(e) => updateProgramField("name", e.target.value)}
+              placeholder="Enter program name"
             />
           </div>
           <div>
-            <label htmlFor="program-weeks" className="block text-sm font-medium text-gray-700 mb-1">
-              Program Weeks
-            </label>
+            <Label htmlFor="duration">Duration (weeks)</Label>
             <Input
-              id="program-weeks"
+              id="duration"
               type="number"
-              value={programState.program_weeks}
-              onChange={handleProgramWeeksChange}
-              className="w-full border-transparent focus:border-lime-500"
-              min={1}
-              disabled={!programState.is_periodized}
+              min="1"
+              max="52"
+              value={programState.duration_weeks || 1}
+              onChange={(e) => {
+                const newDuration = Number.parseInt(e.target.value) || 1
+                updateProgramField("duration_weeks", newDuration)
+              }}
             />
           </div>
-        </div>
-
-        {/* Program Notes */}
-        <div className="mb-8">
-          <label htmlFor="program-notes" className="block text-sm font-medium text-gray-700 mb-1">
-            Program Notes
-          </label>
-          <Textarea
-            id="program-notes"
-            value={programState.program_notes || ""}
-            onChange={handleProgramNotesChange}
-            className="w-full min-h-[100px] border-transparent focus:border-lime-500"
-            placeholder="Add notes about this program..."
-          />
+          <div className="md:col-span-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={programState.description || ""}
+              onChange={(e) => updateProgramField("description", e.target.value)}
+              placeholder="Enter program description"
+              rows={3}
+            />
+          </div>
         </div>
 
         {/* Periodization Toggle */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+        <div className="mt-6 pt-4 border-t">
+          <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-medium text-gray-900">Periodization</h3>
-              <p className="text-sm text-gray-500">
+              <Label htmlFor="periodization-toggle" className="text-base font-medium">
+                Periodization
+              </Label>
+              <p className="text-sm text-gray-600 mt-1">
                 {programState.is_periodized
-                  ? "Program changes week by week with different training variables"
-                  : "Same routine repeated each week"}
+                  ? `Different routines for each week over ${programState.duration_weeks} weeks (periodized)`
+                  : `Same routines repeated each week for ${programState.duration_weeks} weeks (non-periodized)`}
               </p>
             </div>
-            <Button
-              variant={programState.is_periodized ? "default" : "outline"}
-              onClick={togglePeriodization}
-              className="flex items-center gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {programState.is_periodized ? "Switch to Non-Periodized" : "Switch to Periodized"}
-            </Button>
+            <Switch
+              id="periodization-toggle"
+              checked={programState.is_periodized || false}
+              onCheckedChange={handleTogglePeriodization}
+            />
           </div>
         </div>
       </Card>
 
-      {/* Week Navigation (only show if periodized) */}
-      {programState.is_periodized && (
-        <Card className="p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={goToPreviousWeek} disabled={currentWeek === 1}>
-              <ChevronLeft className="h-6 w-6" />
-            </Button>
-            <div className="flex-1 text-center">
-              <div className="text-lg font-semibold">
-                Week {currentWeek}/{programState.program_weeks}
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToNextWeek}
-              disabled={currentWeek === programState.program_weeks}
-            >
-              <ChevronRight className="h-6 w-6" />
-            </Button>
+      {/* Program Structure */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Program Structure</h2>
+          <div className="flex gap-2">
+            <Badge variant="outline">{programState.is_periodized ? "Periodized" : "Non-Periodized"}</Badge>
+            {displayAllWeeks ? (
+              <Badge variant="secondary">{programState.weeks?.length} Weeks</Badge>
+            ) : (
+              <Badge variant="secondary">{currentRoutines.length} Routines</Badge>
+            )}
           </div>
+        </div>
 
-          {/* Week selector dots */}
-          <div className="flex justify-center mt-4 gap-1">
-            {Array.from({ length: programState.program_weeks }, (_, i) => i + 1).map((week) => (
-              <button
-                key={week}
-                onClick={() => setCurrentWeek(week)}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  week === currentWeek ? "bg-lime-500" : "bg-gray-300"
-                }`}
-              />
-            ))}
-          </div>
-        </Card>
-      )}
+        {displayAllWeeks ? (
+          // Show weeks carousel for periodized programs
+          <div className="space-y-4">
+            {/* Week Navigation Header */}
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={createSafeClickHandler(goToPreviousWeek, "goToPreviousWeek")}
+                  disabled={currentWeekIndex === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
 
-      {/* Routines for Current Week / Non-Periodized Program */}
-      {currentRoutines && currentRoutines.length > 0 ? (
-        <div className="space-y-4">
-          {currentRoutines.map((routine, routineIndex) => (
-            <div key={routineIndex} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div
-                className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
-                onClick={() => toggleRoutine(routineIndex)}
-              >
-                <div className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full ${getRoutineColor(routineIndex)} flex items-center justify-center text-white mr-3`}
-                  >
-                    {routine.routine_name?.charAt(0) || "R"}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">{routine.routine_name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {routine.exercises?.length || 0} exercises
-                      {programState.is_periodized && ` • Week ${currentWeek} view`}
-                    </p>
-                  </div>
+                <div className="text-center">
+                  <h3 className="font-semibold text-lg">
+                    Week {programState.weeks?.[currentWeekIndex]?.week_number || 1}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {currentWeekIndex + 1} of {programState.weeks?.length || 0}
+                  </p>
                 </div>
-                <Button variant="ghost" size="sm">
-                  {expandedRoutines[routineIndex] ? (
-                    <ChevronUp className="h-5 w-5" />
-                  ) : (
-                    <ChevronDown className="h-5 w-5" />
-                  )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={createSafeClickHandler(goToNextWeek, "goToNextWeek")}
+                  disabled={currentWeekIndex === (programState.weeks?.length || 1) - 1}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
 
-              {expandedRoutines[routineIndex] && (
+              {/* Week Dots Indicator */}
+              <div className="flex gap-2">
+                {programState.weeks?.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => goToWeek(index)}
+                    className={`w-3 h-3 rounded-full transition-colors ${
+                      index === currentWeekIndex ? "bg-blue-500" : "bg-gray-300 hover:bg-gray-400"
+                    }`}
+                    title={`Go to Week ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Current Week Content */}
+            {programState.weeks?.[currentWeekIndex] && (
+              <Card className="border-l-4 border-l-green-500">
                 <div className="p-4">
-                  {routine.exercises && routine.exercises.length > 0 ? (
-                    <div>
-                      {/* Header */}
-                      <div className="grid grid-cols-9 gap-4 py-2 px-4 bg-gray-100 rounded-t-lg text-sm font-medium text-gray-600">
-                        <div className="col-span-2">Exercise</div>
-                        <div className="col-span-1 text-center">Set</div>
-                        <div className="col-span-1 text-center">Reps</div>
-                        <div className="col-span-1 text-center">Weight</div>
-                        <div className="col-span-1 text-center">RPE</div>
-                        <div className="col-span-1 text-center">Rest</div>
-                        <div className="col-span-2 text-right">Actions</div>
-                      </div>
-
-                      {routine.exercises.map((exercise, exerciseIndex) => (
-                        <div key={exerciseIndex} className="border-b border-gray-200">
-                          {/* Exercise Name and Notes - displayed once per exercise, outside the set loop */}
-                          <div className="py-3 px-4">
-                            <div className="font-medium text-gray-900">{exercise.name}</div>
-                            {exercise.notes && <div className="text-sm text-gray-500 mt-1">{exercise.notes}</div>}
+                  <div className="space-y-4">
+                    {programState.weeks[currentWeekIndex].routines?.map((routine, routineIndex) => (
+                      <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                        <div className="p-4">
+                          <div
+                            className="flex items-center justify-between cursor-pointer"
+                            onClick={createSafeClickHandler(
+                              () => toggleRoutineExpansion(routineIndex),
+                              `toggleRoutineExpansion-${routineIndex}`,
+                            )}
+                          >
+                            <div>
+                              <h3 className="font-medium">
+                                {routine.name || routine.title || `Routine ${routineIndex + 1}`}
+                              </h3>
+                              <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                            </div>
+                            {expandedRoutines[routineIndex] ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
                           </div>
 
-                          {/* Exercise sets */}
-                          {programState.weeks[currentWeek - 1]?.routines[routineIndex]?.exercises[
-                            exerciseIndex
-                          ]?.sets?.map((set, setIndex) => (
-                            <div
-                              key={setIndex}
-                              className="grid grid-cols-9 gap-4 py-3 px-4 items-center hover:bg-gray-50"
-                            >
-                              {/* Empty div to maintain col-span-2 alignment for the first column */}
-                              <div className="col-span-2"></div>
+                          {expandedRoutines[routineIndex] && (
+                            <div className="mt-4 space-y-4">
+                              {routine.exercises?.map((exercise, exerciseIndex) => (
+                                <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                                  <h4 className="font-medium mb-3">{exercise.name}</h4>
+                                  {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
 
-                              <div className="col-span-1 flex justify-center">
-                                <div className="bg-white border border-gray-300 rounded-xl w-8 h-8 flex items-center justify-center text-center font-medium text-gray-800 text-sm">
-                                  {set.set_number}
+                                  {/* Sets Table */}
+                                  {exercise.sets && exercise.sets.length > 0 && (
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="border-b">
+                                            <th className="text-left p-2">Set</th>
+                                            {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                            {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                            {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                            {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                            {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                            <th className="text-left p-2">Actions</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {exercise.sets.map((set, setIndex) => (
+                                            <tr key={setIndex} className="border-b">
+                                              <td className="p-2 font-medium">{setIndex + 1}</td>
+                                              {availableFields.hasReps && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.reps || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "reps",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-20"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasWeight && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.weight || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "weight",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-24"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasRpe && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.rpe || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "rpe",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-16"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasRest && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.rest || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "rest",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-20"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasNotes && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.notes || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "notes",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-32"
+                                                  />
+                                                </td>
+                                              )}
+                                              <td className="p-2">
+                                                <div className="flex gap-1">
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={createSafeClickHandler(
+                                                      () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                                      `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                    )}
+                                                    title="Duplicate set"
+                                                  >
+                                                    <Copy className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={createSafeClickHandler(
+                                                      () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                                      `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                    )}
+                                                    title="Remove set"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                      <div className="mt-2">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={createSafeClickHandler(
+                                            () => addSet(routineIndex, exerciseIndex),
+                                            `addSet-${routineIndex}-${exerciseIndex}`,
+                                          )}
+                                        >
+                                          <Plus className="h-3 w-3 mr-1" />
+                                          Add Set
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        ) : // Show single routine template for non-periodized programs
+        currentRoutines.length > 0 ? (
+          <div className="space-y-4">
+            {currentRoutines.map((routine, routineIndex) => (
+              <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                <div className="p-4">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={createSafeClickHandler(
+                      () => toggleRoutineExpansion(routineIndex),
+                      `toggleRoutineExpansion-${routineIndex}`,
+                    )}
+                  >
+                    <div>
+                      <h3 className="font-medium">{routine.name || routine.title || `Routine ${routineIndex + 1}`}</h3>
+                      <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                    </div>
+                    {expandedRoutines[routineIndex] ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
 
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.reps || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "reps", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="10"
-                                />
-                              </div>
+                  {expandedRoutines[routineIndex] && (
+                    <div className="mt-4 space-y-4">
+                      {routine.exercises?.map((exercise, exerciseIndex) => (
+                        <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                          <h4 className="font-medium mb-3">{exercise.name}</h4>
+                          {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
 
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.weight || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "weight", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="kg"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.rpe || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rpe", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="7"
-                                />
-                              </div>
-
-                              <div className="col-span-1">
-                                <Input
-                                  value={set.rest || ""}
-                                  onChange={(e) =>
-                                    updateSetField(routineIndex, exerciseIndex, setIndex, "rest", e.target.value)
-                                  }
-                                  className="text-center h-8 text-sm border-transparent focus:border-gray-300"
-                                  placeholder="60s"
-                                />
-                              </div>
-
-                              <div className="col-span-2 flex justify-end gap-2">
+                          {/* Sets Table */}
+                          {exercise.sets && exercise.sets.length > 0 && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left p-2">Set</th>
+                                    {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                    {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                    {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                    {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                    {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                    <th className="text-left p-2">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {exercise.sets.map((set, setIndex) => (
+                                    <tr key={setIndex} className="border-b">
+                                      <td className="p-2 font-medium">{setIndex + 1}</td>
+                                      {availableFields.hasReps && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.reps || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "reps",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-20"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasWeight && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.weight || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "weight",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-24"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasRpe && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.rpe || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "rpe",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-16"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasRest && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.rest || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "rest",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-20"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasNotes && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.notes || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "notes",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-32"
+                                          />
+                                        </td>
+                                      )}
+                                      <td className="p-2">
+                                        <div className="flex gap-1">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={createSafeClickHandler(
+                                              () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                              `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
+                                            title="Duplicate set"
+                                          >
+                                            <Copy className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={createSafeClickHandler(
+                                              () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                              `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
+                                            title="Remove set"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="mt-2">
                                 <Button
-                                  variant="ghost"
                                   size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => duplicateSet(routineIndex, exerciseIndex, setIndex)}
+                                  variant="outline"
+                                  onClick={createSafeClickHandler(
+                                    () => addSet(routineIndex, exerciseIndex),
+                                    `addSet-${routineIndex}-${exerciseIndex}`,
+                                  )}
                                 >
-                                  <Copy className="h-4 w-4 text-gray-500" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => deleteSet(routineIndex, exerciseIndex, setIndex)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-gray-500" />
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Set
                                 </Button>
                               </div>
                             </div>
-                          ))}
-
-                          {/* Add set button */}
-                          <div className="grid grid-cols-9 gap-4 py-2 px-4">
-                            <div className="col-span-7"></div>
-                            <div className="col-span-2 flex justify-end">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => addSet(routineIndex, exerciseIndex)}
-                              >
-                                <Plus className="h-4 w-4 text-gray-400" />
-                              </Button>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">No exercises found in this routine.</div>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
-          <div className="text-gray-400 mb-2">
-            <Calendar className="mx-auto h-12 w-12" />
+              </Card>
+            ))}
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">No routines found</h3>
-          <p className="text-gray-500 mb-4">
-            {programState.is_periodized
-              ? `Week ${currentWeek} doesn't have any workout routines yet.`
-              : `This program doesn't have any workout routines yet.`}
-          </p>
-          <Button variant="outline">+ Add Routine</Button>
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No routines found in this program.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Send to Client Dialog */}
+      {showSendDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Send Program to Client</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="client-select">Select Client</Label>
+                  <select
+                    id="client-select"
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Choose a client...</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name} {client.email && `(${client.email})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="custom-message">Custom Message (Optional)</Label>
+                  <Textarea
+                    id="custom-message"
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value)}
+                    placeholder="Add a personal message for your client..."
+                    rows={3}
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={createSafeClickHandler(() => setShowSendDialog(false), "setShowSendDialog-false")}
+                    disabled={isSending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")}
+                    disabled={!selectedClientId || isSending}
+                  >
+                    {isSending ? "Sending..." : "Send Program"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 
-      {/* Send Program Confirmation Dialog */}
-      <Dialog open={showSendProgramDialog} onOpenChange={setShowSendProgramDialog}>
-        <DialogContent className="sm:max-w-[425px] flex flex-col max-h-[90vh]">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Confirm Sending Program</DialogTitle>
-            <DialogDescription>You are about to send the following program:</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2">
-            <Card className="p-4">
-              <h3 className="font-bold text-lg mb-2">{programState.program_title}</h3>
-              <div className="flex items-center text-sm text-gray-600 mb-1">
-                <User className="h-4 w-4 mr-2" /> {clientNameForModal}
+      {/* Confirmation Dialog for leaving without saving */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Unsaved Changes</h3>
+              <p className="text-gray-600 mb-4">
+                You have unsaved changes. Are you sure you want to leave without saving?
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={createSafeClickHandler(() => setShowConfirmDialog(false), "setShowConfirmDialog-false")}
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
+                  Leave Without Saving
+                </Button>
               </div>
-              <div className="flex items-center text-sm text-gray-600 mb-3">
-                <Calendar className="h-4 w-4 mr-2" /> {dateForModal}
-              </div>
-              <div className="flex items-start text-sm text-gray-600">
-                <MessageSquare className="h-4 w-4 mr-2 mt-1" />
-                <Textarea
-                  value={messageToClient}
-                  onChange={(e) => setMessageToClient(e.target.value)}
-                  placeholder="Add a message to your client (optional)"
-                  className="flex-1 border-transparent focus:border-gray-300"
-                  rows={3}
-                />
-              </div>
-            </Card>
+            </div>
+          </Card>
+        </div>
+      )}
 
-            {/* Client Selection Section */}
-            <div className="space-y-2">
-              <h4 className="font-semibold text-gray-800">Select Client:</h4>
-              {loadingClients ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
-                  <span className="ml-2 text-gray-600">Loading clients...</span>
+      {/* Periodization Dialog */}
+      {showPeriodizationDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">
+                {periodizationAction === "to-periodized" ? "Convert to Periodized" : "Convert to Non-Periodized"}
+              </h3>
+
+              {periodizationAction === "to-periodized" ? (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    This will create {numberOfWeeks} different weeks using your current routines as a template.
+                  </p>
+                  <div>
+                    <Label htmlFor="weeks-count">Number of Weeks</Label>
+                    <Input
+                      id="weeks-count"
+                      type="number"
+                      min="2"
+                      max="52"
+                      value={numberOfWeeks}
+                      onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
+                    />
+                  </div>
                 </div>
-              ) : clients.length === 0 ? (
-                <div className="text-center py-4 text-gray-500">No clients found for your account.</div>
               ) : (
-                <>
-                  {console.log(
-                    "[ReviewProgramClient] Rendering RadioGroup. Clients:",
-                    clients,
-                    "Selected ID:",
-                    selectedClientId,
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    This will convert to a single routine template that repeats for {programState?.duration_weeks}{" "}
+                    weeks. Choose which week's routines to keep:
+                  </p>
+                  <div>
+                    <Label htmlFor="week-select">Week to Keep</Label>
+                    <select
+                      id="week-select"
+                      value={selectedWeekToKeep}
+                      onChange={(e) => setSelectedWeekToKeep(Number.parseInt(e.target.value))}
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                    >
+                      {programState?.weeks?.map((week) => (
+                        <option key={week.week_number} value={week.week_number}>
+                          Week {week.week_number}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end mt-6">
+                <Button
+                  variant="outline"
+                  onClick={createSafeClickHandler(
+                    () => setShowPeriodizationDialog(false),
+                    "setShowPeriodizationDialog-false",
                   )}
-                  <RadioGroup
-                    value={selectedClientId}
-                    onValueChange={setSelectedClientId}
-                    className="max-h-48 overflow-y-auto"
-                  >
-                    {clients.map((client) => (
-                      <div
-                        key={client.id}
-                        className="flex items-center space-x-3 p-2 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                      >
-                        <RadioGroupItem value={client.id} id={`client-${client.id}`} />
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-medium text-gray-700">{getInitials(client.name)}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <Label htmlFor={`client-${client.id}`} className="font-medium cursor-pointer block truncate">
-                            {client.name}
-                          </Label>
-                          {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </>
-              )}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
+                  Convert
+                </Button>
+              </div>
             </div>
-
-            <div className="bg-orange-100 text-orange-800 p-3 rounded-md flex items-center gap-2 text-sm">
-              <Info className="h-4 w-4" />
-              <span>
-                We will send your client an email and app notification. They can still access their old program.
-              </span>
-            </div>
-          </div>
-          <DialogFooter className="flex-shrink-0">
-            <Button variant="outline" onClick={() => setShowSendProgramDialog(false)} disabled={isAssigning}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-lime-400 hover:bg-lime-500 text-gray-800"
-              onClick={handleSendProgram}
-              disabled={isAssigning || !selectedClientId || !programState}
-            >
-              {isAssigning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Sending...
-                </>
-              ) : (
-                "Send Program"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmation Dialog for Unsaved Changes */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
-              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Continue Editing
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setHasChanges(false)
-                router.push("/import-programs")
-              }}
-            >
-              Leave Without Saving
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Select Week Dialog for switching from Periodized to Non-Periodized */}
-      <Dialog open={showSelectWeekDialog} onOpenChange={setShowSelectWeekDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select Week to Keep</DialogTitle>
-            <DialogDescription>
-              You are switching from a periodized program to a non-periodized program. Please select which week's data
-              you would like to keep as the single routine for this program.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2 py-4">
-            {programState.weeks?.map((week) => (
-              <Button
-                key={week.week_number}
-                variant={selectedWeekForNonPeriodized === week.week_number ? "default" : "outline"}
-                onClick={() => setSelectedWeekForNonPeriodized(week.week_number)}
-              >
-                Week {week.week_number}
-              </Button>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSelectWeekDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (selectedWeekForNonPeriodized !== null) {
-                  handleSelectWeekForNonPeriodized(selectedWeekForNonPeriodized)
-                }
-              }}
-              disabled={selectedWeekForNonPeriodized === null}
-            >
-              Confirm Selection
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,41 +1,26 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { AppError, ErrorType, handleClientError } from "@/lib/utils/error-handler"
+import { AppError, ErrorType } from "@/lib/utils/error-handler"
 
 export function usePathDetection() {
-  let pathname: string | null = null
-  try {
-    pathname = usePathname()
+  const pathname = usePathname()
 
-    if (!pathname) {
-      throw new AppError({
-        message: "Path not available",
-        errorType: ErrorType.NAVIGATION_ERROR,
-      })
-    }
+  let isDemoMode = false
+  let pathPrefix = ""
 
-    const isDemoMode = pathname.startsWith("/demo")
-    const pathPrefix = isDemoMode ? "/demo" : ""
-
-    return {
-      isDemoMode,
-      pathPrefix,
-    }
-  } catch (err) {
-    const appError = handleClientError(err, {
-      component: "usePathDetection",
-      operation: "detectPath",
-      message: "Failed to detect path",
+  if (!pathname) {
+    throw new AppError({
+      message: "Path not available",
       errorType: ErrorType.NAVIGATION_ERROR,
     })
+  }
 
-    console.error("Path detection error:", appError)
+  isDemoMode = pathname.startsWith("/demo")
+  pathPrefix = isDemoMode ? "/demo" : ""
 
-    // Return default values to prevent UI crashes
-    return {
-      isDemoMode: false,
-      pathPrefix: "",
-    }
+  return {
+    isDemoMode,
+    pathPrefix,
   }
 }

@@ -1,177 +1,201 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Users, Plus } from "lucide-react"
+import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
 import { ClientsList } from "@/components/clients/clients-list"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
+import { AuthDebug } from "@/components/debug/auth-debug"
 import { AddClientModal } from "@/components/clients/add-client-modal"
-import { Button } from "@/components/ui/button"
-import { PlusCircle } from "lucide-react"
-import type { Client } from "@/types/client"
 import { useToast } from "@/hooks/use-toast"
-import { fetchClients } from "@/lib/firebase/client-service"
 
 export default function ClientPage() {
-  const [clients, setClients] = useState<Client[]>([])
-  const [filteredClients, setFilteredClients] = useState<Client[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("All")
-  const [allClientsExpanded, setAllClientsExpanded] = useState(false)
-  const [showAddClientModal, setShowAddClientModal] = useState(false)
+  const [expandFilter, setExpandFilter] = useState("All")
+  const [collapseFilter, setCollapseFilter] = useState("All")
   const { toast } = useToast()
-  const router = useRouter()
 
-  // Fetch clients using the client service (same as Overview page)
-  const fetchClientsData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  // Use the hybrid approach for client data
+  const { clients, loading, error, refetch, lastFetchTime } = useClientDataHybrid(false)
 
-      // Get user ID from cookie (same approach as Overview page)
-      const userIdCookie = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("user_id="))
-        ?.split("=")[1]
-
-      if (!userIdCookie) {
-        router.push("/login")
-        return
-      }
-
-      console.log("Fetching clients for trainer:", userIdCookie)
-
-      // Use the same client service as Overview page
-      const clientsData = await fetchClients(userIdCookie)
-      console.log("Fetched clients:", clientsData)
-
-      // Filter out deleted clients
-      const activeClients = clientsData.filter((client) => client.status !== "Deleted")
-
-      setClients(activeClients)
-      setFilteredClients(activeClients)
-
-      toast({
-        title: "Success",
-        description: `Loaded ${activeClients.length} clients`,
-      })
-    } catch (error) {
-      console.error("Error fetching clients:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to fetch clients"
-      setError(errorMessage)
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Initial fetch
-  useEffect(() => {
-    fetchClientsData()
-  }, [])
+  console.log("[ClientPage] Render state:", {
+    clientsCount: clients.length,
+    loading,
+    error,
+    lastFetchTime: lastFetchTime?.toISOString(),
+  })
 
   // Filter clients based on search and status
-  useEffect(() => {
-    let filtered = clients
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(
-        (client) =>
-          client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.email?.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredClients = clients.filter((client) => {
+    // Search filter - check multiple fields
+    const matchesSearch =
+      searchTerm === "" ||
+      [client.name, client.email, client.goal, client.program, client.notes].some(
+        (field) => field && field.toLowerCase().includes(searchTerm.toLowerCase()),
       )
-    }
 
-    // Apply status filter
-    if (statusFilter !== "All") {
-      filtered = filtered.filter((client) => client.status === statusFilter)
-    }
+    // Status filter
+    const matchesStatus = statusFilter === "All" || client.status === statusFilter
 
-    setFilteredClients(filtered)
-  }, [clients, searchQuery, statusFilter])
+    return matchesSearch && matchesStatus
+  })
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
-  }
-
-  const handleStatusChange = (status: string) => {
-    setStatusFilter(status)
-  }
-
-  const handleExpandAll = () => {
-    setAllClientsExpanded(true)
-  }
-
-  const handleCollapseAll = () => {
-    setAllClientsExpanded(false)
-  }
-
-  const handleClientDeleted = () => {
-    // Refresh the clients list after deletion
-    fetchClientsData()
+  const handleAddClient = () => {
+    setShowAddModal(true)
   }
 
   const handleClientAdded = () => {
-    // Refresh the clients list after adding a new client
-    fetchClientsData()
+    console.log("[ClientPage] Client added - real-time listener should pick it up")
+    toast({
+      title: "Client added",
+      description: "The new client has been added successfully.",
+    })
+  }
+
+  const handleClientDeleted = () => {
+    refetch()
+    toast({
+      title: "Client deleted",
+      description: "The client has been deleted successfully.",
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+            <p className="text-gray-500">Loading your coaching clients...</p>
+          </div>
+          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+            {showDebug ? "Hide" : "Show"} Debug
+          </Button>
+        </div>
+
+        {showDebug && <AuthDebug />}
+
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Error Loading Clients</h1>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <Button onClick={fetchClientsData}>Try Again</Button>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+            <p className="text-gray-500">Manage your coaching clients</p>
+          </div>
+          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+            {showDebug ? "Hide" : "Show"} Debug
+          </Button>
+        </div>
+
+        {showDebug && <AuthDebug />}
+
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Clients</h3>
+            <p className="text-gray-500 mb-4">{error}</p>
+            <div className="space-y-2">
+              <Button onClick={() => refetch()} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
-          <p className="text-gray-600 mt-2">Manage your coaching clients</p>
+          <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+          <p className="text-gray-500">Manage your coaching clients</p>
+          {lastFetchTime && (
+            <p className="text-sm text-gray-400 mt-1">Last updated: {lastFetchTime.toLocaleTimeString()}</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowDebug(!showDebug)} variant="outline" size="sm">
+            {showDebug ? "Hide" : "Show"} Debug
+          </Button>
+          <Button onClick={() => refetch()} variant="outline" size="sm">
+            Refresh
+          </Button>
+          <Button
+            onClick={handleAddClient}
+            className="bg-lime-400 hover:bg-lime-500 text-gray-800"
+            data-add-client-button="true"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Client
+          </Button>
         </div>
       </div>
 
-      <ClientsFilterBar
-        onSearch={handleSearch}
-        onStatusChange={handleStatusChange}
-        onExpandAll={handleExpandAll}
-        onCollapseAll={handleCollapseAll}
-        statusFilter={statusFilter}
-      >
-        <Button
-          onClick={() => setShowAddClientModal(true)}
-          className="bg-[#d2ff28] text-black hover:bg-[#c1f01f] font-medium"
-          data-add-client-button="true"
-        >
-          <PlusCircle className="h-4 w-4 mr-2" />
-          Add Client
-        </Button>
-      </ClientsFilterBar>
+      {/* Debug Panel */}
+      {showDebug && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="text-sm text-yellow-800">Debug Information</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <strong>Showing Clients:</strong> {clients.length}
+              </div>
+              <div>
+                <strong>Loading:</strong> {loading ? "Yes" : "No"}
+              </div>
+              <div>
+                <strong>Error:</strong> {error || "None"}
+              </div>
+              <div>
+                <strong>Last Updated:</strong> {lastFetchTime?.toLocaleTimeString() || "Never"}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
+      {/* Filters */}
+      <ClientsFilterBar
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        expandFilter={expandFilter}
+        onExpandFilterChange={setExpandFilter}
+        collapseFilter={collapseFilter}
+        onCollapseFilterChange={setCollapseFilter}
+        clientCount={filteredClients.length}
+        totalCount={clients.length}
+      />
+
+      {/* Clients List */}
       <ClientsList
         clients={filteredClients}
-        allClientsExpanded={allClientsExpanded}
+        allClientsExpanded={expandFilter === "All"}
         loading={loading}
         onClientDeleted={handleClientDeleted}
       />
 
-      <AddClientModal
-        isOpen={showAddClientModal}
-        onClose={() => setShowAddClientModal(false)}
-        onClientAdded={handleClientAdded}
-      />
+      {/* Add Client Modal */}
+      <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
     </div>
   )
 }

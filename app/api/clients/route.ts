@@ -1,72 +1,46 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { fetchClients } from "@/lib/firebase/client-service"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  console.log("[API /api/clients] === REQUEST RECEIVED ===")
+
   try {
-    console.log("🚀 Starting /api/clients request")
-
+    // Use the SAME authentication method as your existing working routes
     const cookieStore = cookies()
     const userId = cookieStore.get("user_id")?.value
-    console.log("🆔 User ID from cookie:", userId)
+    const userIdAlt = cookieStore.get("userId")?.value // Fallback for inconsistent naming
+    const trainerId = userId || userIdAlt
 
-    if (!userId) {
-      console.log("❌ No user_id in cookies")
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    console.log("🔍 [API /api/clients] Auth check:", {
+      userId,
+      userIdAlt,
+      trainerId,
+      hasCookies: !!cookieStore,
+    })
+
+    if (!trainerId) {
+      console.log("❌ [API /api/clients] No trainer ID found in cookies")
+      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
     }
 
-    try {
-      // Import Firestore directly
-      const { db } = await import("@/lib/firebase/firebase")
-      console.log("📊 Firestore imported successfully")
+    console.log("✅ [API /api/clients] Authenticated trainer:", trainerId)
 
-      if (!db) {
-        console.error("❌ Firestore not available")
-        return NextResponse.json({ error: "Database not available" }, { status: 500 })
-      }
+    // Use your existing fetchClients function - NO server-side filtering
+    console.log("📊 [API /api/clients] Calling fetchClients...")
+    const allClients = await fetchClients(trainerId)
+    console.log("[API /api/clients] Raw clients from fetchClients:", allClients.length)
 
-      console.log("🔍 Querying Firestore for clients of trainer:", userId)
+    // Return ALL clients - no filtering
+    console.log("[API /api/clients] Returning ALL clients without any filtering")
 
-      // Import collection and query functions from firebase/firestore
-      const { collection, query, where, getDocs } = await import("firebase/firestore")
-
-      // ❌ WRONG: Query clients where trainerId matches the current user
-      const clientsRef = collection(db, "clients")
-      const q = query(clientsRef, where("trainerId", "==", userId))
-      const querySnapshot = await getDocs(q)
-
-      console.log("✅ Clients query completed, found:", querySnapshot.size, "clients")
-
-      const clients: any[] = []
-      querySnapshot.forEach((doc) => {
-        clients.push({
-          id: doc.id,
-          ...doc.data(),
-        })
-      })
-
-      console.log("📤 Sending clients response:", clients.length, "clients")
-      return NextResponse.json(clients)
-    } catch (firestoreError: any) {
-      console.error("💥 Firestore error:", firestoreError)
-      return NextResponse.json(
-        {
-          error: "Database error",
-          details: firestoreError?.message || "Database connection failed",
-        },
-        { status: 500 },
-      )
-    }
-  } catch (error: any) {
-    console.error("💥 Unexpected error:", error)
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error?.message || "Unknown error",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({
+      success: true,
+      clients: allClients,
+      totalClients: allClients.length,
+    })
+  } catch (error) {
+    console.error("[API /api/clients] ❌ Error:", error)
+    return NextResponse.json({ success: false, error: "Failed to fetch clients" }, { status: 500 })
   }
 }

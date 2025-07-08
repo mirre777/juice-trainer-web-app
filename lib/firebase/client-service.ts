@@ -1,23 +1,23 @@
-// lib/firebase/client-service.ts
 import {
   collection,
   doc,
   getDoc,
   getDocs,
+  addDoc,
   updateDoc,
-  arrayUnion,
   deleteDoc,
   query,
-  orderBy,
-  addDoc,
   where,
-  serverTimestamp,
   onSnapshot,
+  serverTimestamp,
+  arrayUnion,
+  orderBy,
+  Timestamp,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import type { Client } from "@/types/client"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
-import { getUserById } from "@/lib/firebase/user-service"
+import type { Client } from "@/types/client"
+import { getUserById } from "@/lib/firebase/user-service" // Declare getUserById import
 
 // Helper function to get initials from name
 function getInitials(name: string): string {
@@ -36,13 +36,110 @@ export function isValidClientData(data: any): boolean {
   return data && typeof data === "object" && typeof data.name === "string" && !data.name.includes("channel?VER=")
 }
 
-// Map raw Firestore data to Client type
-export function mapClientData(id: string, data: any): Client | null {
+// NEW: Get user data by following the userId from client document
+async function getUserDataFromUserId(userId: string): Promise<any> {
+  try {
+    if (!userId) {
+      console.log(`[getUserDataFromUserId] No userId provided`)
+      return null
+    }
+
+    const userPath = `users/${userId}`
+    console.log(`[getUserDataFromUserId] 📍 Following userId to path: /${userPath}`)
+
+    const userRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userRef)
+
+    if (userDoc.exists()) {
+      const userData = userDoc.data()
+      console.log(`[getUserDataFromUserId] ✅ Found user data:`, {
+        id: userId,
+        name: userData.name || "NO_NAME",
+        email: userData.email || "NO_EMAIL",
+        status: userData.status || "NO_STATUS",
+        hasTrainers: !!(userData.trainers && userData.trainers.length > 0),
+      })
+      return userData
+    } else {
+      console.log(`[getUserDataFromUserId] ❌ User document does not exist at /${userPath}`)
+      return null
+    }
+  } catch (error) {
+    console.error(`[getUserDataFromUserId] Error getting user data for ${userId}:`, error)
+    return null
+  }
+}
+
+// Enhanced client data mapping that follows userId to get complete user data
+export async function mapClientDataWithUserInfo(id: string, data: any): Promise<Client | null> {
+  // Check for corrupted data
   if (!isValidClientData(data)) {
     console.error("Invalid client data detected:", data)
     return null
   }
 
+  console.log(`[mapClientDataWithUserInfo] 🔍 Processing client ${id}:`, {
+    name: data.name,
+    status: data.status,
+    userId: data.userId || "NO_USER_ID",
+    email: data.email || "NO_EMAIL_IN_CLIENT_DOC",
+  })
+
+  // If client has userId, follow it to get complete user data
+  let userData = null
+  if (data.userId) {
+    userData = await getUserDataFromUserId(data.userId)
+  }
+
+  // Merge client data with user data (user data takes precedence for contact info)
+  const mergedData = {
+    id: id,
+    name: userData?.name || data.name || "Unnamed Client",
+    initials: getInitials(userData?.name || data.name || "UC"),
+    status: data.status || "Pending",
+    progress: data.progress || 0,
+    sessions: data.sessions || { completed: 0, total: 0 },
+    completion: data.completion || 0,
+    notes: data.notes || "",
+    bgColor: data.bgColor || "#f3f4f6",
+    textColor: data.textColor || "#111827",
+    lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
+    metrics: data.metrics || [],
+    email: userData?.email || data.email || "", // Prefer user document email
+    goal: data.goal || "",
+    program: data.program || "",
+    createdAt: data.createdAt,
+    inviteCode: data.inviteCode || "",
+    userId: data.userId || "",
+    phone: userData?.phone || data.phone || "", // Prefer user document phone
+    // Add user-specific data
+    userStatus: userData?.status || "unknown",
+    hasLinkedAccount: !!(data.userId && userData),
+    _lastUpdated: Date.now(),
+  } as Client
+
+  console.log(`[mapClientDataWithUserInfo] ✅ Mapped client:`, {
+    id: mergedData.id,
+    name: mergedData.name,
+    email: mergedData.email,
+    status: mergedData.status,
+    userId: mergedData.userId,
+    hasLinkedAccount: mergedData.hasLinkedAccount,
+    userStatus: mergedData.userStatus,
+  })
+
+  return mergedData
+}
+
+// Synchronous version for backward compatibility
+export function mapClientData(id: string, data: any): Client | null {
+  // Check for corrupted data
+  if (!isValidClientData(data)) {
+    console.error("Invalid client data detected:", data)
+    return null
+  }
+
+  // Ensure we're getting the most up-to-date data
   return {
     id: id,
     name: data.name || "Unnamed Client",
@@ -59,7 +156,7 @@ export function mapClientData(id: string, data: any): Client | null {
     email: data.email || "",
     goal: data.goal || "",
     program: data.program || "",
-    createdAt: data.createdAt,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt || new Date(),
     inviteCode: data.inviteCode || "",
     userId: data.userId || "",
     phone: data.phone || "",
@@ -67,439 +164,135 @@ export function mapClientData(id: string, data: any): Client | null {
   } as Client
 }
 
-// Get all clients for a specific trainer (trainerId is actually a userId)
-export async function fetchClients(trainerId: string): Promise<Client[]> {
+// Get all clients for a specific trainer - ENHANCED WITH DETAILED PATH LOGGING AND USER DATA FOLLOWING
+export async function fetchClients(trainerUid: string): Promise<Client[]> {
   try {
-    console.log("Fetching clients for trainer (userId):", trainerId)
+    console.log(`[fetchClients] 🚀 === STARTING CLIENT FETCH PROCESS ===`)
+    console.log(`[fetchClients] 🔍 Trainer ID: ${trainerUid}`)
+    console.log(`[fetchClients] 🔗 Firebase app: ${db.app.name}`)
+    console.log(`[fetchClients] 🔗 Firebase project: ${db.app.options.projectId}`)
 
-    if (!trainerId) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "fetchClients" },
-        "No trainer ID provided",
-      )
-      logError(error)
+    if (!trainerUid) {
+      console.log(`[fetchClients] ❌ No trainer UID provided`)
       return []
     }
 
-    // Query: users/{trainerId}/clients (where trainerId is actually a userId)
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
-    const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
+    // STEP 1: Define and log the exact Firestore paths
+    const trainerPath = `users/${trainerUid}`
+    const clientsCollectionPath = `users/${trainerUid}/clients`
 
-    console.log("Executing Firestore query...")
-    const [clientsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      trainerId,
-      function: "fetchClients",
+    console.log(`[fetchClients] 📍 FIRESTORE PATHS:`)
+    console.log(`[fetchClients]   - Trainer document: /${trainerPath}`)
+    console.log(`[fetchClients]   - Clients collection: /${clientsCollectionPath}`)
+
+    // STEP 2: Verify trainer document exists
+    console.log(`[fetchClients] 🔍 Step 1: Verifying trainer document exists...`)
+    const trainerRef = doc(db, "users", trainerUid)
+    const trainerDoc = await getDoc(trainerRef)
+
+    if (!trainerDoc.exists()) {
+      console.log(`[fetchClients] ❌ TRAINER DOCUMENT DOES NOT EXIST at /${trainerPath}`)
+      return []
+    }
+
+    const trainerData = trainerDoc.data()
+    console.log(`[fetchClients] ✅ Trainer document exists:`, {
+      name: trainerData.name || "NO_NAME",
+      email: trainerData.email || "NO_EMAIL",
+      hasClients: !!(trainerData.clients && trainerData.clients.length > 0),
+      clientsArray: trainerData.clients || [],
     })
 
-    if (error || !clientsSnapshot) {
+    // STEP 3: Query the clients collection
+    console.log(`[fetchClients] 🔍 Step 2: Querying clients collection...`)
+    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
+
+    // Try simple query first
+    console.log(`[fetchClients] 📡 Executing simple query on /${clientsCollectionPath}`)
+    const simpleQuery = query(clientsCollectionRef)
+    const simpleSnapshot = await getDocs(simpleQuery)
+
+    console.log(`[fetchClients] 📊 Simple query result: ${simpleSnapshot.size} documents`)
+
+    if (simpleSnapshot.size === 0) {
+      console.log(`[fetchClients] ⚠️ CLIENTS COLLECTION IS EMPTY`)
+      console.log(`[fetchClients] 💡 This means no client documents exist at /${clientsCollectionPath}`)
       return []
     }
 
-    console.log(`Found ${clientsSnapshot.size} clients`)
-
+    // STEP 4: Process each client document and follow userId links
+    console.log(`[fetchClients] 🔍 Step 3: Processing client documents and following userId links...`)
     const clients: Client[] = []
-    clientsSnapshot.forEach((doc) => {
-      const data = doc.data()
-      console.log(`Processing client: ${doc.id}`, data)
-      const client = mapClientData(doc.id, data)
+    let processedCount = 0
+
+    for (const docSnapshot of simpleSnapshot.docs) {
+      processedCount++
+      const clientId = docSnapshot.id
+      const clientData = docSnapshot.data()
+
+      console.log(`[fetchClients] 📄 Processing client ${processedCount}/${simpleSnapshot.size} (${clientId}):`)
+      console.log(`[fetchClients]   - Document path: /${clientsCollectionPath}/${clientId}`)
+      console.log(`[fetchClients]   - Name: ${clientData.name || "NO_NAME"}`)
+      console.log(`[fetchClients]   - Status: ${clientData.status || "NO_STATUS"}`)
+      console.log(`[fetchClients]   - UserId: ${clientData.userId || "NO_USER_ID"}`)
+      console.log(`[fetchClients]   - Email in client doc: ${clientData.email || "NO_EMAIL"}`)
+      console.log(`[fetchClients]   - IsTemporary: ${clientData.isTemporary || false}`)
+
+      // Use enhanced mapping that follows userId
+      const client = await mapClientDataWithUserInfo(clientId, clientData)
+
       if (client) {
         clients.push(client)
+        console.log(`[fetchClients] ✅ Added client to results:`, {
+          id: client.id,
+          name: client.name,
+          status: client.status,
+          hasLinkedAccount: client.hasLinkedAccount,
+          email: client.email,
+        })
+      } else {
+        console.log(`[fetchClients] ❌ Skipped invalid client: ${clientId}`)
       }
+    }
+
+    // STEP 5: Final summary and filtering
+    console.log(`[fetchClients] 📈 PROCESSING SUMMARY:`)
+    console.log(`[fetchClients]   - Total documents found: ${simpleSnapshot.size}`)
+    console.log(`[fetchClients]   - Valid clients processed: ${clients.length}`)
+    console.log(`[fetchClients]   - Firestore paths used:`)
+    console.log(`[fetchClients]     * Trainer: /${trainerPath}`)
+    console.log(`[fetchClients]     * Clients: /${clientsCollectionPath}`)
+    console.log(`[fetchClients]     * User docs: /users/{userId} (for each client with userId)`)
+
+    // Log each client with detailed info
+    clients.forEach((client, index) => {
+      console.log(`[fetchClients] 🎯 Client ${index + 1} details:`, {
+        id: client.id,
+        name: client.name,
+        status: client.status,
+        userId: client.userId || "NO_USER_ID",
+        email: client.email || "NO_EMAIL",
+        hasLinkedAccount: client.hasLinkedAccount,
+        userStatus: client.userStatus,
+        willShowInDialog: !!(client.userId && client.hasLinkedAccount && client.status === "Active"),
+      })
     })
 
-    console.log("Returning clients:", clients)
+    console.log(`[fetchClients] 🏁 === FETCH PROCESS COMPLETE ===`)
     return clients
   } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "fetchClients", trainerId },
-      "Unexpected error fetching trainer clients",
-    )
-    logError(appError)
+    console.error(`[fetchClients] ❌ UNEXPECTED ERROR:`, error)
+    console.error(`[fetchClients] ❌ Error details:`, {
+      message: error.message,
+      code: error.code,
+      stack: error.stack?.substring(0, 500),
+      trainerUid,
+    })
     return []
   }
 }
 
-// Get a specific client by ID
-export async function getClient(trainerId: string, clientId: string): Promise<Client | null> {
-  try {
-    if (!trainerId || !clientId) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "getClient" },
-        "Trainer ID and client ID are required",
-      )
-      logError(error)
-      return null
-    }
-
-    // Query: users/{trainerId}/clients/{clientId} (where trainerId is actually a userId)
-    const clientRef = doc(db, "users", trainerId, "clients", clientId)
-    const [clientDoc, error] = await tryCatch(() => getDoc(clientRef), ErrorType.DB_READ_FAILED, {
-      function: "getClient",
-      trainerId,
-      clientId,
-    })
-
-    if (error || !clientDoc) {
-      return null
-    }
-
-    if (!clientDoc.exists()) {
-      const error = createError(
-        ErrorType.DB_DOCUMENT_NOT_FOUND,
-        null,
-        { function: "getClient", trainerId, clientId },
-        "Client not found",
-      )
-      logError(error)
-      return null
-    }
-
-    const data = clientDoc.data()
-    return mapClientData(clientDoc.id, data)
-  } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "getClient", trainerId, clientId },
-      "Unexpected error fetching client",
-    )
-    logError(appError)
-    return null
-  }
-}
-
-// Real-time subscription to clients
-export function subscribeToClients(trainerId: string, callback: (clients: Client[], error?: any) => void) {
-  if (!trainerId) {
-    const error = createError(
-      ErrorType.API_MISSING_PARAMS,
-      null,
-      { function: "subscribeToClients" },
-      "No trainer ID provided for subscription",
-    )
-    logError(error)
-    callback([], error)
-    return () => {}
-  }
-
-  console.log(`[REALTIME] Setting up real-time listener for trainer (userId): ${trainerId}`)
-
-  try {
-    // Query: users/{trainerId}/clients (where trainerId is actually a userId)
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
-    const q = query(clientsCollectionRef, orderBy("createdAt", "desc"))
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        console.log(`[REALTIME] Received update: ${snapshot.size} clients, ${snapshot.docChanges().length} changes`)
-
-        snapshot.docChanges().forEach((change) => {
-          const data = change.doc.data()
-          console.log(`[REALTIME] Change (${change.type}):`, {
-            id: change.doc.id,
-            name: data.name,
-            status: data.status,
-            inviteCode: data.inviteCode,
-            userId: data.userId || "none",
-          })
-        })
-
-        const clients: Client[] = []
-        snapshot.forEach((doc) => {
-          const data = doc.data()
-          const client = mapClientData(doc.id, data)
-          if (client) {
-            clients.push(client)
-          }
-        })
-
-        console.log(`[REALTIME] Processed ${clients.length} valid clients, calling callback`)
-        callback(clients)
-      },
-      (error) => {
-        const appError = createError(
-          ErrorType.DB_READ_FAILED,
-          error,
-          { function: "subscribeToClients", trainerId },
-          "Error in client subscription",
-        )
-        logError(appError)
-        console.error("[REALTIME] Subscription error:", error)
-        callback([], appError)
-      },
-      { includeMetadataChanges: true },
-    )
-
-    return unsubscribe
-  } catch (error) {
-    console.error("[REALTIME] Error setting up subscription:", error)
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "subscribeToClients", trainerId },
-      "Unexpected error setting up client subscription",
-    )
-    logError(appError)
-    callback([], appError)
-    return () => {}
-  }
-}
-
-// Create a new client
-export async function createClient(
-  trainerId: string,
-  clientData: {
-    name: string
-    email?: string
-    phone?: string
-    goal?: string
-    notes?: string
-    program?: string
-  },
-): Promise<{ success: boolean; clientId?: string; error?: any }> {
-  try {
-    console.log("createClient called with:", { trainerId, clientData })
-
-    if (!trainerId) {
-      console.error("Missing trainer ID")
-      return {
-        success: false,
-        error: new Error("Trainer ID is required"),
-      }
-    }
-
-    if (!clientData || !clientData.name) {
-      console.error("Missing client name")
-      return {
-        success: false,
-        error: new Error("Client name is required"),
-      }
-    }
-
-    const sanitizedClientData = {
-      name: clientData.name,
-      email: clientData.email || "",
-      phone: clientData.phone || "",
-      goal: clientData.goal || "",
-      notes: clientData.notes || "",
-      program: clientData.program || "",
-    }
-
-    const clientDocData = {
-      ...sanitizedClientData,
-      status: "Pending",
-      progress: 0,
-      sessions: { completed: 0, total: 0 },
-      completion: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      isTemporary: true,
-    }
-
-    // Create in: users/{trainerId}/clients (where trainerId is actually a userId)
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
-    try {
-      const newClientRef = await addDoc(clientsCollectionRef, clientDocData)
-      console.log("Client document created with ID:", newClientRef.id)
-
-      await updateDoc(newClientRef, {
-        id: newClientRef.id,
-      })
-
-      // Update the trainer's (user's) document to include this client
-      const trainerRef = doc(db, "users", trainerId)
-      await updateDoc(trainerRef, {
-        clients: arrayUnion(newClientRef.id),
-        updatedAt: serverTimestamp(),
-      })
-
-      return {
-        success: true,
-        clientId: newClientRef.id,
-      }
-    } catch (err) {
-      console.error("Firebase operation failed:", err)
-      return {
-        success: false,
-        error: err,
-      }
-    }
-  } catch (error) {
-    console.error("Unexpected error in createClient:", error)
-    return {
-      success: false,
-      error: error,
-    }
-  }
-}
-
-// Update a client
-export async function updateClient(
-  trainerId: string,
-  clientId: string,
-  updates: Partial<Client>,
-): Promise<{ success: boolean; error: any }> {
-  try {
-    if (!trainerId || !clientId) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "updateClient" },
-        "Trainer ID and client ID are required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    const sanitizedUpdates: Record<string, any> = {}
-    for (const [key, value] of Object.entries(updates)) {
-      if (value !== undefined) {
-        sanitizedUpdates[key] = value === null ? "" : value
-      }
-    }
-
-    const { id, initials, ...validUpdates } = sanitizedUpdates
-
-    // Update: users/{trainerId}/clients/{clientId} (where trainerId is actually a userId)
-    const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId)
-
-    const [, updateError] = await tryCatch(
-      () =>
-        updateDoc(clientRef, {
-          ...validUpdates,
-          updatedAt: serverTimestamp(),
-        }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "updateClient", trainerId, clientId, updates },
-    )
-
-    if (updateError) {
-      return { success: false, error: updateError }
-    }
-
-    return { success: true, error: null }
-  } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "updateClient", trainerId, clientId, updates },
-      "Unexpected error updating client",
-    )
-    logError(appError)
-    return { success: false, error: appError }
-  }
-}
-
-// Soft delete a client
-export async function deleteClient(trainerId: string, clientId: string): Promise<{ success: boolean; error: any }> {
-  try {
-    if (!trainerId || !clientId) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "deleteClient" },
-        "Trainer ID and client ID are required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    // Reference: users/{trainerId}/clients/{clientId} (where trainerId is actually a userId)
-    const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId)
-    const [clientDoc, getError] = await tryCatch(() => getDoc(clientRef), ErrorType.DB_READ_FAILED, {
-      function: "deleteClient",
-      trainerId,
-      clientId,
-    })
-
-    if (getError || !clientDoc) {
-      return { success: false, error: getError }
-    }
-
-    if (!clientDoc.exists()) {
-      const error = createError(
-        ErrorType.DB_DOCUMENT_NOT_FOUND,
-        null,
-        { function: "deleteClient", trainerId, clientId },
-        "Client not found",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    const [, updateError] = await tryCatch(
-      () =>
-        updateDoc(clientRef, {
-          status: "Deleted",
-          deletedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "deleteClient", trainerId, clientId },
-    )
-
-    if (updateError) {
-      return { success: false, error: updateError }
-    }
-
-    return { success: true, error: null }
-  } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "deleteClient", trainerId, clientId },
-      "Unexpected error deleting client",
-    )
-    logError(appError)
-    return { success: false, error: appError }
-  }
-}
-
-// Get pending clients for a trainer
-export async function getPendingClients(trainerId: string): Promise<Client[]> {
-  try {
-    if (!trainerId) {
-      console.error("Trainer ID is required")
-      return []
-    }
-
-    // Query: users/{trainerId}/clients where status == "Pending" (where trainerId is actually a userId)
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
-    const q = query(clientsCollectionRef, where("status", "==", "Pending"), orderBy("createdAt", "desc"))
-
-    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      function: "getPendingClients",
-      trainerId,
-    })
-
-    if (error || !querySnapshot) {
-      return []
-    }
-
-    const clients: Client[] = []
-    querySnapshot.forEach((doc) => {
-      const data = doc.data()
-      const client = mapClientData(doc.id, data)
-      if (client) {
-        clients.push(client)
-      }
-    })
-
-    return clients
-  } catch (error) {
-    console.error("Error getting pending clients:", error)
-    return []
-  }
-}
-
-// Check for duplicate email in trainer's clients
+// NEW: Check for duplicate email in trainer's clients
 export async function checkDuplicateEmail(
   trainerId: string,
   email: string,
@@ -511,7 +304,6 @@ export async function checkDuplicateEmail(
 
     console.log(`[checkDuplicateEmail] Checking for duplicate email: ${email} for trainer: ${trainerId}`)
 
-    // Query: users/{trainerId}/clients where email == email (where trainerId is actually a userId)
     const clientsCollectionRef = collection(db, "users", trainerId, "clients")
     const q = query(clientsCollectionRef, where("email", "==", email.toLowerCase().trim()))
 
@@ -547,6 +339,361 @@ export async function checkDuplicateEmail(
   }
 }
 
+// Improved subscribeToClients function with better logging and error handling
+export function subscribeToClients(trainerId: string, callback: (clients: Client[], error?: any) => void): () => void {
+  if (!trainerId) {
+    const error = createError(
+      ErrorType.API_MISSING_PARAMS,
+      null,
+      { function: "subscribeToClients" },
+      "Trainer ID is required for subscription",
+    )
+    logError(error)
+    callback([], error)
+    return () => {}
+  }
+
+  try {
+    console.log("[subscribeToClients] Setting up subscription for trainer:", trainerId)
+
+    const clientsRef = collection(db, "clients")
+    const q = query(
+      clientsRef,
+      where("trainerId", "==", trainerId),
+      // Removed orderBy to avoid issues with missing createdAt fields
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        console.log("[subscribeToClients] Received snapshot with", querySnapshot.size, "documents")
+
+        const clients: Client[] = []
+
+        querySnapshot.forEach((doc) => {
+          try {
+            const client = mapClientData(doc)
+            clients.push(client)
+            console.log("[subscribeToClients] Mapped client:", { id: client.id, name: client.name })
+          } catch (mappingError) {
+            console.error("[subscribeToClients] Error mapping client document:", doc.id, mappingError)
+            // Continue processing other documents
+          }
+        })
+
+        // Sort clients by createdAt on the client side
+        clients.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
+          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
+          return dateB.getTime() - dateA.getTime()
+        })
+
+        console.log("[subscribeToClients] Calling callback with", clients.length, "clients")
+        callback(clients)
+      },
+      (error) => {
+        console.error("[subscribeToClients] Firestore subscription error:", error)
+        const appError = createError(
+          ErrorType.DB_READ_FAILED,
+          error,
+          { function: "subscribeToClients", trainerId },
+          "Error in clients subscription",
+        )
+        logError(appError)
+        callback([], appError)
+      },
+    )
+
+    console.log("[subscribeToClients] Subscription setup complete")
+    return unsubscribe
+  } catch (error) {
+    console.error("[subscribeToClients] Error setting up subscription:", error)
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "subscribeToClients", trainerId },
+      "Unexpected error setting up clients subscription",
+    )
+    logError(appError)
+    callback([], appError)
+    return () => {}
+  }
+}
+
+// Get clients for a trainer (one-time fetch)
+export async function getClientsByTrainer(trainerId: string): Promise<{ clients: Client[]; error?: any }> {
+  try {
+    if (!trainerId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "getClientsByTrainer" },
+        "Trainer ID is required",
+      )
+      logError(error)
+      return { clients: [], error }
+    }
+
+    console.log("[getClientsByTrainer] Fetching clients for trainer:", trainerId)
+
+    const clientsRef = collection(db, "clients")
+    const q = query(clientsRef, where("trainerId", "==", trainerId))
+
+    const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+      function: "getClientsByTrainer",
+      trainerId,
+    })
+
+    if (queryError || !querySnapshot) {
+      return { clients: [], error: queryError }
+    }
+
+    const clients: Client[] = []
+    querySnapshot.forEach((doc) => {
+      try {
+        const client = mapClientData(doc)
+        clients.push(client)
+      } catch (mappingError) {
+        console.error("[getClientsByTrainer] Error mapping client:", doc.id, mappingError)
+      }
+    })
+
+    // Sort by createdAt
+    clients.sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
+      return dateB.getTime() - dateA.getTime()
+    })
+
+    console.log("[getClientsByTrainer] Found", clients.length, "clients")
+    return { clients }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "getClientsByTrainer", trainerId },
+      "Unexpected error fetching clients",
+    )
+    logError(appError)
+    return { clients: [], error: appError }
+  }
+}
+
+// Add a new client
+export async function addClient(
+  clientData: Partial<Client>,
+): Promise<{ success: boolean; clientId?: string; error?: any }> {
+  try {
+    if (!clientData.trainerId) {
+      const error = createError(ErrorType.API_MISSING_PARAMS, null, { function: "addClient" }, "Trainer ID is required")
+      logError(error)
+      return { success: false, error }
+    }
+
+    const clientsRef = collection(db, "clients")
+    const newClient = {
+      ...clientData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      status: clientData.status || "active",
+    }
+
+    const [docRef, addError] = await tryCatch(() => addDoc(clientsRef, newClient), ErrorType.DB_WRITE_FAILED, {
+      function: "addClient",
+      trainerId: clientData.trainerId,
+    })
+
+    if (addError || !docRef) {
+      return { success: false, error: addError }
+    }
+
+    console.log("[addClient] Client added with ID:", docRef.id)
+    return { success: true, clientId: docRef.id }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "addClient" },
+      "Unexpected error adding client",
+    )
+    logError(appError)
+    return { success: false, error: appError }
+  }
+}
+
+// Update a client
+export async function updateClient(
+  clientId: string,
+  updates: Partial<Client>,
+): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!clientId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "updateClient" },
+        "Client ID is required",
+      )
+      logError(error)
+      return { success: false, error }
+    }
+
+    const clientRef = doc(db, "clients", clientId)
+    const updateData = {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    }
+
+    const [, updateError] = await tryCatch(() => updateDoc(clientRef, updateData), ErrorType.DB_WRITE_FAILED, {
+      function: "updateClient",
+      clientId,
+    })
+
+    if (updateError) {
+      return { success: false, error: updateError }
+    }
+
+    console.log("[updateClient] Client updated:", clientId)
+    return { success: true }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "updateClient", clientId },
+      "Unexpected error updating client",
+    )
+    logError(appError)
+    return { success: false, error: appError }
+  }
+}
+
+// Delete a client
+export async function deleteClient(clientId: string): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!clientId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "deleteClient" },
+        "Client ID is required",
+      )
+      logError(error)
+      return { success: false, error }
+    }
+
+    const clientRef = doc(db, "clients", clientId)
+    const [, deleteError] = await tryCatch(() => deleteDoc(clientRef), ErrorType.DB_DELETE_FAILED, {
+      function: "deleteClient",
+      clientId,
+    })
+
+    if (deleteError) {
+      return { success: false, error: deleteError }
+    }
+
+    console.log("[deleteClient] Client deleted:", clientId)
+    return { success: true }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "deleteClient", clientId },
+      "Unexpected error deleting client",
+    )
+    logError(appError)
+    return { success: false, error: appError }
+  }
+}
+
+// Get a single client by ID
+export async function getClientById(clientId: string): Promise<{ client: Client | null; error?: any }> {
+  try {
+    if (!clientId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "getClientById" },
+        "Client ID is required",
+      )
+      logError(error)
+      return { client: null, error }
+    }
+
+    const clientRef = doc(db, "clients", clientId)
+    const [clientDoc, getError] = await tryCatch(() => getDoc(clientRef), ErrorType.DB_READ_FAILED, {
+      function: "getClientById",
+      clientId,
+    })
+
+    if (getError || !clientDoc) {
+      return { client: null, error: getError }
+    }
+
+    if (!clientDoc.exists()) {
+      console.log("[getClientById] Client not found:", clientId)
+      return { client: null }
+    }
+
+    const client = mapClientData(clientDoc)
+    return { client }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "getClientById", clientId },
+      "Unexpected error fetching client",
+    )
+    logError(appError)
+    return { client: null, error: appError }
+  }
+}
+
+// Get trainer name by ID - using the existing getUserById function
+export async function getTrainerName(trainerId: string): Promise<string> {
+  try {
+    console.log("Getting trainer name for ID:", trainerId)
+
+    if (!trainerId) {
+      console.error("No trainer ID provided")
+      return ""
+    }
+
+    // Use the existing getUserById function
+    const userData = await getUserById(trainerId)
+
+    if (!userData) {
+      console.error("Trainer not found")
+      return ""
+    }
+
+    // Extract the name from the user data
+    const name = userData.name || userData.firstName || ""
+
+    console.log("Found trainer name:", name)
+    return name
+  } catch (error) {
+    console.error("Error getting trainer name:", error)
+    return ""
+  }
+}
+
+// Generate invitation link with trainer name encoded in URL
+export function generateInviteLink(inviteCode: string, trainerName: string): string {
+  if (!inviteCode) {
+    console.error("Invite code is required")
+    return ""
+  }
+
+  // Encode the trainer name to safely include it in the URL
+  const encodedTrainerName = encodeURIComponent(trainerName || "")
+
+  // Get the app URL from environment or use a default
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "")
+
+  // Build the invitation URL with the encoded trainer name - restore the original /invite/ path
+  return `${appUrl}/invite/${inviteCode}?tn=${encodedTrainerName}`
+}
+
 // Process an invitation when a client creates an account
 export async function processInvitation(
   inviteCode: string,
@@ -568,24 +715,24 @@ export async function processInvitation(
       }
     }
 
-    // Search across all users for clients with this invitation code
-    const usersRef = collection(db, "users")
-    const trainersSnapshot = await getDocs(usersRef)
+    // Find the client with this invitation code across all trainers
+    const clientsRef = collection(db, "users")
+    const trainersSnapshot = await getDocs(clientsRef)
 
     let clientData = null
     let trainerId = null
     let clientId = null
     let clientRef = null
 
-    console.log(`[processInvitation] Searching for invitation code across ${trainersSnapshot.size} users`)
+    // Search through each trainer's clients subcollection
+    console.log(`[processInvitation] Searching for invitation code across ${trainersSnapshot.size} trainers`)
 
     for (const trainerDoc of trainersSnapshot.docs) {
       try {
-        // Check each user's clients subcollection: users/{userId}/clients
         const trainerClientsRef = collection(db, "users", trainerDoc.id, "clients")
         const q = query(trainerClientsRef, where("inviteCode", "==", inviteCode))
 
-        console.log(`[processInvitation] Checking user: ${trainerDoc.id}`)
+        console.log(`[processInvitation] Checking trainer: ${trainerDoc.id}`)
         const clientsSnapshot = await getDocs(q)
 
         if (!clientsSnapshot.empty) {
@@ -598,7 +745,8 @@ export async function processInvitation(
           break
         }
       } catch (trainerError) {
-        console.error(`[processInvitation] Error checking user ${trainerDoc.id}:`, trainerError)
+        console.error(`[processInvitation] Error checking trainer ${trainerDoc.id}:`, trainerError)
+        // Continue to next trainer
       }
     }
 
@@ -614,14 +762,14 @@ export async function processInvitation(
     await updateDoc(clientRef, {
       userId: userId,
       isTemporary: false,
-      status: "Active",
+      status: "Active", // Final status after account creation
       updatedAt: serverTimestamp(),
     })
 
     console.log(`[processInvitation] Updated client ${clientId} status to Active and added userId: ${userId}`)
 
     // Add the trainer to the user's trainers list
-    const userRef = doc(collection(db, "users"), userId)
+    const userRef = doc(db, "users", userId)
     await updateDoc(userRef, {
       trainers: arrayUnion(trainerId),
       updatedAt: serverTimestamp(),
@@ -656,19 +804,19 @@ export async function findClientByInvitationCode(
       return { exists: false, error: new Error("Invite code is required") }
     }
 
-    // Search across all users for clients with this invitation code
-    const usersRef = collection(db, "users")
-    const trainersSnapshot = await getDocs(usersRef)
+    // Find the client with this invitation code across all trainers
+    const clientsRef = collection(db, "users")
+    const trainersSnapshot = await getDocs(clientsRef)
 
-    console.log(`[findClientByInvitationCode] Searching across ${trainersSnapshot.size} users`)
+    console.log(`[findClientByInvitationCode] Searching across ${trainersSnapshot.size} trainers`)
 
+    // Search through each trainer's clients subcollection
     for (const trainerDoc of trainersSnapshot.docs) {
       try {
-        // Check each user's clients subcollection: users/{userId}/clients
         const trainerClientsRef = collection(db, "users", trainerDoc.id, "clients")
         const q = query(trainerClientsRef, where("inviteCode", "==", inviteCode))
 
-        console.log(`[findClientByInvitationCode] Checking user: ${trainerDoc.id}`)
+        console.log(`[findClientByInvitationCode] Checking trainer: ${trainerDoc.id}`)
         const clientsSnapshot = await getDocs(q)
 
         if (!clientsSnapshot.empty) {
@@ -687,7 +835,8 @@ export async function findClientByInvitationCode(
           }
         }
       } catch (trainerError) {
-        console.error(`[findClientByInvitationCode] Error checking user ${trainerDoc.id}:`, trainerError)
+        console.error(`[findClientByInvitationCode] Error checking trainer ${trainerDoc.id}:`, trainerError)
+        // Continue to next trainer
       }
     }
 
@@ -716,7 +865,6 @@ export async function checkExistingClientProfile(
       return { exists: false, error }
     }
 
-    // Query: users/{trainerId}/clients where userId == userId (where trainerId is actually a userId)
     const clientsCollectionRef = collection(db, "users", trainerId, "clients")
     const q = query(clientsCollectionRef, where("userId", "==", userId))
 
@@ -765,7 +913,7 @@ export async function replaceTemporaryClient(
       return { success: false, error }
     }
 
-    // Get the temporary client: users/{trainerId}/clients/{temporaryClientId} (where trainerId is actually a userId)
+    // Get the temporary client data
     const tempClientRef = doc(collection(db, "users", trainerId, "clients"), temporaryClientId)
     const [tempClientDoc, tempClientError] = await tryCatch(() => getDoc(tempClientRef), ErrorType.DB_READ_FAILED, {
       function: "replaceTemporaryClient",
@@ -790,6 +938,7 @@ export async function replaceTemporaryClient(
 
     const tempClientData = tempClientDoc.data()
 
+    // Check if there's already a permanent client for this user
     const { exists, clientId, error: checkError } = await checkExistingClientProfile(userId, trainerId)
 
     if (checkError) {
@@ -797,11 +946,12 @@ export async function replaceTemporaryClient(
     }
 
     if (exists && clientId) {
-      // Update existing client: users/{trainerId}/clients/{clientId} (where trainerId is actually a userId)
+      // Update the existing client with any new data from the temporary client
       const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId)
       const [, updateError] = await tryCatch(
         () =>
           updateDoc(clientRef, {
+            // Only update fields that might be useful from the temporary client
             program: tempClientData.program || "",
             goal: tempClientData.goal || "",
             notes: tempClientData.notes || "",
@@ -815,6 +965,7 @@ export async function replaceTemporaryClient(
         return { success: false, error: updateError }
       }
 
+      // Delete the temporary client
       const [, deleteError] = await tryCatch(() => deleteDoc(tempClientRef), ErrorType.DB_DELETE_FAILED, {
         function: "replaceTemporaryClient",
         trainerId,
@@ -822,10 +973,11 @@ export async function replaceTemporaryClient(
       })
 
       if (deleteError) {
+        // Log but continue, as the main operation succeeded
         logError(deleteError)
       }
     } else {
-      // Convert temporary to permanent
+      // Convert the temporary client to a permanent one
       const [, updateError] = await tryCatch(
         () =>
           updateDoc(tempClientRef, {
@@ -856,7 +1008,7 @@ export async function replaceTemporaryClient(
   }
 }
 
-// Link pending clients with user accounts
+// Add this new function to check and link pending clients with user accounts
 export async function linkPendingClientsWithUsers(trainerId: string): Promise<void> {
   try {
     console.log(`[linkPendingClientsWithUsers] Starting linking process for trainer: ${trainerId}`)
@@ -873,6 +1025,7 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
 
     console.log(`[linkPendingClientsWithUsers] Found ${usersSnapshot.size} users with invitation codes`)
 
+    // Map of invitation codes to user IDs for faster lookup
     const invitationCodeMap = new Map<string, string>()
 
     usersSnapshot.forEach((userDoc) => {
@@ -883,7 +1036,7 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
       }
     })
 
-    // Get all clients for this trainer: users/{trainerId}/clients (where trainerId is actually a userId)
+    // Get all clients for this trainer
     const clientsCollectionRef = collection(db, "users", trainerId, "clients")
     const clientsSnapshot = await getDocs(clientsCollectionRef)
 
@@ -891,10 +1044,12 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
 
     let updateCount = 0
 
+    // For each client, check if there's a user with a matching invitation code
     for (const clientDoc of clientsSnapshot.docs) {
       const clientData = clientDoc.data()
       const clientId = clientDoc.id
 
+      // Skip if already has userId or no invite code
       if (clientData.userId || !clientData.inviteCode) {
         continue
       }
@@ -903,11 +1058,13 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
         `[linkPendingClientsWithUsers] Checking client ${clientId} with invite code: ${clientData.inviteCode}`,
       )
 
+      // Check if we have a user with this invitation code
       const userId = invitationCodeMap.get(clientData.inviteCode)
 
       if (userId) {
         console.log(`[linkPendingClientsWithUsers] Found matching user ${userId} for client ${clientId}`)
 
+        // Update the client document with the user ID
         await updateDoc(clientDoc.ref, {
           userId: userId,
           status: "Active",
@@ -917,6 +1074,7 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
 
         console.log(`[linkPendingClientsWithUsers] Updated client ${clientId} with user ID ${userId}`)
 
+        // Add the trainer to the user's trainers list
         const userRef = doc(db, "users", userId)
         await updateDoc(userRef, {
           trainers: arrayUnion(trainerId),
@@ -935,7 +1093,43 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
   }
 }
 
-// Handle invitation codes during login
+// Get pending clients for a trainer
+export async function getPendingClients(trainerId: string): Promise<Client[]> {
+  try {
+    if (!trainerId) {
+      console.error("Trainer ID is required")
+      return []
+    }
+
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const q = query(clientsCollectionRef, where("status", "==", "Pending"), orderBy("createdAt", "desc"))
+
+    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+      function: "getPendingClients",
+      trainerId,
+    })
+
+    if (error || !querySnapshot) {
+      return []
+    }
+
+    const clients: Client[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      const client = mapClientData(doc)
+      if (client) {
+        clients.push(client)
+      }
+    })
+
+    return clients
+  } catch (error) {
+    console.error("Error getting pending clients:", error)
+    return []
+  }
+}
+
+// Add this new function to handle invitation codes during login
 export async function processLoginInvitation(
   invitationCode: string,
   userId: string,
@@ -956,7 +1150,7 @@ export async function processLoginInvitation(
       }
     }
 
-    // Find trainer with this universal invite code in users collection
+    // Find trainer with this universal invite code
     const usersRef = collection(db, "users")
     const q = query(usersRef, where("universalInviteCode", "==", invitationCode))
     const [querySnapshot, queryError] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
@@ -1016,7 +1210,7 @@ export async function processLoginInvitation(
           updatedAt: serverTimestamp(),
         }),
       ErrorType.DB_WRITE_FAILED,
-      { function: "processLoginInvitation", trainerId, userId },
+      { function: "processLoginInvitation", userId, trainerId },
     )
 
     if (addToPendingError) {
@@ -1039,47 +1233,3 @@ export async function processLoginInvitation(
     }
   }
 }
-
-// Get trainer name by ID (trainerId is actually a userId)
-export async function getTrainerName(trainerId: string): Promise<string> {
-  try {
-    console.log("Getting trainer name for ID:", trainerId)
-
-    if (!trainerId) {
-      console.error("No trainer ID provided")
-      return ""
-    }
-
-    // Get user data from users/{trainerId} (where trainerId is actually a userId)
-    const userData = await getUserById(trainerId)
-
-    if (!userData) {
-      console.error("Trainer not found")
-      return ""
-    }
-
-    const name = userData.name || userData.firstName || ""
-
-    console.log("Found trainer name:", name)
-    return name
-  } catch (error) {
-    console.error("Error getting trainer name:", error)
-    return ""
-  }
-}
-
-// Generate invitation link with trainer name encoded in URL
-export function generateInviteLink(inviteCode: string, trainerName: string): string {
-  if (!inviteCode) {
-    console.error("Invite code is required")
-    return ""
-  }
-
-  const encodedTrainerName = encodeURIComponent(trainerName || "")
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "")
-
-  return `${appUrl}/invite/${inviteCode}?tn=${encodedTrainerName}`
-}
-
-// Alias for fetchClients to maintain compatibility
-export const getTrainerClients = fetchClients

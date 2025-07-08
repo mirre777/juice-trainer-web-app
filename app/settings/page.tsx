@@ -1,24 +1,16 @@
-import { Suspense } from "react"
 import SettingsPageClient from "./SettingsPageClient"
+import { ProtectedRoute } from "@/components/auth/protected-route"
+
+// Metadata needs to be in a server component
+export const metadata = {
+  title: "Account Settings",
+  description: "Manage your account preferences and settings",
+}
 
 export default function SettingsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="container mx-auto p-6">
-          <div className="max-w-4xl mx-auto">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-              <div className="space-y-6">
-                <div className="h-32 bg-gray-200 rounded"></div>
-                <div className="h-32 bg-gray-200 rounded"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      }
-    >
+    <ProtectedRoute requiredRole="trainer">
       <SettingsPageClient />
-    </Suspense>
+    </ProtectedRoute>
   )
 }

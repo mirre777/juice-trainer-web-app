@@ -1,103 +1,98 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Filter } from "lucide-react"
+import { Search, Filter, ChevronDown } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 interface ClientsFilterBarProps {
-  onSearch: (query: string) => void
-  onStatusChange: (status: string) => void
-  onExpandAll: () => void
-  onCollapseAll: () => void
+  searchTerm: string
+  onSearchChange: (term: string) => void
   statusFilter: string
-  children?: React.ReactNode
+  onStatusFilterChange: (status: string) => void
+  expandFilter: string
+  onExpandFilterChange: (filter: string) => void
+  collapseFilter: string
+  onCollapseFilterChange: (filter: string) => void
+  clientCount: number
+  totalCount: number
 }
 
 export function ClientsFilterBar({
-  onSearch,
-  onStatusChange,
-  onExpandAll,
-  onCollapseAll,
-  statusFilter = "All",
-  children,
+  searchTerm,
+  onSearchChange,
+  statusFilter,
+  onStatusFilterChange,
+  expandFilter,
+  onExpandFilterChange,
+  collapseFilter,
+  onCollapseFilterChange,
+  clientCount,
+  totalCount,
 }: ClientsFilterBarProps) {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
 
-  const handleStatusChange = (status: string) => {
-    onStatusChange(status)
-    setShowStatusDropdown(false)
-  }
+  const statusOptions = ["All", "Active", "Inactive", "Pending", "Invited", "Paused", "On Hold", "Deleted"]
 
   return (
-    <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-      <div className="relative w-full md:w-auto md:min-w-[320px]">
-        <input
+    <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      {/* Search Input */}
+      <div className="relative flex-1">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Input
           type="text"
-          placeholder="Search clients..."
-          className="w-full h-10 pl-10 pr-4 py-2 bg-gray-50 rounded-lg border border-gray-200"
-          onChange={(e) => onSearch(e.target.value)}
+          placeholder="Search clients by name, email, goal, program..."
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="pl-10"
         />
-        <svg
-          className="h-4 w-4 text-gray-500 absolute left-3 top-1/2 transform -translate-y-1/2"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <button
-            className="h-10 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2"
-            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-          >
-            <Filter className="h-4 w-4 text-gray-500" />
-            <span className="text-sm">Status: {statusFilter}</span>
-            <ChevronDown className="h-4 w-4 text-gray-500" />
-          </button>
-          {showStatusDropdown && (
-            <div className="absolute z-10 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg">
-              <div className="py-1">
-                {["All", "Active", "Pending", "On Hold", "Inactive", "Deleted"].map((status) => (
-                  <button
-                    key={status}
-                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
-                    onClick={() => handleStatusChange(status)}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={onExpandAll}
-          className="h-10 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2"
+      {/* Status Filter */}
+      <div className="relative">
+        <Button
+          variant="outline"
+          onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+          className="flex items-center gap-2 min-w-[140px] justify-between"
         >
-          <ChevronUp className="h-4 w-4 text-gray-500 transform rotate-180" />
-          <span className="text-sm">Expand All</span>
-        </button>
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4" />
+            <span>Status: {statusFilter}</span>
+          </div>
+          <ChevronDown className="h-4 w-4" />
+        </Button>
 
-        <button
-          onClick={onCollapseAll}
-          className="h-10 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200 flex items-center gap-2"
-        >
-          <ChevronDown className="h-4 w-4 text-gray-500" />
-          <span className="text-sm">Collapse All</span>
-        </button>
+        {showStatusDropdown && (
+          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg">
+            {statusOptions.map((status) => (
+              <button
+                key={status}
+                className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                onClick={() => {
+                  onStatusFilterChange(status)
+                  setShowStatusDropdown(false)
+                }}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-        {children}
+      {/* Expand/Collapse Controls */}
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => onExpandFilterChange("All")}>
+          Expand All
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => onCollapseFilterChange("All")}>
+          Collapse All
+        </Button>
+      </div>
+
+      {/* Results Count */}
+      <div className="text-sm text-gray-500 flex items-center whitespace-nowrap">
+        Showing {clientCount} of {totalCount}
       </div>
     </div>
   )
