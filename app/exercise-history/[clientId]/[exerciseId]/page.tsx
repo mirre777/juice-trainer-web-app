@@ -180,4 +180,4 @@ export default function ClientExerciseHistoryPage() {
 
   // Only render the content component when exerciseName is available
   return <ClientExerciseHistoryContent clientId={clientId} exerciseName={exerciseName} exerciseId={exerciseId} />;
-} 
+}

@@ -6,6 +6,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
   serverTimestamp,
   onSnapshot,
@@ -61,6 +62,50 @@ export async function getUserById(userId: string): Promise<any> {
     }
   } catch (error) {
     console.error(`[getUserById] Error fetching user data for ${userId}:`, error)
+    return null
+  }
+}
+
+// Get user data by email from Firestore
+export async function getUserByEmail(email: string): Promise<any> {
+  try {
+    if (!email) {
+      console.error("[getUserByEmail] No email provided")
+      return null
+    }
+
+    console.log(`[getUserByEmail] Fetching user data for email: ${email}`)
+    const usersRef = collection(db, "users")
+    const q = query(usersRef, where("email", "==", email))
+
+    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
+      function: "getUserByEmail",
+      email,
+    })
+
+    if (error || !querySnapshot) {
+      console.error(`[getUserByEmail] Error querying user by email ${email}:`, error)
+      return null
+    }
+
+    if (querySnapshot.empty) {
+      console.log(`[getUserByEmail] No user found with email: ${email}`)
+      return null
+    }
+
+    // Should only be one user with this email
+    const userDoc = querySnapshot.docs[0]
+    const userData = userDoc.data()
+
+    console.log(`[getUserByEmail] Found user data:`, {
+      id: userDoc.id,
+      name: userData.name || "NO_NAME",
+      email: userData.email || "NO_EMAIL",
+    })
+
+    return { id: userDoc.id, ...userData }
+  } catch (error) {
+    console.error(`[getUserByEmail] Error fetching user data for ${email}:`, error)
     return null
   }
 }
@@ -159,6 +204,43 @@ export async function updateUserProfile(userId: string, updates: any): Promise<{
       error,
       { function: "updateUserProfile", userId },
       "Unexpected error updating user profile",
+    )
+    logError(appError)
+    return { success: false, error: appError }
+  }
+}
+
+// Update user document
+export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!userId) {
+      const error = createError(ErrorType.API_MISSING_PARAMS, null, { function: "updateUser" }, "User ID is required")
+      logError(error)
+      return { success: false, error }
+    }
+
+    const userRef = doc(db, "users", userId)
+    const [, updateError] = await tryCatch(
+      () =>
+        updateDoc(userRef, {
+          ...updates,
+          updatedAt: serverTimestamp(),
+        }),
+      ErrorType.DB_WRITE_FAILED,
+      { function: "updateUser", userId },
+    )
+
+    if (updateError) {
+      return { success: false, error: updateError }
+    }
+
+    return { success: true }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "updateUser", userId },
+      "Unexpected error updating user",
     )
     logError(appError)
     return { success: false, error: appError }
@@ -273,5 +355,55 @@ export function subscribeToUser(userId: string, callback: (userData: any, error?
     logError(appError)
     callback(null, appError)
     return () => {}
+  }
+}
+
+// Store invitation code for user
+export async function storeInvitationCode(
+  userId: string,
+  invitationCode: string,
+): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!userId || !invitationCode) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "storeInvitationCode" },
+        "User ID and invitation code are required",
+      )
+      logError(error)
+      return { success: false, error }
+    }
+
+    console.log(`[storeInvitationCode] Storing invitation code ${invitationCode} for user ${userId}`)
+
+    const userRef = doc(db, "users", userId)
+    const [, updateError] = await tryCatch(
+      () =>
+        updateDoc(userRef, {
+          inviteCode: invitationCode,
+          inviteCodeStoredAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+      ErrorType.DB_WRITE_FAILED,
+      { function: "storeInvitationCode", userId, invitationCode },
+    )
+
+    if (updateError) {
+      console.error(`[storeInvitationCode] Failed to store invitation code:`, updateError)
+      return { success: false, error: updateError }
+    }
+
+    console.log(`[storeInvitationCode] Successfully stored invitation code for user ${userId}`)
+    return { success: true }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "storeInvitationCode", userId, invitationCode },
+      "Unexpected error storing invitation code",
+    )
+    logError(appError)
+    return { success: false, error: appError }
   }
 }
