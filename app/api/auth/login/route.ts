@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
-import { getUserByEmail } from "@/lib/firebase/user-service"
+import { getUserByEmail, updateUser, storeInvitationCode } from "@/lib/firebase/user-service"
 
 export async function POST(request: Request) {
   try {
@@ -73,7 +73,6 @@ export async function POST(request: Request) {
 
           try {
             // Store the invitation code in the user document
-            const { storeInvitationCode } = await import("@/lib/firebase/user-service")
             const storeResult = await storeInvitationCode(user.id, invitationCode)
 
             if (storeResult.success) {
@@ -83,41 +82,50 @@ export async function POST(request: Request) {
             }
 
             // Process the invitation (add to pending users, etc.)
-            const { processLoginInvitation } = await import("@/lib/firebase/client-service")
-            const inviteResult = await processLoginInvitation(invitationCode, user.id)
+            try {
+              const { processLoginInvitation } = await import("@/lib/firebase/client-service")
+              const inviteResult = await processLoginInvitation(invitationCode, user.id)
 
-            if (inviteResult.success) {
-              console.log(`[API:login] ✅ Successfully processed invitation for user ${user.id}`)
+              if (inviteResult.success) {
+                console.log(`[API:login] ✅ Successfully processed invitation for user ${user.id}`)
 
-              const response = NextResponse.json({
-                success: true,
-                userId: user.id,
-                message: "Login successful! Your request has been sent to the trainer.",
-                authMethod: "firebase",
-                invitationProcessed: true,
-                pendingApproval: true,
-              })
+                const response = NextResponse.json({
+                  success: true,
+                  userId: user.id,
+                  message: "Login successful! Your request has been sent to the trainer.",
+                  authMethod: "firebase",
+                  invitationProcessed: true,
+                  pendingApproval: true,
+                })
 
-              response.cookies.set("auth_token", token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                maxAge: 60 * 60 * 24 * 7,
-                path: "/",
-              })
+                response.cookies.set("auth_token", token, {
+                  httpOnly: true,
+                  secure: process.env.NODE_ENV === "production",
+                  sameSite: "lax",
+                  maxAge: 60 * 60 * 24 * 7,
+                  path: "/",
+                })
 
-              response.cookies.set("user_id", user.id, {
-                httpOnly: false,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                maxAge: 60 * 60 * 24 * 7,
-                path: "/",
-              })
+                response.cookies.set("user_id", user.id, {
+                  httpOnly: false,
+                  secure: process.env.NODE_ENV === "production",
+                  sameSite: "lax",
+                  maxAge: 60 * 60 * 24 * 7,
+                  path: "/",
+                })
 
-              return response
+                return response
+              }
+            } catch (clientServiceError) {
+              console.error(
+                `[API:login] ❌ Client service not available, continuing without invitation processing:`,
+                clientServiceError,
+              )
+              // Continue with normal login flow even if invitation processing fails
             }
           } catch (inviteError) {
             console.error(`[API:login] 💥 Error during invitation processing:`, inviteError)
+            // Continue with normal login flow even if invitation processing fails
           }
         }
 
@@ -182,7 +190,6 @@ export async function POST(request: Request) {
 
         console.log(`[API:login] ✅ User exists in Firebase Auth, linking accounts automatically`)
 
-        const { updateUser } = await import("@/lib/firebase/user-service")
         const updateResult = await updateUser(user.id, {
           hasFirebaseAuth: true,
           firebaseUid: existingFirebaseUser.uid,
@@ -235,7 +242,6 @@ export async function POST(request: Request) {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password)
             const firebaseUser = userCredential.user
 
-            const { updateUser } = await import("@/lib/firebase/user-service")
             const updateResult = await updateUser(user.id, {
               hasFirebaseAuth: true,
               firebaseUid: firebaseUser.uid,
