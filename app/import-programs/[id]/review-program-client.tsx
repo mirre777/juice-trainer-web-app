@@ -44,7 +44,7 @@ interface Program {
   title?: string
   description?: string
   duration_weeks?: number
-  program_weeks?: number
+  program_weeks?: number // Keep for backward compatibility
   is_periodized?: boolean
   weeks?: Week[]
   routines?: Routine[]
@@ -98,7 +98,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
-  const [isSending, setIsSending] = useState(false)
+  const [isSending, setIsSending] = useState(isSaving)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
@@ -125,7 +125,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     setCurrentWeekIndex(weekIndex)
   }, [])
 
-  // Get current routines with fallback logic
+  // FIXED: Get current routines with fallback logic
   const currentRoutines = useMemo(() => {
     if (!programState) return []
 
@@ -138,7 +138,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     // For non-periodized, check routines array first
     let routines = programState.routines || []
 
-    // If routines array is empty but we have weeks, use weeks[0].routines
+    // CRITICAL FIX: If routines array is empty but we have weeks, use weeks[0].routines
     if (routines.length === 0 && programState.weeks && programState.weeks.length > 0) {
       routines = programState.weeks[0]?.routines || []
       debugLog("Using fallback routines from weeks[0]:", routines.length)
@@ -162,6 +162,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       }
     }
 
+    // FIXED: Use currentRoutines which handles the fallback logic
     const routinesToCheck =
       currentRoutines.length > 0
         ? currentRoutines
@@ -245,7 +246,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         debugLog("Created program state:", programState)
         setProgramState(programState)
-        setOriginalProgramState(JSON.parse(JSON.stringify(programState)))
+        setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Deep copy for comparison
         setIsLoading(false)
       } catch (err) {
         errorLog("Error initializing program state:", err)
@@ -319,7 +320,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         description: "Your program changes have been saved successfully.",
       })
       setHasChanges(false)
-      setOriginalProgramState(JSON.parse(JSON.stringify(programState)))
+      setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Update original state
     } catch (error) {
       errorLog("Error saving changes:", error)
       toast({
@@ -336,10 +337,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     debugLog("Canceling changes, reverting to original state")
 
     if (originalProgramState) {
-      setProgramState(JSON.parse(JSON.stringify(originalProgramState)))
+      setProgramState(JSON.parse(JSON.stringify(originalProgramState))) // Deep copy to avoid reference issues
       setHasChanges(false)
-      setExpandedRoutines({ 0: true })
-      setCurrentWeekIndex(0)
+      setExpandedRoutines({ 0: true }) // Reset expanded state
+      setCurrentWeekIndex(0) // Reset week index
 
       toast({
         title: "Changes Canceled",
@@ -361,8 +362,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       return
     }
 
-    // Safely find the selected client
-    const selectedClient = clients && clients.length > 0 ? clients.find((c) => c.id === selectedClientId) : null
+    const selectedClient = clients.find((c) => c.id === selectedClientId)
     if (!selectedClient) {
       debugLog("Selected client not found in clients list")
       toast({
@@ -385,16 +385,16 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         body: JSON.stringify({
           clientId: selectedClientId,
           programData: programState,
-          customMessage: customMessage || "",
+          customMessage,
         }),
       })
 
-      const result = await response.json()
-
       if (!response.ok) {
-        throw new Error(result.error || `Server error: ${response.status}`)
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(errorData.error || "Failed to send program")
       }
 
+      const result = await response.json()
       debugLog("Program sent successfully:", result)
 
       toast({
@@ -431,6 +431,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         if (checked && !programState.is_periodized) {
           debugLog("Converting to periodized")
           setPeriodizationAction("to-periodized")
+          // Use current duration_weeks for the conversion
           setNumberOfWeeks(programState.duration_weeks || 4)
           setShowPeriodizationDialog(true)
         } else if (!checked && programState.is_periodized) {
@@ -445,7 +446,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         errorLog("Error in handleTogglePeriodization:", err)
       }
     },
-    [programState],
+    [programState, setPeriodizationAction, setShowPeriodizationDialog],
   )
 
   const confirmPeriodizationChange = useCallback(() => {
@@ -461,8 +462,10 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       if (periodizationAction === "to-periodized") {
         debugLog("Converting to periodized with weeks:", numberOfWeeks)
 
+        // FIXED: Get base routines with proper fallback logic
         let baseRoutines: Routine[] = programState.routines || []
 
+        // CRITICAL FIX: If routines array is empty, check weeks[0].routines
         if (baseRoutines.length === 0 && programState.weeks && programState.weeks.length > 0) {
           baseRoutines = programState.weeks[0]?.routines || []
           debugLog("Using fallback routines from weeks[0] for conversion:", baseRoutines.length)
@@ -506,7 +509,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             is_periodized: true,
             weeks,
             routines: undefined,
-            duration_weeks: numberOfWeeks,
+            duration_weeks: numberOfWeeks, // Keep the selected duration
           }
           debugLog("New program state after conversion to periodized:", newState)
           return newState
@@ -535,6 +538,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           return
         }
 
+        // Remove week suffixes from routine names
         const cleanedRoutines = routinesToKeep.map((routine) => ({
           ...routine,
           name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
@@ -552,7 +556,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
             is_periodized: false,
             routines: cleanedRoutines,
             weeks: undefined,
-            duration_weeks: prev.duration_weeks,
+            // FIXED: Keep the original duration_weeks, don't change it to 1
+            duration_weeks: prev.duration_weeks, // Preserve original duration
           }
           debugLog("New program state after conversion to non-periodized:", newState)
           return newState
@@ -600,7 +605,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         debugLog("Updated program state:", newState)
         return newState
       })
-      setHasChanges(true)
+      setHasChanges(true) // This should trigger the Save Changes button to appear
     },
     [programState],
   )
@@ -625,18 +630,23 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         }
 
         const newState = { ...prev }
+
+        // Handle both periodized (weeks) and non-periodized structures
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          // For periodized programs, update the current week being viewed
           const currentWeek = newState.weeks[currentWeekIndex]
           if (currentWeek && currentWeek.routines) {
             targetRoutines = currentWeek.routines
             debugLog("Using periodized routines from current week:", currentWeekIndex)
           }
         } else if (newState.routines && newState.routines.length > 0) {
+          // For non-periodized programs, use the routines array
           targetRoutines = newState.routines
           debugLog("Using non-periodized routines")
         } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          // Fallback: use first week's routines if routines array is empty
           targetRoutines = newState.weeks[0].routines
           debugLog("Using fallback routines from first week")
         }
@@ -658,7 +668,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       })
       setHasChanges(true)
     },
-    [currentWeekIndex],
+    [currentWeekIndex], // Add currentWeekIndex as dependency
   )
 
   const addSet = useCallback(
@@ -669,6 +679,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         if (!prev) return prev
 
         const newState = { ...prev }
+
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
@@ -713,6 +724,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         if (!prev) return prev
 
         const newState = { ...prev }
+
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
@@ -746,6 +758,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         if (!prev) return prev
 
         const newState = { ...prev }
+
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
@@ -804,6 +817,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     }
   }, [])
 
+  // Add this useEffect to debug hasChanges state
   useEffect(() => {
     debugLog("hasChanges state changed:", hasChanges)
   }, [hasChanges])
@@ -1222,7 +1236,8 @@ export default function ReviewProgramClient({ importData, importId, initialClien
               </Card>
             )}
           </div>
-        ) : currentRoutines.length > 0 ? (
+        ) : // Show single routine template for non-periodized programs
+        currentRoutines.length > 0 ? (
           <div className="space-y-4">
             {currentRoutines.map((routine, routineIndex) => (
               <Card key={routineIndex} className="border-l-4 border-l-blue-500">
@@ -1432,13 +1447,11 @@ export default function ReviewProgramClient({ importData, importId, initialClien
                     className="w-full mt-1 p-2 border border-gray-300 rounded-md"
                   >
                     <option value="">Choose a client...</option>
-                    {clients &&
-                      clients.length > 0 &&
-                      clients.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.name} {client.email && `(${client.email})`}
-                        </option>
-                      ))}
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name} {client.email && `(${client.email})`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
