@@ -1,160 +1,73 @@
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { verifyToken } from "@/lib/auth/token-service"
+import { getUserProfile } from "@/lib/firebase/user-service"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🚀 Starting /api/auth/me request")
+    console.log("[/api/auth/me] Starting user profile fetch...")
 
-    const cookieStore = await cookies()
+    const cookieStore = cookies()
+    const token = cookieStore.get("auth-token")?.value
 
-    // Check for different possible cookie names
-    const authToken =
-      cookieStore.get("auth-token")?.value ||
-      cookieStore.get("auth_token")?.value ||
-      cookieStore.get("session_token")?.value
-    const userId = cookieStore.get("user_id")?.value
+    if (!token) {
+      console.log("[/api/auth/me] No auth token found")
+      return NextResponse.json({ error: "No token provided" }, { status: 401 })
+    }
 
-    console.log("🍪 Cookies found:", {
-      "auth-token": cookieStore.get("auth-token")?.value ? "Present" : "Missing",
-      auth_token: cookieStore.get("auth_token")?.value ? "Present" : "Missing",
-      session_token: cookieStore.get("session_token")?.value ? "Present" : "Missing",
-      user_id: userId || "Missing",
+    console.log("[/api/auth/me] Token found, verifying...")
+
+    // Verify the token
+    const decoded = await verifyToken(token)
+    if (!decoded || !decoded.uid) {
+      console.log("[/api/auth/me] Token verification failed")
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
+    console.log("[/api/auth/me] Token verified for user:", decoded.email)
+
+    // Always fetch fresh data from Firestore
+    console.log("[/api/auth/me] Fetching fresh user data from Firestore...")
+    const userProfile = await getUserProfile(decoded.email)
+
+    if (!userProfile) {
+      console.log("[/api/auth/me] User profile not found in Firestore for:", decoded.email)
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
+    }
+
+    console.log("[/api/auth/me] User profile fetched successfully:", {
+      email: userProfile.email,
+      role: userProfile.role,
+      name: userProfile.name,
     })
 
-    // If we have an auth token, try to decode it
-    if (authToken) {
-      try {
-        console.log("🔓 Attempting to verify auth token...")
-        const { verifyToken } = await import("@/lib/auth/token-service")
-        const decoded = await verifyToken(authToken)
-        console.log("✅ Token decoded successfully:", {
-          uid: decoded.uid,
-          email: decoded.email,
-          tokenRole: decoded.role,
-        })
-
-        // ALWAYS get fresh user data from Firestore to ensure we have the latest role
-        try {
-          console.log("🔍 Fetching fresh user data from Firestore for UID:", decoded.uid)
-          const { db } = await import("@/lib/firebase/firebase")
-          const { collection, doc, getDoc } = await import("firebase/firestore")
-
-          const userDocRef = doc(collection(db, "users"), decoded.uid)
-          const userDoc = await getDoc(userDocRef)
-
-          if (userDoc.exists()) {
-            const freshUserData = userDoc.data()
-            console.log("✅ Fresh user data from Firestore:", {
-              uid: decoded.uid,
-              email: freshUserData.email,
-              firestoreRole: freshUserData.role,
-              user_type: freshUserData.user_type,
-            })
-
-            const finalRole = freshUserData.role || decoded.role || "user"
-            console.log("🎭 Final role determined:", finalRole)
-
-            return NextResponse.json({
-              uid: decoded.uid,
-              email: decoded.email,
-              role: finalRole,
-              user_type: freshUserData.user_type,
-              name: freshUserData.name || "",
-              universalInviteCode: freshUserData.universalInviteCode || "",
-              inviteCode: freshUserData.inviteCode || "",
-            })
-          } else {
-            console.log("⚠️ User document not found in Firestore, using token data")
-            return NextResponse.json({
-              uid: decoded.uid,
-              email: decoded.email,
-              role: decoded.role || "user",
-              name: decoded.name || "",
-            })
-          }
-        } catch (firestoreError) {
-          console.error("⚠️ Firestore lookup failed, using token data:", firestoreError)
-          return NextResponse.json({
-            uid: decoded.uid,
-            email: decoded.email,
-            role: decoded.role || "user",
-            name: decoded.name || "",
-          })
-        }
-      } catch (tokenError) {
-        console.error("❌ Token verification failed:", tokenError)
-        // Continue to user_id fallback
-      }
+    // Return the fresh user data
+    const response = {
+      user: {
+        uid: decoded.uid,
+        email: userProfile.email,
+        name: userProfile.name || decoded.name,
+        role: userProfile.role || "user", // Default to "user" if no role
+        user_type: userProfile.user_type,
+        hasFirebaseAuth: userProfile.hasFirebaseAuth,
+        profilePicture: userProfile.profilePicture,
+        createdAt: userProfile.createdAt,
+        updatedAt: userProfile.updatedAt,
+      },
     }
 
-    // Fallback: If we have a user_id cookie, use that
-    if (userId) {
-      try {
-        console.log("🔍 Using user_id cookie, fetching from Firestore...")
-        const { db } = await import("@/lib/firebase/firebase")
+    console.log("[/api/auth/me] Returning user data with role:", response.user.role)
 
-        if (!db) {
-          console.error("❌ Firestore not available")
-          return NextResponse.json({ error: "Database not available" }, { status: 500 })
-        }
-
-        console.log("🔍 Querying Firestore for user:", userId)
-
-        const { collection, doc, getDoc } = await import("firebase/firestore")
-        const userDocRef = doc(collection(db, "users"), userId)
-        const userDoc = await getDoc(userDocRef)
-
-        console.log("✅ Document query completed, exists:", userDoc.exists())
-
-        if (!userDoc.exists()) {
-          console.log("❌ User document not found for ID:", userId)
-          return NextResponse.json({ error: "User not found" }, { status: 404 })
-        }
-
-        const userData = userDoc.data()
-        console.log("✅ User data extracted from Firestore:", {
-          uid: userId,
-          email: userData?.email,
-          role: userData?.role,
-          user_type: userData?.user_type,
-        })
-
-        const response = {
-          uid: userId,
-          email: userData?.email || "",
-          name: userData?.name || "",
-          role: userData?.role || "user", // This should now get the correct role from Firestore
-          user_type: userData?.user_type || "",
-          universalInviteCode: userData?.universalInviteCode || "",
-          inviteCode: userData?.inviteCode || "",
-        }
-
-        console.log("📤 Sending successful response with role:", response.role)
-        return NextResponse.json(response)
-      } catch (firestoreError: any) {
-        console.error("💥 Firestore error:", firestoreError)
-        return NextResponse.json(
-          {
-            error: "Database error",
-            details: firestoreError?.message || "Database connection failed",
-          },
-          { status: 500 },
-        )
-      }
-    }
-
-    // No authentication found
-    console.log("❌ No authentication cookies found")
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-  } catch (error: any) {
-    console.error("💥 Unexpected error:", error)
+    return NextResponse.json(response, { status: 200 })
+  } catch (error) {
+    console.error("[/api/auth/me] Error fetching user profile:", error)
     return NextResponse.json(
       {
-        error: "Internal server error",
-        details: error?.message || "Unknown error",
+        error: "Failed to fetch user profile",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

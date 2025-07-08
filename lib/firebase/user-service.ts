@@ -1,296 +1,239 @@
+import { db } from "./firebase"
 import {
   collection,
-  doc,
-  getDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
   query,
   where,
-  orderBy,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
   serverTimestamp,
-  onSnapshot,
+  type Timestamp,
 } from "firebase/firestore"
-import { getAuth, onAuthStateChanged, type User } from "firebase/auth"
-import { db } from "@/lib/firebase/firebase"
 
-// Get current authenticated user
-export async function getCurrentUser(): Promise<User | null> {
-  return new Promise((resolve) => {
-    const auth = getAuth()
-
-    // If user is already available, return immediately
-    if (auth.currentUser) {
-      console.log("[getCurrentUser] User already available:", auth.currentUser.uid)
-      resolve(auth.currentUser)
-      return
-    }
-
-    // Otherwise, wait for auth state to be determined
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("[getCurrentUser] Auth state changed:", user?.uid || "null")
-      unsubscribe() // Clean up the listener
-      resolve(user)
-    })
-  })
+export interface UserProfile {
+  uid?: string
+  email: string
+  name?: string
+  role: "trainer" | "user" | "admin"
+  user_type?: "trainer" | "client"
+  hasFirebaseAuth?: boolean
+  profilePicture?: string
+  createdAt?: Timestamp | Date
+  updatedAt?: Timestamp | Date
+  isApproved?: boolean
+  subscriptionStatus?: string
+  stripeCustomerId?: string
 }
 
-// Get user data by email from Firestore
-export async function getUserByEmail(email: string): Promise<any> {
+export async function getUserProfile(email: string): Promise<UserProfile | null> {
   try {
+    console.log("[getUserProfile] Fetching user profile for:", email)
+
     if (!email) {
-      console.error("[getUserByEmail] No email provided")
+      console.log("[getUserProfile] No email provided")
       return null
     }
 
-    console.log(`[getUserByEmail] 🔍 Searching for user with email: ${email}`)
-
-    // Query users collection by email field
+    // Query users by email
     const usersRef = collection(db, "users")
     const q = query(usersRef, where("email", "==", email))
-
-    console.log(`[getUserByEmail] 📋 Executing Firestore query...`)
     const querySnapshot = await getDocs(q)
 
-    console.log(`[getUserByEmail] 📊 Query returned ${querySnapshot.size} documents`)
-
     if (querySnapshot.empty) {
-      console.log(`[getUserByEmail] ❌ No user found with email: ${email}`)
+      console.log("[getUserProfile] No user found with email:", email)
       return null
     }
 
-    // Get the first matching document
+    if (querySnapshot.size > 1) {
+      console.warn("[getUserProfile] Multiple users found with email:", email, "- using first one")
+    }
+
+    // Get the first (should be only) user document
     const userDoc = querySnapshot.docs[0]
     const userData = userDoc.data()
 
-    console.log(`[getUserByEmail] ✅ Found user:`, {
+    console.log("[getUserProfile] Raw user data from Firestore:", {
       id: userDoc.id,
       email: userData.email,
-      hasFirebaseAuth: userData.hasFirebaseAuth || false,
-      role: userData.role || "user",
+      role: userData.role,
+      user_type: userData.user_type,
+      name: userData.name,
+      roleType: typeof userData.role,
+      rawRole: JSON.stringify(userData.role),
     })
+
+    // Ensure role is properly set
+    let role: "trainer" | "user" | "admin" = "user" // Default
+
+    if (userData.role === "trainer" || userData.role === "admin") {
+      role = userData.role
+    } else if (userData.user_type === "trainer") {
+      // Fallback: if user_type is trainer but role isn't set correctly
+      role = "trainer"
+      console.log("[getUserProfile] Using user_type as role fallback")
+    }
+
+    const userProfile: UserProfile = {
+      uid: userDoc.id,
+      email: userData.email,
+      name: userData.name,
+      role: role,
+      user_type: userData.user_type,
+      hasFirebaseAuth: userData.hasFirebaseAuth,
+      profilePicture: userData.profilePicture,
+      createdAt: userData.createdAt,
+      updatedAt: userData.updatedAt,
+      isApproved: userData.isApproved,
+      subscriptionStatus: userData.subscriptionStatus,
+      stripeCustomerId: userData.stripeCustomerId,
+    }
+
+    console.log("[getUserProfile] Processed user profile:", {
+      email: userProfile.email,
+      role: userProfile.role,
+      user_type: userProfile.user_type,
+      name: userProfile.name,
+    })
+
+    return userProfile
+  } catch (error) {
+    console.error("[getUserProfile] Error fetching user profile:", error)
+    throw error
+  }
+}
+
+export async function createUserProfile(userData: Partial<UserProfile>): Promise<UserProfile> {
+  try {
+    console.log("[createUserProfile] Creating user profile:", userData)
+
+    if (!userData.email) {
+      throw new Error("Email is required to create user profile")
+    }
+
+    // Check if user already exists
+    const existingUser = await getUserProfile(userData.email)
+    if (existingUser) {
+      console.log("[createUserProfile] User already exists, updating instead")
+      return await updateUserProfile(userData.email, userData)
+    }
+
+    const userProfile: UserProfile = {
+      email: userData.email,
+      name: userData.name || "",
+      role: userData.role || "user",
+      user_type: userData.user_type || "client",
+      hasFirebaseAuth: userData.hasFirebaseAuth || false,
+      profilePicture: userData.profilePicture,
+      isApproved: userData.isApproved || false,
+      subscriptionStatus: userData.subscriptionStatus || "inactive",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+
+    // Create document with auto-generated ID
+    const usersRef = collection(db, "users")
+    const docRef = doc(usersRef)
+
+    await setDoc(docRef, userProfile)
+
+    console.log("[createUserProfile] User profile created with ID:", docRef.id)
 
     return {
-      id: userDoc.id,
-      ...userData,
-    }
-  } catch (error: any) {
-    console.error(`[getUserByEmail] ❌ Error fetching user data for ${email}:`, error)
-    console.error(`[getUserByEmail] Error code:`, error.code)
-    console.error(`[getUserByEmail] Error message:`, error.message)
-
-    // Log specific Firestore errors
-    if (error.code) {
-      console.error(`[getUserByEmail] Firestore error details:`, {
-        code: error.code,
-        message: error.message,
-        details: error.details || "No additional details",
-      })
-    }
-
-    throw error // Re-throw to be handled by the calling function
-  }
-}
-
-// Get user data by ID from Firestore
-export async function getUserById(userId: string): Promise<any> {
-  try {
-    if (!userId) {
-      console.error("[getUserById] No user ID provided")
-      return null
-    }
-
-    console.log(`[getUserById] Fetching user data for ID: ${userId}`)
-    const userRef = doc(db, "users", userId)
-    const userDoc = await getDoc(userRef)
-
-    if (userDoc.exists()) {
-      const userData = userDoc.data()
-      console.log(`[getUserById] Found user data:`, {
-        id: userId,
-        name: userData.name || "NO_NAME",
-        email: userData.email || "NO_EMAIL",
-        role: userData.role || "NO_ROLE",
-      })
-      return { id: userId, ...userData }
-    } else {
-      console.log(`[getUserById] User document does not exist for ID: ${userId}`)
-      return null
+      ...userProfile,
+      uid: docRef.id,
     }
   } catch (error) {
-    console.error(`[getUserById] Error fetching user data for ${userId}:`, error)
-    return null
+    console.error("[createUserProfile] Error creating user profile:", error)
+    throw error
   }
 }
 
-// Get current user's Firestore data
-export async function getCurrentUserData(): Promise<any> {
+export async function updateUserProfile(email: string, updates: Partial<UserProfile>): Promise<UserProfile> {
   try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
-      console.log("[getCurrentUserData] No authenticated user")
-      return null
-    }
+    console.log("[updateUserProfile] Updating user profile for:", email, "with:", updates)
 
-    return await getUserById(currentUser.uid)
-  } catch (error) {
-    console.error("[getCurrentUserData] Error getting current user data:", error)
-    return null
-  }
-}
-
-// Update user document
-export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!userId) {
-      console.error("[updateUser] User ID is required")
-      return { success: false, error: "User ID is required" }
-    }
-
-    console.log(`[updateUser] Updating user ${userId} with:`, updates)
-
-    const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    })
-
-    console.log(`[updateUser] Successfully updated user ${userId}`)
-    return { success: true }
-  } catch (error) {
-    console.error(`[updateUser] Failed to update user ${userId}:`, error)
-    return { success: false, error }
-  }
-}
-
-// Store invitation code for a user
-export async function storeInvitationCode(
-  userId: string,
-  invitationCode: string,
-): Promise<{ success: boolean; error?: any }> {
-  try {
-    console.log(`[storeInvitationCode] Storing invitation code ${invitationCode} for user ${userId}`)
-
-    return await updateUser(userId, {
-      inviteCode: invitationCode,
-      inviteCodeStoredAt: new Date(),
-    })
-  } catch (error) {
-    console.error(`[storeInvitationCode] Error storing invitation code:`, error)
-    return { success: false, error }
-  }
-}
-
-// Create or update user document
-export async function createOrUpdateUser(userData: any): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!userData.id) {
-      console.error("[createOrUpdateUser] User ID is required")
-      return { success: false, error: "User ID is required" }
-    }
-
-    const userRef = doc(db, "users", userData.id)
-    await updateDoc(userRef, {
-      ...userData,
-      updatedAt: serverTimestamp(),
-    })
-
-    return { success: true }
-  } catch (error) {
-    console.error("[createOrUpdateUser] Error creating/updating user:", error)
-    return { success: false, error }
-  }
-}
-
-// Update user profile
-export async function updateUserProfile(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!userId) {
-      console.error("[updateUserProfile] User ID is required")
-      return { success: false, error: "User ID is required" }
-    }
-
-    const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    })
-
-    return { success: true }
-  } catch (error) {
-    console.error("[updateUserProfile] Error updating user profile:", error)
-    return { success: false, error }
-  }
-}
-
-// Get all users (admin function)
-export async function getAllUsers(): Promise<any[]> {
-  try {
+    // Find the user document
     const usersRef = collection(db, "users")
-    const q = query(usersRef, orderBy("createdAt", "desc"))
+    const q = query(usersRef, where("email", "==", email))
     const querySnapshot = await getDocs(q)
 
-    const users: any[] = []
-    querySnapshot.forEach((doc) => {
-      users.push({ id: doc.id, ...doc.data() })
-    })
-
-    return users
-  } catch (error) {
-    console.error("Error getting all users:", error)
-    return []
-  }
-}
-
-// Delete user
-export async function deleteUser(userId: string): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!userId) {
-      console.error("[deleteUser] User ID is required")
-      return { success: false, error: "User ID is required" }
+    if (querySnapshot.empty) {
+      throw new Error(`User not found with email: ${email}`)
     }
 
-    const userRef = doc(db, "users", userId)
-    await deleteDoc(userRef)
+    const userDoc = querySnapshot.docs[0]
+    const docRef = doc(db, "users", userDoc.id)
 
-    return { success: true }
+    // Prepare update data
+    const updateData = {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    }
+
+    // Remove undefined values
+    Object.keys(updateData).forEach((key) => {
+      if (updateData[key as keyof typeof updateData] === undefined) {
+        delete updateData[key as keyof typeof updateData]
+      }
+    })
+
+    await updateDoc(docRef, updateData)
+
+    console.log("[updateUserProfile] User profile updated successfully")
+
+    // Return updated profile
+    const updatedProfile = await getUserProfile(email)
+    if (!updatedProfile) {
+      throw new Error("Failed to fetch updated user profile")
+    }
+
+    return updatedProfile
   } catch (error) {
-    console.error("[deleteUser] Error deleting user:", error)
-    return { success: false, error }
+    console.error("[updateUserProfile] Error updating user profile:", error)
+    throw error
   }
 }
 
-// Subscribe to user changes
-export function subscribeToUser(userId: string, callback: (userData: any, error?: any) => void) {
-  if (!userId) {
-    console.error("[subscribeToUser] User ID is required for subscription")
-    callback(null, "User ID is required for subscription")
-    return () => {}
-  }
-
+export async function getUserById(uid: string): Promise<UserProfile | null> {
   try {
-    const userRef = doc(db, "users", userId)
+    console.log("[getUserById] Fetching user by ID:", uid)
 
-    const unsubscribe = onSnapshot(
-      userRef,
-      (doc) => {
-        if (doc.exists()) {
-          const userData = { id: doc.id, ...doc.data() }
-          callback(userData)
-        } else {
-          callback(null)
-        }
-      },
-      (error) => {
-        console.error("[subscribeToUser] Error in user subscription:", error)
-        callback(null, error)
-      },
-    )
+    const docRef = doc(db, "users", uid)
+    const docSnap = await getDoc(docRef)
 
-    return unsubscribe
+    if (!docSnap.exists()) {
+      console.log("[getUserById] No user found with ID:", uid)
+      return null
+    }
+
+    const userData = docSnap.data()
+
+    const userProfile: UserProfile = {
+      uid: docSnap.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role || "user",
+      user_type: userData.user_type,
+      hasFirebaseAuth: userData.hasFirebaseAuth,
+      profilePicture: userData.profilePicture,
+      createdAt: userData.createdAt,
+      updatedAt: userData.updatedAt,
+      isApproved: userData.isApproved,
+      subscriptionStatus: userData.subscriptionStatus,
+      stripeCustomerId: userData.stripeCustomerId,
+    }
+
+    console.log("[getUserById] User profile fetched:", {
+      uid: userProfile.uid,
+      email: userProfile.email,
+      role: userProfile.role,
+    })
+
+    return userProfile
   } catch (error) {
-    console.error("[subscribeToUser] Error setting up user subscription:", error)
-    callback(null, error)
-    return () => {}
+    console.error("[getUserById] Error fetching user by ID:", error)
+    throw error
   }
 }
