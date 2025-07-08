@@ -1,4 +1,3 @@
-import { db } from "./firebase"
 import {
   collection,
   doc,
@@ -9,8 +8,9 @@ import {
   where,
   writeBatch,
   type WriteBatch,
-  Timestamp,
+  serverTimestamp,
 } from "firebase/firestore"
+import { db } from "./firebase"
 import { fetchClients } from "./client-service"
 import { v4 as uuidv4 } from "uuid"
 
@@ -135,7 +135,7 @@ export class ProgramConversionService {
 
       // Create new exercise in user's collection using proper timestamp
       const exerciseId = uuidv4()
-      const now = Timestamp.now()
+      const now = serverTimestamp()
 
       const exerciseDoc: MobileExercise = {
         id: exerciseId,
@@ -229,7 +229,7 @@ export class ProgramConversionService {
     programId: string,
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
-    const now = Timestamp.now()
+    const now = serverTimestamp()
 
     console.log(`[createRoutineBatch] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
 
@@ -363,7 +363,7 @@ export class ProgramConversionService {
 
       // Generate programId first
       const programId = uuidv4()
-      const now = Timestamp.now()
+      const now = serverTimestamp()
 
       console.log(`[convertAndSendProgram] Using Timestamp.now():`, now)
       console.log(`[convertAndSendProgram] Timestamp type:`, typeof now)
