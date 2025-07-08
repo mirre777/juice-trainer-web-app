@@ -81,7 +81,7 @@ export async function POST(request: Request) {
               console.error(`[API:login] ❌ Failed to store invitation code:`, storeResult.error)
             }
 
-            // Process the invitation (add to pending users, etc.)
+            // Try to process the invitation if client service is available
             try {
               const { processLoginInvitation } = await import("@/lib/firebase/client-service")
               const inviteResult = await processLoginInvitation(invitationCode, user.id)
