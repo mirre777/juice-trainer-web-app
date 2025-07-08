@@ -9,7 +9,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  setDoc,
+  onSnapshot,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 
@@ -36,7 +36,7 @@ export async function getUserById(userId: string) {
       ...userData,
     }
   } catch (error: any) {
-    console.error(`[getUserById] ❌ Error fetching user ${userId}:`, error)
+    console.error(`[getUserById] ❌ Error fetching user data for ${userId}:`, error)
     throw error
   }
 }
@@ -92,6 +92,7 @@ export async function updateUser(userId: string, userData: any) {
       updatedAt: serverTimestamp(),
     })
     console.log(`[updateUser] ✅ User ${userId} updated successfully`)
+    return true
   } catch (error: any) {
     console.error(`[updateUser] ❌ Error updating user ${userId}:`, error)
     throw error
@@ -104,13 +105,15 @@ export async function storeInvitationCode(userId: string, invitationCode: string
     console.log(`[storeInvitationCode] 💌 Storing invitation code for user ${userId}`)
     const userRef = doc(db, "users", userId)
     await updateDoc(userRef, {
-      invitationCode,
+      invitationCode: invitationCode,
       invitationCodeStoredAt: serverTimestamp(),
     })
     console.log(`[storeInvitationCode] ✅ Invitation code stored for user ${userId}`)
+    return true
   } catch (error: any) {
-    console.error(`[storeInvitationCode] ❌ Error storing invitation code:`, error)
-    throw error
+    console.error(`[storeInvitationCode] ❌ Error storing invitation code for ${userId}:`, error)
+    // Don't throw error - this is not critical
+    return false
   }
 }
 
@@ -126,7 +129,11 @@ export async function getCurrentUserData(userId: string) {
     }
 
     const userData = userDoc.data()
-    console.log(`[getCurrentUserData] ✅ Found current user data`)
+    console.log(`[getCurrentUserData] ✅ Found current user:`, {
+      id: userDoc.id,
+      email: userData.email,
+      role: userData.role || "user",
+    })
 
     return {
       id: userDoc.id,
@@ -138,36 +145,20 @@ export async function getCurrentUserData(userId: string) {
   }
 }
 
-// Create user
-export async function createUser(userId: string, userData: any) {
-  try {
-    console.log(`[createUser] 👤 Creating user ${userId}:`, userData)
-    const userRef = doc(db, "users", userId)
-    await setDoc(userRef, {
-      ...userData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
-    console.log(`[createUser] ✅ User ${userId} created successfully`)
-  } catch (error: any) {
-    console.error(`[createUser] ❌ Error creating user ${userId}:`, error)
-    throw error
-  }
-}
-
 // Delete user
 export async function deleteUser(userId: string) {
   try {
     console.log(`[deleteUser] 🗑️ Deleting user: ${userId}`)
     await deleteDoc(doc(db, "users", userId))
     console.log(`[deleteUser] ✅ User ${userId} deleted successfully`)
+    return true
   } catch (error: any) {
     console.error(`[deleteUser] ❌ Error deleting user ${userId}:`, error)
     throw error
   }
 }
 
-// Get all users
+// Get all users (admin function)
 export async function getAllUsers() {
   try {
     console.log(`[getAllUsers] 📋 Fetching all users`)
@@ -184,6 +175,34 @@ export async function getAllUsers() {
     return users
   } catch (error: any) {
     console.error(`[getAllUsers] ❌ Error fetching all users:`, error)
+    throw error
+  }
+}
+
+// Listen to user changes
+export function listenToUserChanges(userId: string, callback: (userData: any) => void) {
+  try {
+    console.log(`[listenToUserChanges] 👂 Setting up listener for user: ${userId}`)
+    const userRef = doc(db, "users", userId)
+
+    return onSnapshot(
+      userRef,
+      (doc) => {
+        if (doc.exists()) {
+          const userData = { id: doc.id, ...doc.data() }
+          console.log(`[listenToUserChanges] 🔄 User data changed:`, userData)
+          callback(userData)
+        } else {
+          console.log(`[listenToUserChanges] ❌ User ${userId} no longer exists`)
+          callback(null)
+        }
+      },
+      (error) => {
+        console.error(`[listenToUserChanges] ❌ Error listening to user changes:`, error)
+      },
+    )
+  } catch (error: any) {
+    console.error(`[listenToUserChanges] ❌ Error setting up user listener:`, error)
     throw error
   }
 }

@@ -21,8 +21,9 @@ export async function POST(request: NextRequest) {
       userCredential = await signInWithEmailAndPassword(auth, email, password)
       console.log(`[API:login] ✅ Firebase authentication successful`)
     } catch (authError: any) {
-      console.error(`[API:login] ❌ Firebase auth error:`, authError)
+      console.error(`[API:login] ❌ Firebase authentication failed:`, authError)
 
+      // Handle specific Firebase auth errors
       if (authError.code === "auth/user-not-found") {
         return NextResponse.json({ error: "No account found with this email" }, { status: 404 })
       }
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
       }
       if (authError.code === "auth/invalid-email") {
         return NextResponse.json({ error: "Invalid email address" }, { status: 400 })
+      }
+      if (authError.code === "auth/user-disabled") {
+        return NextResponse.json({ error: "This account has been disabled" }, { status: 403 })
       }
 
       return NextResponse.json({ error: "Authentication failed", details: authError.message }, { status: 500 })
@@ -59,10 +63,10 @@ export async function POST(request: NextRequest) {
     if (invitationCode) {
       try {
         await storeInvitationCode(userCredential.user.uid, invitationCode)
-        console.log(`[API:login] 💌 Invitation code stored`)
+        console.log(`[API:login] 💌 Invitation code stored successfully`)
       } catch (inviteError: any) {
-        console.error(`[API:login] ❌ Error storing invitation code:`, inviteError)
-        // Don't fail login for invitation code errors
+        console.error(`[API:login] ⚠️ Failed to store invitation code:`, inviteError)
+        // Don't fail login if invitation code storage fails
       }
     }
 
@@ -70,10 +74,12 @@ export async function POST(request: NextRequest) {
     try {
       await updateUser(userCredential.user.uid, {
         lastLoginAt: new Date().toISOString(),
+        lastLoginIP: request.headers.get("x-forwarded-for") || "unknown",
       })
+      console.log(`[API:login] 📅 Last login time updated`)
     } catch (updateError: any) {
-      console.error(`[API:login] ❌ Error updating last login:`, updateError)
-      // Don't fail login for update errors
+      console.error(`[API:login] ⚠️ Failed to update last login:`, updateError)
+      // Don't fail login if update fails
     }
 
     // Generate JWT token
@@ -84,18 +90,21 @@ export async function POST(request: NextRequest) {
         email: userCredential.user.email!,
         role: userData.role || "user",
       })
+      console.log(`[API:login] 🔑 JWT token generated successfully`)
     } catch (tokenError: any) {
-      console.error(`[API:login] ❌ Error generating token:`, tokenError)
+      console.error(`[API:login] ❌ Token generation failed:`, tokenError)
       return NextResponse.json({ error: "Token generation failed" }, { status: 500 })
     }
 
+    // Prepare response
     const response = NextResponse.json({
       success: true,
       user: {
         uid: userCredential.user.uid,
         email: userCredential.user.email,
         role: userData.role || "user",
-        name: userData.name || userData.displayName,
+        name: userData.name || userData.displayName || null,
+        profilePicture: userData.profilePicture || null,
       },
     })
 
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
 
     response.cookies.set("auth-token", token, cookieOptions)
-    response.cookies.set("auth_token", token, cookieOptions)
+    response.cookies.set("auth_token", token, cookieOptions) // Legacy support
     response.cookies.set("user_id", userCredential.user.uid, cookieOptions)
 
     console.log(`[API:login] ✅ Login successful for ${email}`)
