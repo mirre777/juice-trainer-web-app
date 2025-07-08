@@ -19,10 +19,10 @@ export interface MobileProgram {
   id: string
   name: string
   notes: string
-  startedAt: string
+  startedAt: any // Firestore Timestamp
   duration: number
-  createdAt: string
-  updatedAt: string
+  createdAt: any // Firestore Timestamp
+  updatedAt: any // Firestore Timestamp
   program_URL: string
   routines: Array<{
     routineId: string
@@ -424,9 +424,9 @@ export class ProgramConversionService {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: timestamp.toDate().toISOString(), // Convert to ISO string for mobile app
-        startedAt: timestamp.toDate().toISOString(), // Convert to ISO string for mobile app
-        updatedAt: timestamp.toDate().toISOString(), // Convert to ISO string for mobile app
+        createdAt: timestamp, // Use Firestore Timestamp directly
+        startedAt: timestamp, // Use Firestore Timestamp directly
+        updatedAt: timestamp, // Use Firestore Timestamp directly
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
