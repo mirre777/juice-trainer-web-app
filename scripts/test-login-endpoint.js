@@ -2,148 +2,110 @@
 
 console.log("🔐 Testing Login Endpoint...\n")
 
+// Test configuration
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 const loginUrl = `${baseUrl}/api/auth/login`
 
-console.log(`Testing endpoint: ${loginUrl}\n`)
+console.log(`🌐 Testing endpoint: ${loginUrl}`)
+console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`)
+console.log(`📦 Vercel: ${process.env.VERCEL === "1" ? "Yes" : "No"}`)
+console.log("")
 
-// Test credentials
+// Test credentials from your screenshot
 const testCredentials = {
-  email: process.env.TEST_EMAIL || "mirresnelting+4@gmail.com",
-  password: process.env.TEST_PASSWORD || "test123",
+  email: "mirresnelting+4@gmail.com", // From your screenshot
+  password: "test123", // Placeholder - you'll need to use the real password
 }
 
-console.log(`Test credentials: ${testCredentials.email} / ${"*".repeat(testCredentials.password.length)}\n`)
+console.log(`📧 Test email: ${testCredentials.email}`)
+console.log(`🔑 Password: ${"*".repeat(testCredentials.password.length)}`)
+console.log("")
 
-// Test 1: Valid login attempt
-console.log("1️⃣ Testing valid login attempt...")
+// Simulate the login request that's failing
+console.log("1️⃣ Simulating the failing login request...")
 
-try {
-  const response = await fetch(loginUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+// Create the request payload (same as in your screenshot)
+const requestPayload = {
+  email: testCredentials.email,
+  password: testCredentials.password,
+  invitationCode: null, // From your screenshot logs
+}
+
+console.log("📦 Request payload:")
+console.log(
+  JSON.stringify(
+    {
+      ...requestPayload,
+      password: "********", // Hide password in logs
     },
-    body: JSON.stringify(testCredentials),
+    null,
+    2,
+  ),
+)
+
+console.log("\n2️⃣ Analyzing the request...")
+
+// Check if we have the required environment variables for the API to work
+const requiredForAPI = [
+  "NEXT_PUBLIC_FIREBASE_API_KEY",
+  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+  "FIREBASE_CLIENT_EMAIL",
+  "FIREBASE_PRIVATE_KEY",
+]
+
+console.log("🔍 Checking if API has required environment variables...")
+const missingForAPI = requiredForAPI.filter((varName) => !process.env[varName])
+
+if (missingForAPI.length > 0) {
+  console.log("❌ Missing environment variables that the API needs:")
+  missingForAPI.forEach((varName) => {
+    console.log(`   - ${varName}`)
   })
-
-  console.log(`Response status: ${response.status} ${response.statusText}`)
-  console.log(`Response headers:`, Object.fromEntries(response.headers.entries()))
-
-  const responseText = await response.text()
-  console.log(`Response body: ${responseText}`)
-
-  if (response.ok) {
-    console.log("✅ Login successful")
-    try {
-      const data = JSON.parse(responseText)
-      console.log(`User ID: ${data.user?.uid || "N/A"}`)
-      console.log(`Email: ${data.user?.email || "N/A"}`)
-    } catch (parseError) {
-      console.log("⚠️  Could not parse response as JSON")
-    }
-  } else {
-    console.log("❌ Login failed")
-    try {
-      const errorData = JSON.parse(responseText)
-      console.log(`Error: ${errorData.error}`)
-      console.log(`Error ID: ${errorData.errorId || "N/A"}`)
-    } catch (parseError) {
-      console.log("⚠️  Could not parse error response as JSON")
-    }
-  }
-} catch (error) {
-  console.log("❌ Request failed:")
-  console.log(`   Error: ${error.message}`)
-
-  if (error.code === "ECONNREFUSED") {
-    console.log("   💡 Hint: Make sure your development server is running")
-  }
+  console.log("\n💡 This explains the 500 Internal Server Error!")
+  console.log("   The login API cannot initialize Firebase without these variables.")
+} else {
+  console.log("✅ All required environment variables are present for the API")
 }
 
-// Test 2: Invalid credentials
-console.log("\n2️⃣ Testing invalid credentials...")
+console.log("\n3️⃣ Analyzing the error from your screenshot...")
 
-try {
-  const response = await fetch(loginUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email: testCredentials.email,
-      password: "wrongpassword",
-    }),
-  })
-
-  console.log(`Response status: ${response.status} ${response.statusText}`)
-
-  const responseText = await response.text()
-
-  if (response.status === 401) {
-    console.log("✅ Correctly rejected invalid credentials")
-  } else {
-    console.log("⚠️  Unexpected response for invalid credentials")
-    console.log(`Response: ${responseText}`)
-  }
-} catch (error) {
-  console.log("❌ Request failed:")
-  console.log(`   Error: ${error.message}`)
+const errorFromScreenshot = {
+  message: "Failed to retrieve user profile. Please try again.",
+  errorId: "ERR_1751989111900_guxe85vd",
 }
 
-// Test 3: Missing fields
-console.log("\n3️⃣ Testing missing fields...")
+console.log("📋 Error details from your screenshot:")
+console.log(`   Message: ${errorFromScreenshot.message}`)
+console.log(`   Error ID: ${errorFromScreenshot.errorId}`)
+console.log("")
 
-try {
-  const response = await fetch(loginUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email: testCredentials.email,
-      // password missing
-    }),
-  })
+console.log("🔍 This error suggests:")
+console.log("   1. Firebase authentication might be working")
+console.log("   2. But the getUserByEmail() function is failing")
+console.log("   3. This could be due to:")
+console.log("      - Firestore connection issues")
+console.log("      - Missing user document in Firestore")
+console.log("      - Firestore security rules blocking the query")
+console.log("      - Invalid Firestore configuration")
 
-  console.log(`Response status: ${response.status} ${response.statusText}`)
+console.log("\n4️⃣ Recommended next steps...")
 
-  if (response.status === 400) {
-    console.log("✅ Correctly rejected missing password")
-  } else {
-    console.log("⚠️  Unexpected response for missing password")
-    const responseText = await response.text()
-    console.log(`Response: ${responseText}`)
-  }
-} catch (error) {
-  console.log("❌ Request failed:")
-  console.log(`   Error: ${error.message}`)
+console.log("🔧 To fix the 500 error:")
+console.log("   1. Check Vercel environment variables dashboard")
+console.log("   2. Verify Firebase service account credentials")
+console.log("   3. Check Firestore security rules")
+console.log("   4. Verify user document exists in Firestore")
+console.log("   5. Check Vercel function logs for detailed error messages")
+
+console.log("\n📊 Summary:")
+if (missingForAPI.length > 0) {
+  console.log("❌ CRITICAL: Missing environment variables will cause 500 errors")
+} else {
+  console.log("⚠️  Environment variables present, but 500 error suggests:")
+  console.log("   - Firestore query issues in getUserByEmail()")
+  console.log("   - Check Vercel function logs for detailed Firebase errors")
 }
 
-// Test 4: Invalid JSON
-console.log("\n4️⃣ Testing invalid JSON...")
-
-try {
-  const response = await fetch(loginUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: "invalid json",
-  })
-
-  console.log(`Response status: ${response.status} ${response.statusText}`)
-
-  if (response.status === 400) {
-    console.log("✅ Correctly rejected invalid JSON")
-  } else {
-    console.log("⚠️  Unexpected response for invalid JSON")
-    const responseText = await response.text()
-    console.log(`Response: ${responseText}`)
-  }
-} catch (error) {
-  console.log("❌ Request failed:")
-  console.log(`   Error: ${error.message}`)
-}
-
-console.log("\n🏁 Login Endpoint Test Complete")
+console.log("\n🎯 Most likely cause based on your error:")
+console.log("   The getUserByEmail() function in user-service.ts is failing")
+console.log("   when trying to query Firestore for the user document.")

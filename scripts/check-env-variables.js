@@ -165,6 +165,8 @@ Object.entries(requiredVars).forEach(([varName, config]) => {
   console.log(`   Description: ${config.description}`)
   if (exists && config.type === "public") {
     console.log(`   Value: ${valuePreview}`)
+  } else if (exists && config.type === "private") {
+    console.log(`   Value: ${valuePreview}`)
   }
   console.log("")
 })
@@ -185,16 +187,26 @@ publicSecrets.forEach((secretVar) => {
   }
 })
 
+// Environment info
+console.log("🌍 Environment Info:")
+console.log(`   NODE_ENV: ${process.env.NODE_ENV || "undefined"}`)
+console.log(`   VERCEL: ${process.env.VERCEL || "undefined"}`)
+console.log(`   VERCEL_ENV: ${process.env.VERCEL_ENV || "undefined"}`)
+console.log("")
+
 // Summary
 console.log("📊 Summary:\n")
 
 if (hasErrors) {
   console.log("❌ Configuration has ERRORS that need to be fixed")
-  process.exit(1)
+  console.log("   Missing required environment variables will cause 500 errors")
 } else if (hasWarnings) {
   console.log("⚠️  Configuration has warnings but should work")
-  process.exit(0)
 } else {
   console.log("✅ All environment variables are properly configured")
-  process.exit(0)
 }
+
+console.log("\n🔍 Next steps:")
+console.log("1. Fix any missing required variables")
+console.log("2. Run the Firebase connection test")
+console.log("3. Test the login endpoint")
