@@ -27,43 +27,39 @@ loginRequiredVars.forEach((varName) => {
 })
 
 console.log("\n🔍 Analyzing Your Specific Error:")
-console.log("Error Message: 'Failed to retrieve user profile. Please try again.'")
-console.log("Error ID: ERR_1751989111900_guxe85vd")
+console.log("From Vercel Logs: 'TypeError: (0, c.getUserByEmail) is not a function'")
+console.log("Location: /var/task/.next/server/app/api/auth/login/route.js:1599")
 console.log("Status Code: 500")
 
 console.log("\n🕵️ Error Analysis:")
-console.log("This error occurs in the login API route at this sequence:")
-console.log("1. ✅ User submits email/password")
-console.log("2. ✅ Firebase authentication succeeds")
-console.log("3. ❌ getUserByEmail() function fails")
-console.log("4. ❌ Returns 500 error")
+console.log("This error occurs because:")
+console.log("1. ❌ getUserByEmail function is not properly imported")
+console.log("2. ❌ The import statement in login route is incorrect")
+console.log("3. ❌ The function might not be exported from user-service.ts")
 
 console.log("\n🎯 Root Cause Analysis:")
+console.log("❌ ACTUAL ISSUE: Import/Export problem with getUserByEmail")
+console.log("   This is NOT an environment variable issue")
+console.log("   The function getUserByEmail is not being imported correctly")
+
 if (missingVars.length > 0) {
-  console.log("❌ CRITICAL: Missing environment variables detected")
-  console.log("   This will cause Firebase initialization to fail")
+  console.log("\n⚠️  Additional Issue: Missing environment variables")
   console.log("   Missing variables:", missingVars.join(", "))
+  console.log("   Fix these too, but the main issue is the import error")
 } else {
-  console.log("✅ All required environment variables are present")
-  console.log("   The issue might be:")
-  console.log("   - Firestore security rules blocking the query")
-  console.log("   - Network connectivity issues")
-  console.log("   - Malformed private key")
+  console.log("\n✅ Environment variables are present")
+  console.log("   Focus on fixing the getUserByEmail import issue")
 }
 
 console.log("\n🔧 Recommended Fix Order:")
-console.log("1. Fix missing environment variables (if any)")
-console.log("2. Check Vercel function logs for detailed error")
-console.log("3. Verify Firestore security rules")
-console.log("4. Test login again")
+console.log("1. Fix getUserByEmail import in login route")
+console.log("2. Verify getUserByEmail export in user-service.ts")
+console.log("3. Test login again")
+console.log("4. Check for any remaining environment variable issues")
 
-// Test specific login scenario
-console.log("\n🧪 Login Flow Test:")
-console.log("Simulating login for: test@example.com")
-
-if (missingVars.length === 0) {
-  console.log("✅ Environment variables OK - login should work")
-} else {
-  console.log("❌ Missing variables will cause 500 error")
-  console.log("   Fix these first:", missingVars.join(", "))
-}
+console.log("\n🧪 Import Analysis:")
+console.log("Current import in login route should be:")
+console.log("import { getUserByEmail } from '@/lib/firebase/user-service'")
+console.log("")
+console.log("Make sure user-service.ts exports:")
+console.log("export async function getUserByEmail(email: string) { ... }")

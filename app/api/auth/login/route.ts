@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
 import { getUserByEmail } from "@/lib/firebase/user-service"
+// If that doesn't work, try:
+// import * as userService from "@/lib/firebase/user-service"
+// Then use: userService.getUserByEmail(email)
 import { generateToken } from "@/lib/auth/token-service"
 import { createUserSession } from "@/lib/auth/auth-service"
 

@@ -2,13 +2,19 @@
 
 console.log("🚨 Diagnosing 500 Internal Server Error...\n")
 
-console.log("📊 Error Details from Screenshot:")
-console.log("- Error Message: 'Failed to retrieve user profile. Please try again.'")
-console.log("- Error ID: ERR_1751989111900_guxe85vd")
-console.log("- Location: Login API route")
-console.log("- Function: getUserByEmail()")
+console.log("📊 Error Details from Vercel Logs:")
+console.log("- Error: TypeError: (0, c.getUserByEmail) is not a function")
+console.log("- Location: /var/task/.next/server/app/api/auth/login/route.js:1599")
+console.log("- Function: Login API route")
+console.log("- Root Cause: Import/Export issue")
 
-console.log("\n🔍 STEP 1: Environment Variables Check")
+console.log("\n🔍 STEP 1: Analyzing the TypeError")
+console.log("The error '(0, c.getUserByEmail) is not a function' means:")
+console.log("1. The import statement is trying to destructure getUserByEmail")
+console.log("2. But getUserByEmail is undefined or not exported properly")
+console.log("3. This causes a TypeError when trying to call it")
+
+console.log("\n🔍 STEP 2: Environment Variables Check")
 
 // Critical variables for login functionality
 const criticalVars = {
@@ -38,46 +44,43 @@ Object.entries(criticalVars).forEach(([name, value]) => {
 
 console.log(`\n📈 Results: ${presentVars.length}/${Object.keys(criticalVars).length} variables present`)
 
+console.log("\n🚨 CONCLUSION:")
+console.log("❌ PRIMARY ISSUE: getUserByEmail import/export error")
+console.log("   This is the main cause of your 500 error")
+
 if (missingCritical.length > 0) {
-  console.log("\n🚨 CONCLUSION:")
-  console.log("❌ CRITICAL ISSUE FOUND: Missing environment variables")
-  console.log("   This is definitely causing your 500 error.")
+  console.log("❌ SECONDARY ISSUE: Missing environment variables")
+  console.log("   These also need to be fixed")
 
   console.log("\n📋 Missing Variables:")
   missingCritical.forEach((varName) => {
     console.log(`   • ${varName}`)
   })
+}
 
-  console.log("\n🔧 IMMEDIATE FIX:")
-  console.log("1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables")
-  console.log("2. Add these missing variables:")
+console.log("\n🔧 IMMEDIATE FIX STEPS:")
+console.log("1. Fix the getUserByEmail import issue first:")
+console.log("   - Check the import statement in login route")
+console.log("   - Verify the export in user-service.ts")
+console.log("   - Make sure the function is properly exported")
+
+if (missingCritical.length > 0) {
+  console.log("2. Add missing environment variables to Vercel:")
   missingCritical.forEach((varName) => {
     console.log(`   - ${varName}`)
   })
-  console.log("3. Get values from your Firebase Console → Project Settings")
-  console.log("4. Redeploy your application")
-  console.log("5. Test login again")
-} else {
-  console.log("\n✅ All critical environment variables are present")
-  console.log("\n🔍 STEP 2: Advanced Diagnosis Needed")
-  console.log("Since env vars are OK, the issue might be:")
-  console.log("1. Firestore security rules blocking queries")
-  console.log("2. Malformed Firebase private key")
-  console.log("3. Network/connectivity issues")
-  console.log("4. User document structure mismatch")
-
-  console.log("\n🔧 Next Steps:")
-  console.log("1. Check Vercel function logs for detailed error")
-  console.log("2. Verify Firestore security rules allow reads")
-  console.log("3. Test Firebase connection manually")
 }
 
-console.log("\n📞 Next Steps:")
-console.log("1. Fix any issues identified above")
-console.log("2. Check your Vercel dashboard for environment variables")
-console.log("3. Look at Vercel function logs for detailed error messages")
-console.log("4. Test the login again after making changes")
+console.log("3. Redeploy your application")
+console.log("4. Test login again")
 
-console.log("\n🎯 Quick Test:")
-console.log("Try logging in again after fixing the missing variables.")
-console.log("If it still fails, check the Vercel function logs for the detailed Firebase error.")
+console.log("\n🎯 The Real Problem:")
+console.log("Your Vercel logs show the actual error is NOT missing environment variables.")
+console.log("It's a JavaScript TypeError because getUserByEmail is not a function.")
+console.log("This means there's an import/export mismatch in your code.")
+
+console.log("\n📞 Next Steps:")
+console.log("1. Check the import statement in app/api/auth/login/route.ts")
+console.log("2. Verify getUserByEmail is exported from lib/firebase/user-service.ts")
+console.log("3. Fix any import/export issues")
+console.log("4. Test the login again")
