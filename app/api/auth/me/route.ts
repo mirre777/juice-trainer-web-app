@@ -33,43 +33,57 @@ export async function GET() {
         console.log("✅ Token decoded successfully:", {
           uid: decoded.uid,
           email: decoded.email,
-          role: decoded.role,
+          tokenRole: decoded.role,
         })
 
-        // Get fresh user data from Firestore to ensure we have the latest role
+        // ALWAYS get fresh user data from Firestore to ensure we have the latest role
         try {
-          const { getUserById } = await import("@/lib/firebase/user-service")
-          const freshUserData = await getUserById(decoded.uid)
+          console.log("🔍 Fetching fresh user data from Firestore for UID:", decoded.uid)
+          const { db } = await import("@/lib/firebase/firebase")
+          const { collection, doc, getDoc } = await import("firebase/firestore")
 
-          if (freshUserData) {
+          const userDocRef = doc(collection(db, "users"), decoded.uid)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const freshUserData = userDoc.data()
             console.log("✅ Fresh user data from Firestore:", {
               uid: decoded.uid,
               email: freshUserData.email,
-              role: freshUserData.role,
+              firestoreRole: freshUserData.role,
               user_type: freshUserData.user_type,
             })
+
+            const finalRole = freshUserData.role || decoded.role || "user"
+            console.log("🎭 Final role determined:", finalRole)
 
             return NextResponse.json({
               uid: decoded.uid,
               email: decoded.email,
-              role: freshUserData.role || decoded.role || "user",
+              role: finalRole,
               user_type: freshUserData.user_type,
               name: freshUserData.name || "",
               universalInviteCode: freshUserData.universalInviteCode || "",
               inviteCode: freshUserData.inviteCode || "",
             })
+          } else {
+            console.log("⚠️ User document not found in Firestore, using token data")
+            return NextResponse.json({
+              uid: decoded.uid,
+              email: decoded.email,
+              role: decoded.role || "user",
+              name: decoded.name || "",
+            })
           }
         } catch (firestoreError) {
-          console.log("⚠️ Firestore lookup failed, using token data:", firestoreError)
+          console.error("⚠️ Firestore lookup failed, using token data:", firestoreError)
+          return NextResponse.json({
+            uid: decoded.uid,
+            email: decoded.email,
+            role: decoded.role || "user",
+            name: decoded.name || "",
+          })
         }
-
-        // Fallback to token data if Firestore fails
-        return NextResponse.json({
-          uid: decoded.uid,
-          email: decoded.email,
-          role: decoded.role || "user",
-          name: decoded.name || "",
-        })
       } catch (tokenError) {
         console.error("❌ Token verification failed:", tokenError)
         // Continue to user_id fallback
@@ -101,7 +115,7 @@ export async function GET() {
         }
 
         const userData = userDoc.data()
-        console.log("✅ User data extracted:", {
+        console.log("✅ User data extracted from Firestore:", {
           uid: userId,
           email: userData?.email,
           role: userData?.role,
@@ -112,13 +126,13 @@ export async function GET() {
           uid: userId,
           email: userData?.email || "",
           name: userData?.name || "",
-          role: userData?.role || "user",
+          role: userData?.role || "user", // This should now get the correct role from Firestore
           user_type: userData?.user_type || "",
           universalInviteCode: userData?.universalInviteCode || "",
           inviteCode: userData?.inviteCode || "",
         }
 
-        console.log("📤 Sending successful response:", response)
+        console.log("📤 Sending successful response with role:", response.role)
         return NextResponse.json(response)
       } catch (firestoreError: any) {
         console.error("💥 Firestore error:", firestoreError)
