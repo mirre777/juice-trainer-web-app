@@ -25,6 +25,7 @@ export interface ProgramExercise {
   video_url?: string
   notes?: string
   sets: ProgramSet[]
+  category?: string
 }
 
 export interface ProgramSet {
@@ -37,6 +38,22 @@ export interface ProgramSet {
   rest?: string
   notes?: string
 }
+
+// Default exercise categories
+export const DEFAULT_EXERCISE_CATEGORIES = [
+  "Chest",
+  "Back",
+  "Shoulders",
+  "Arms",
+  "Legs",
+  "Core",
+  "Cardio",
+  "Full Body",
+  "Mobility",
+  "Other",
+] as const
+
+export type ExerciseCategory = (typeof DEFAULT_EXERCISE_CATEGORIES)[number]
 
 // Mobile app format interfaces
 export interface MobileProgram {
