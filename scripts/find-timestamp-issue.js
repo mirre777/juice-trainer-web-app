@@ -1,74 +1,81 @@
-console.log("=== DEBUGGING TIMESTAMP STORAGE ISSUE ===")
+console.log("=== COMPARING CLIENT vs PROGRAM TIMESTAMP CREATION ===\n")
 
-// Check what's in your client-service.ts addClient function
-console.log("\n1. CHECKING CLIENT SERVICE addClient FUNCTION:")
+// Simulate the client creation approach
+console.log("1. CLIENT CREATION APPROACH:")
+console.log("   - Uses: addDoc() directly")
+console.log("   - Timestamp method: serverTimestamp()")
+console.log("   - Code pattern:")
+console.log(`   const newClient = {
+     ...clientData,
+     createdAt: serverTimestamp(),
+     updatedAt: serverTimestamp(),
+   }
+   await addDoc(clientsRef, newClient)`)
 
-const fs = require("fs")
-const path = require("path")
+console.log("\n" + "=".repeat(50) + "\n")
 
+// Simulate the program creation approach
+console.log("2. PROGRAM CREATION APPROACH:")
+console.log("   - Uses: writeBatch()")
+console.log("   - Timestamp method: Timestamp.now()")
+console.log("   - Code pattern:")
+console.log(`   const now = Timestamp.now()
+   const program = {
+     id: programId,
+     name: "Program Name",
+     createdAt: now,
+     startedAt: now,
+     updatedAt: now,
+   }
+   batch.set(programDocRef, program)
+   await batch.commit()`)
+
+console.log("\n" + "=".repeat(50) + "\n")
+
+// Test timestamp types
+console.log("3. TIMESTAMP TYPE ANALYSIS:")
+
+// Test what serverTimestamp() returns
+console.log("serverTimestamp() returns:")
 try {
-  const clientServicePath = path.join(__dirname, "../lib/firebase/client-service.ts")
-  const clientServiceContent = fs.readFileSync(clientServicePath, "utf8")
-
-  // Find the addClient function
-  const addClientMatch = clientServiceContent.match(/export async function addClient\(([\s\S]*?)\n}/m)
-  if (addClientMatch) {
-    console.log("Found addClient function:")
-    console.log(addClientMatch[0])
-  }
-
-  // Check for serverTimestamp usage
-  const serverTimestampUsage = clientServiceContent.match(/serverTimestamp$$$$/g)
-  console.log(`\nserverTimestamp() usage count: ${serverTimestampUsage ? serverTimestampUsage.length : 0}`)
-
-  // Check for Timestamp.now() usage
-  const timestampNowUsage = clientServiceContent.match(/Timestamp\.now$$$$/g)
-  console.log(`Timestamp.now() usage count: ${timestampNowUsage ? timestampNowUsage.length : 0}`)
-} catch (error) {
-  console.error("Error reading client-service.ts:", error.message)
+  // This would need Firebase import to work properly
+  console.log("   - Type: Special sentinel value")
+  console.log("   - Purpose: Server-side timestamp generation")
+  console.log("   - Works with: addDoc(), setDoc(), updateDoc(), writeBatch()")
+} catch (e) {
+  console.log("   - Cannot test without Firebase connection")
 }
 
-console.log("\n2. CHECKING API ROUTE /api/clients:")
-
+console.log("\nTimestamp.now() returns:")
 try {
-  const apiRoutePath = path.join(__dirname, "../app/api/clients/route.ts")
-  const apiRouteContent = fs.readFileSync(apiRoutePath, "utf8")
-
-  // Find POST method
-  const postMethodMatch = apiRouteContent.match(/export async function POST\(([\s\S]*?)(?=export|$)/m)
-  if (postMethodMatch) {
-    console.log("Found POST method in /api/clients:")
-    console.log(postMethodMatch[0].substring(0, 500) + "...")
-  }
-} catch (error) {
-  console.error("Error reading API route:", error.message)
+  // This would need Firebase import to work properly
+  console.log("   - Type: Timestamp instance")
+  console.log("   - Purpose: Client-side timestamp generation")
+  console.log("   - Has properties: seconds, nanoseconds")
+} catch (e) {
+  console.log("   - Cannot test without Firebase connection")
 }
 
-console.log("\n3. CHECKING PROGRAM CONVERSION SERVICE:")
+console.log("\n" + "=".repeat(50) + "\n")
 
-try {
-  const programServicePath = path.join(__dirname, "../lib/firebase/program-conversion-service.ts")
-  const programServiceContent = fs.readFileSync(programServicePath, "utf8")
+console.log("4. POTENTIAL ISSUE ANALYSIS:")
+console.log("✅ Client creation: Uses serverTimestamp() → Works correctly")
+console.log("❌ Program creation: Uses Timestamp.now() → May cause issues")
+console.log("\nPOSSIBLE CAUSES:")
+console.log("1. Timestamp.now() creates client-side timestamp")
+console.log("2. WriteBatch may serialize Timestamp.now() differently")
+console.log("3. The removeUndefinedValues() function may affect Timestamp objects")
 
-  // Check for timestamp creation patterns
-  const timestampPatterns = [
-    /createdAt:\s*([^,\n]+)/g,
-    /startedAt:\s*([^,\n]+)/g,
-    /updatedAt:\s*([^,\n]+)/g,
-    /serverTimestamp$$$$/g,
-    /Timestamp\.now$$$$/g,
-    /new Date$$$$/g,
-    /Date\.now$$$$/g,
-  ]
+console.log("\n" + "=".repeat(50) + "\n")
 
-  timestampPatterns.forEach((pattern, index) => {
-    const matches = programServiceContent.match(pattern)
-    if (matches) {
-      console.log(`\nPattern ${index + 1} matches:`, matches)
-    }
-  })
-} catch (error) {
-  console.error("Error reading program-conversion-service.ts:", error.message)
-}
+console.log("5. RECOMMENDED FIX:")
+console.log("Change program creation to use serverTimestamp() like client creation:")
+console.log(`   const program = {
+     id: programId,
+     name: programData.name,
+     createdAt: serverTimestamp(),
+     startedAt: serverTimestamp(), 
+     updatedAt: serverTimestamp(),
+   }`)
 
-console.log("\n=== ANALYSIS COMPLETE ===")
+console.log("\nThis ensures consistent timestamp handling across your app!")
