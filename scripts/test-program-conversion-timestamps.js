@@ -20,7 +20,7 @@ async function testProgramConversionTimestamps() {
     console.log("=== TESTING PROGRAM CONVERSION SERVICE TIMESTAMPS ===")
 
     // Import the program conversion service
-    const { programConversionService } = require("../lib/firebase/program-conversion-service.ts")
+    const { programConversionService } = await import("../lib/firebase/program-conversion-service.js")
 
     // Test data - simple program
     const testProgramData = {
