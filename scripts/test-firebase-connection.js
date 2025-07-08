@@ -1,6 +1,4 @@
-#!/usr/bin/env node
-
-console.log("🔥 Testing Firebase Connection...\n")
+console.log("🔥 TESTING FIREBASE CONNECTION...\n")
 
 // Check required environment variables first
 const requiredVars = [

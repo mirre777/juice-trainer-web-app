@@ -1,6 +1,4 @@
-#!/usr/bin/env node
-
-console.log("🚨 Diagnosing 500 Internal Server Error...\n")
+console.log("🚨 DIAGNOSING 500 INTERNAL SERVER ERROR...\n")
 
 console.log("Based on your error message: 'Failed to retrieve user profile'")
 console.log("Error ID: ERR_1751989111900_guxe85vd")
@@ -144,3 +142,8 @@ console.log("   1. Fix any issues identified above")
 console.log("   2. Check your Vercel dashboard for environment variables")
 console.log("   3. Look at Vercel function logs for detailed error messages")
 console.log("   4. Test the login again after making changes")
+
+console.log("\n🔗 Quick Links:")
+console.log("   - Vercel Dashboard: https://vercel.com/dashboard")
+console.log("   - Firebase Console: https://console.firebase.google.com")
+console.log("   - Environment Variables: Project Settings → Environment Variables")

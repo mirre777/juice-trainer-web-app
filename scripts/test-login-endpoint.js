@@ -1,6 +1,4 @@
-#!/usr/bin/env node
-
-console.log("🔐 Testing Login Endpoint...\n")
+console.log("🔐 TESTING LOGIN ENDPOINT...\n")
 
 // Test configuration
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
@@ -88,4 +86,20 @@ if (missingForAPI.length > 0) {
 } else {
   console.log("   The getUserByEmail() function in user-service.ts is not being")
   console.log("   imported correctly into the login route.")
+}
+
+console.log("\n🔧 RECOMMENDED FIXES:")
+if (missingForAPI.length > 0) {
+  console.log("   1. Add missing environment variables to Vercel:")
+  missingForAPI.forEach((varName) => {
+    console.log(`      - ${varName}`)
+  })
+  console.log("   2. Get values from Firebase Console → Project Settings")
+  console.log("   3. Redeploy your application")
+  console.log("   4. Test login again")
+} else {
+  console.log("   1. Check the import statement in app/api/auth/login/route.ts")
+  console.log("   2. Try namespace import: import * as userService from '@/lib/firebase/user-service'")
+  console.log("   3. Use: await userService.getUserByEmail(email)")
+  console.log("   4. Redeploy and test")
 }

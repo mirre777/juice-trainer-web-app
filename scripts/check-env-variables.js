@@ -1,212 +1,123 @@
-#!/usr/bin/env node
+import dotenv from "dotenv"
 
-console.log("🔍 Checking Environment Variables...\n")
+// Load environment variables
+dotenv.config()
 
-// Required environment variables
-const requiredVars = {
-  // Firebase Client Config
-  NEXT_PUBLIC_FIREBASE_API_KEY: {
-    required: true,
-    type: "public",
-    validation: (val) => val && val.startsWith("AIza"),
-    description: "Firebase API Key (should start with AIza)",
-  },
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: {
-    required: true,
-    type: "public",
-    validation: (val) => val && val.includes(".firebaseapp.com"),
-    description: "Firebase Auth Domain (should end with .firebaseapp.com)",
-  },
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: {
-    required: true,
-    type: "public",
-    validation: (val) => val && val.length > 0,
-    description: "Firebase Project ID",
-  },
-  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: {
-    required: true,
-    type: "public",
-    validation: (val) => val && val.includes(".appspot.com"),
-    description: "Firebase Storage Bucket",
-  },
-  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: {
-    required: true,
-    type: "public",
-    validation: (val) => val && /^\d+$/.test(val),
-    description: "Firebase Messaging Sender ID (should be numeric)",
-  },
-  NEXT_PUBLIC_FIREBASE_APP_ID: {
-    required: true,
-    type: "public",
-    validation: (val) => val && val.startsWith("1:"),
-    description: "Firebase App ID (should start with 1:)",
-  },
-  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: {
-    required: false,
-    type: "public",
-    validation: (val) => !val || val.startsWith("G-"),
-    description: "Firebase Measurement ID (optional, should start with G-)",
-  },
+console.log("🔍 CHECKING ENVIRONMENT VARIABLES...\n")
 
-  // Firebase Server Config
-  FIREBASE_CLIENT_EMAIL: {
-    required: true,
-    type: "private",
-    validation: (val) => val && val.includes("@") && val.includes(".iam.gserviceaccount.com"),
-    description: "Firebase Service Account Email",
-  },
-  FIREBASE_PRIVATE_KEY: {
-    required: true,
-    type: "private",
-    validation: (val) => val && val.includes("-----BEGIN PRIVATE KEY-----"),
-    description: "Firebase Private Key",
-  },
-  FIREBASE_PRIVATE_KEY_ID: {
-    required: false,
-    type: "private",
-    validation: (val) => !val || val.length > 0,
-    description: "Firebase Private Key ID (optional)",
-  },
-  FIREBASE_CLIENT_ID: {
-    required: false,
-    type: "private",
-    validation: (val) => !val || /^\d+$/.test(val),
-    description: "Firebase Client ID (optional, should be numeric)",
-  },
-
-  // Google OAuth
-  GOOGLE_CLIENT_ID: {
-    required: false,
-    type: "private",
-    validation: (val) => !val || val.includes(".googleusercontent.com"),
-    description: "Google OAuth Client ID",
-  },
-  GOOGLE_CLIENT_SECRET: {
-    required: false,
-    type: "private",
-    validation: (val) => !val || val.length > 10,
-    description: "Google OAuth Client Secret",
-  },
-  NEXT_PUBLIC_GOOGLE_CLIENT_ID: {
-    required: false,
-    type: "public",
-    validation: (val) => !val || val.includes(".googleusercontent.com"),
-    description: "Public Google OAuth Client ID",
-  },
-
-  // App Config
-  NEXT_PUBLIC_APP_URL: {
-    required: true,
-    type: "public",
-    validation: (val) => val && (val.startsWith("http://") || val.startsWith("https://")),
-    description: "Application URL",
-  },
-  ENCRYPTION_KEY: {
-    required: true,
-    type: "private",
-    validation: (val) => val && val.length >= 32,
-    description: "Encryption Key (should be at least 32 characters)",
-  },
-
-  // Stripe
-  STRIPE_SECRET_KEY: {
-    required: false,
-    type: "private",
-    validation: (val) => !val || val.startsWith("sk_"),
-    description: "Stripe Secret Key (should start with sk_)",
-  },
-  STRIPE_WEBHOOK_SECRET: {
-    required: false,
-    type: "private",
-    validation: (val) => !val || val.startsWith("whsec_"),
-    description: "Stripe Webhook Secret (should start with whsec_)",
-  },
-
-  // Vercel Blob
-  BLOB_READ_WRITE_TOKEN: {
-    required: false,
-    type: "private",
-    validation: (val) => !val || val.startsWith("vercel_blob_rw_"),
-    description: "Vercel Blob Token",
-  },
+// Firebase Client Configuration (Public)
+const clientVars = {
+  NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-let hasErrors = false
-let hasWarnings = false
+// Firebase Server Configuration (Private)
+const serverVars = {
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
+  FIREBASE_PRIVATE_KEY_ID: process.env.FIREBASE_PRIVATE_KEY_ID,
+  FIREBASE_CLIENT_ID: process.env.FIREBASE_CLIENT_ID,
+}
 
-console.log("📋 Environment Variable Status:\n")
+// Other Required Variables
+const otherVars = {
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+}
 
-Object.entries(requiredVars).forEach(([varName, config]) => {
-  const value = process.env[varName]
-  const exists = value !== undefined && value !== ""
-
-  let status = "✅"
-  let message = "OK"
-
-  if (config.required && !exists) {
-    status = "❌"
-    message = "MISSING (Required)"
-    hasErrors = true
-  } else if (!config.required && !exists) {
-    status = "⚠️ "
-    message = "MISSING (Optional)"
-    hasWarnings = true
-  } else if (exists && !config.validation(value)) {
-    status = "❌"
-    message = "INVALID FORMAT"
-    hasErrors = true
-  }
-
-  const typeIndicator = config.type === "public" ? "🌐" : "🔒"
-  const valuePreview = exists ? (config.type === "private" ? `${value.substring(0, 10)}...` : value) : "Not set"
-
-  console.log(`${status} ${typeIndicator} ${varName}`)
-  console.log(`   Status: ${message}`)
-  console.log(`   Description: ${config.description}`)
-  if (exists && config.type === "public") {
-    console.log(`   Value: ${valuePreview}`)
-  } else if (exists && config.type === "private") {
-    console.log(`   Value: ${valuePreview}`)
-  }
-  console.log("")
+console.log("📱 FIREBASE CLIENT CONFIGURATION:")
+let clientMissing = 0
+Object.entries(clientVars).forEach(([key, value]) => {
+  const status = value ? "✅" : "❌"
+  const displayValue = value ? (key.includes("KEY") ? "[HIDDEN]" : value.substring(0, 20) + "...") : "MISSING"
+  console.log(`  ${status} ${key}: ${displayValue}`)
+  if (!value) clientMissing++
 })
 
-// Security warnings
-console.log("🔒 Security Check:\n")
-
-const publicSecrets = [
-  "NEXT_PUBLIC_GOOGLE_CLIENT_SECRET",
-  "NEXT_PUBLIC_FIREBASE_PRIVATE_KEY",
-  "NEXT_PUBLIC_STRIPE_SECRET_KEY",
-]
-
-publicSecrets.forEach((secretVar) => {
-  if (process.env[secretVar]) {
-    console.log(`❌ SECURITY WARNING: ${secretVar} should not be public!`)
-    hasErrors = true
-  }
+console.log("\n🔐 FIREBASE SERVER CONFIGURATION:")
+let serverMissing = 0
+Object.entries(serverVars).forEach(([key, value]) => {
+  const status = value ? "✅" : "❌"
+  const displayValue = value ? "[HIDDEN]" : "MISSING"
+  console.log(`  ${status} ${key}: ${displayValue}`)
+  if (!value) serverMissing++
 })
 
-// Environment info
-console.log("🌍 Environment Info:")
-console.log(`   NODE_ENV: ${process.env.NODE_ENV || "undefined"}`)
-console.log(`   VERCEL: ${process.env.VERCEL || "undefined"}`)
-console.log(`   VERCEL_ENV: ${process.env.VERCEL_ENV || "undefined"}`)
-console.log("")
+console.log("\n⚙️  OTHER CONFIGURATION:")
+let otherMissing = 0
+Object.entries(otherVars).forEach(([key, value]) => {
+  const status = value ? "✅" : "❌"
+  const displayValue = value ? (key.includes("KEY") || key.includes("SECRET") ? "[HIDDEN]" : value) : "MISSING"
+  console.log(`  ${status} ${key}: ${displayValue}`)
+  if (!value && (key === "ENCRYPTION_KEY" || key === "NEXT_PUBLIC_APP_URL")) otherMissing++
+})
 
-// Summary
-console.log("📊 Summary:\n")
+console.log("\n📊 SUMMARY:")
+console.log(`  Client variables missing: ${clientMissing}/7`)
+console.log(`  Server variables missing: ${serverMissing}/4`)
+console.log(`  Critical other variables missing: ${otherMissing}/2`)
 
-if (hasErrors) {
-  console.log("❌ Configuration has ERRORS that need to be fixed")
-  console.log("   Missing required environment variables will cause 500 errors")
-} else if (hasWarnings) {
-  console.log("⚠️  Configuration has warnings but should work")
+const totalMissing = clientMissing + serverMissing + otherMissing
+if (totalMissing === 0) {
+  console.log("\n🎉 ALL CRITICAL ENVIRONMENT VARIABLES ARE PRESENT!")
 } else {
-  console.log("✅ All environment variables are properly configured")
+  console.log(`\n⚠️  ${totalMissing} CRITICAL ENVIRONMENT VARIABLES ARE MISSING!`)
+  console.log("\n🔧 NEXT STEPS:")
+  console.log("1. Go to Vercel Dashboard → Project Settings → Environment Variables")
+  console.log("2. Add the missing variables listed above")
+  console.log("3. Get values from Firebase Console → Project Settings")
+  console.log("4. Redeploy your application")
 }
 
-console.log("\n🔍 Next steps:")
-console.log("1. Fix any missing required variables")
-console.log("2. Run the Firebase connection test")
-console.log("3. Test the login endpoint")
+console.log("\n🌍 ENVIRONMENT INFO:")
+console.log(`  NODE_ENV: ${process.env.NODE_ENV || "not set"}`)
+console.log(`  VERCEL: ${process.env.VERCEL === "1" ? "Yes" : "No"}`)
+console.log(`  VERCEL_ENV: ${process.env.VERCEL_ENV || "not set"}`)
+
+// Validation checks
+console.log("\n🔍 VALIDATION CHECKS:")
+if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY.startsWith("AIza")) {
+    console.log("  ✅ Firebase API Key format is correct")
+  } else {
+    console.log("  ❌ Firebase API Key format is incorrect (should start with 'AIza')")
+  }
+}
+
+if (process.env.FIREBASE_CLIENT_EMAIL) {
+  if (
+    process.env.FIREBASE_CLIENT_EMAIL.includes("@") &&
+    process.env.FIREBASE_CLIENT_EMAIL.includes(".iam.gserviceaccount.com")
+  ) {
+    console.log("  ✅ Firebase Client Email format is correct")
+  } else {
+    console.log("  ❌ Firebase Client Email format is incorrect (should be service account email)")
+  }
+}
+
+if (process.env.FIREBASE_PRIVATE_KEY) {
+  if (process.env.FIREBASE_PRIVATE_KEY.includes("-----BEGIN PRIVATE KEY-----")) {
+    console.log("  ✅ Firebase Private Key format is correct")
+  } else {
+    console.log("  ❌ Firebase Private Key format is incorrect")
+  }
+}
+
+if (process.env.NEXT_PUBLIC_APP_URL) {
+  if (process.env.NEXT_PUBLIC_APP_URL.startsWith("http")) {
+    console.log("  ✅ App URL format is correct")
+  } else {
+    console.log("  ❌ App URL format is incorrect (should start with http)")
+  }
+}
