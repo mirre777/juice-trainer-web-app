@@ -5,37 +5,14 @@ import type React from "react"
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
-import { Send, User, Calendar, Clock, Dumbbell, Loader2 } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-
-interface ExerciseSet {
-  reps: string
-  weight: string
-  notes: string
-}
-
-interface Exercise {
-  name: string
-  sets: ExerciseSet[]
-}
-
-interface Routine {
-  name: string
-  exercises: Exercise[]
-}
-
-interface ProgramData {
-  name: string
-  program_title?: string
-  duration_weeks: number
-  routines: Routine[]
-}
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Exercise {
   name: string
@@ -67,7 +44,7 @@ interface Program {
   title?: string
   description?: string
   duration_weeks?: number
-  program_weeks?: number // Keep for backward compatibility
+  program_weeks?: number
   is_periodized?: boolean
   weeks?: Week[]
   routines?: Routine[]
@@ -86,8 +63,6 @@ interface ReviewProgramClientProps {
   importData: any
   importId?: string
   initialClients?: Client[]
-  programData: ProgramData
-  clients: Client[]
 }
 
 interface AvailableFields {
@@ -106,13 +81,7 @@ const errorLog = (message: string, error?: any) => {
   console.error(`[ReviewProgramClient ERROR] ${message}`, error || "")
 }
 
-export default function ReviewProgramClient({
-  importData,
-  importId,
-  initialClients = [],
-  programData,
-  clients,
-}: ReviewProgramClientProps) {
+export default function ReviewProgramClient({ importData, importId, initialClients = [] }: ReviewProgramClientProps) {
   debugLog("Component initialized with props:", {
     importData: !!importData,
     importId,
@@ -123,13 +92,13 @@ export default function ReviewProgramClient({
   const { toast } = useToast()
   const [programState, setProgramState] = useState<Program | null>(null)
   const [originalProgramState, setOriginalProgramState] = useState<Program | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [clientsState, setClientsState] = useState<Client[]>(initialClients)
+  const [clients, setClients] = useState<Client[]>(initialClients)
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
-  const [isSending, setIsSending] = useState(isSaving)
+  const [isSending, setIsSending] = useState(false)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
@@ -139,61 +108,6 @@ export default function ReviewProgramClient({
   const [selectedWeekToKeep, setSelectedWeekToKeep] = useState<number>(1)
   const [numberOfWeeks, setNumberOfWeeks] = useState<number>(4)
   const [currentWeekIndex, setCurrentWeekIndex] = useState<number>(0)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-
-  const handleSendToClient = async () => {
-    if (!selectedClientId) {
-      toast({
-        title: "Error",
-        description: "Please select a client first",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      console.log("🔄 Sending program to client:", selectedClientId)
-      console.log("📋 Program data:", programData)
-
-      const response = await fetch("/api/programs/send-to-client", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          clientId: selectedClientId,
-          programData,
-          customMessage,
-        }),
-      })
-
-      const result = await response.json()
-      console.log("📨 API Response:", result)
-
-      if (result.success) {
-        toast({
-          title: "Success!",
-          description: result.message || "Program sent to client successfully",
-        })
-        setIsDialogOpen(false)
-        setSelectedClientId("")
-        setCustomMessage("")
-      } else {
-        throw new Error(result.error || "Failed to send program")
-      }
-    } catch (error) {
-      console.error("❌ Error sending program:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send program to client",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const goToNextWeek = useCallback(() => {
     if (programState?.weeks && currentWeekIndex < programState.weeks.length - 1) {
@@ -211,7 +125,7 @@ export default function ReviewProgramClient({
     setCurrentWeekIndex(weekIndex)
   }, [])
 
-  // FIXED: Get current routines with fallback logic
+  // Get current routines with fallback logic
   const currentRoutines = useMemo(() => {
     if (!programState) return []
 
@@ -224,7 +138,7 @@ export default function ReviewProgramClient({
     // For non-periodized, check routines array first
     let routines = programState.routines || []
 
-    // CRITICAL FIX: If routines array is empty but we have weeks, use weeks[0].routines
+    // If routines array is empty but we have weeks, use weeks[0].routines
     if (routines.length === 0 && programState.weeks && programState.weeks.length > 0) {
       routines = programState.weeks[0]?.routines || []
       debugLog("Using fallback routines from weeks[0]:", routines.length)
@@ -248,7 +162,6 @@ export default function ReviewProgramClient({
       }
     }
 
-    // FIXED: Use currentRoutines which handles the fallback logic
     const routinesToCheck =
       currentRoutines.length > 0
         ? currentRoutines
@@ -332,7 +245,7 @@ export default function ReviewProgramClient({
 
         debugLog("Created program state:", programState)
         setProgramState(programState)
-        setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Deep copy for comparison
+        setOriginalProgramState(JSON.parse(JSON.stringify(programState)))
         setIsLoading(false)
       } catch (err) {
         errorLog("Error initializing program state:", err)
@@ -358,7 +271,7 @@ export default function ReviewProgramClient({
           if (response.ok) {
             const data = await response.json()
             debugLog("Fetched clients from API:", data.clients)
-            setClientsState(data.clients || [])
+            setClients(data.clients || [])
           } else {
             debugLog("Failed to fetch clients, status:", response.status)
           }
@@ -366,7 +279,7 @@ export default function ReviewProgramClient({
           errorLog("Error fetching clients:", error)
         }
       } else {
-        setClientsState(initialClients)
+        setClients(initialClients)
       }
     }
 
@@ -406,7 +319,7 @@ export default function ReviewProgramClient({
         description: "Your program changes have been saved successfully.",
       })
       setHasChanges(false)
-      setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Update original state
+      setOriginalProgramState(JSON.parse(JSON.stringify(programState)))
     } catch (error) {
       errorLog("Error saving changes:", error)
       toast({
@@ -423,10 +336,10 @@ export default function ReviewProgramClient({
     debugLog("Canceling changes, reverting to original state")
 
     if (originalProgramState) {
-      setProgramState(JSON.parse(JSON.stringify(originalProgramState))) // Deep copy to avoid reference issues
+      setProgramState(JSON.parse(JSON.stringify(originalProgramState)))
       setHasChanges(false)
-      setExpandedRoutines({ 0: true }) // Reset expanded state
-      setCurrentWeekIndex(0) // Reset week index
+      setExpandedRoutines({ 0: true })
+      setCurrentWeekIndex(0)
 
       toast({
         title: "Changes Canceled",
@@ -435,22 +348,78 @@ export default function ReviewProgramClient({
     }
   }, [originalProgramState, toast])
 
-  const createSafeClickHandler = useCallback((handler: () => void, handlerName: string) => {
-    return (event?: React.MouseEvent) => {
-      try {
-        if (event) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        debugLog(`Executing safe click handler: ${handlerName}`)
-        handler()
-      } catch (err) {
-        errorLog(`Error in ${handlerName}:`, err)
-      }
-    }
-  }, [])
+  const handleSendToClient = useCallback(async () => {
+    debugLog("Sending program to client:", selectedClientId)
 
-  const selectedClient = clients.find((client) => client.id === selectedClientId)
+    if (!selectedClientId || !programState) {
+      debugLog("Cannot send - missing client ID or program state")
+      toast({
+        title: "Missing Information",
+        description: "Please select a client and ensure program data is loaded.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Safely find the selected client
+    const selectedClient = clients && clients.length > 0 ? clients.find((c) => c.id === selectedClientId) : null
+    if (!selectedClient) {
+      debugLog("Selected client not found in clients list")
+      toast({
+        title: "Client Not Found",
+        description: "The selected client could not be found.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSending(true)
+
+    try {
+      const response = await fetch("/api/programs/send-to-client", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          programData: programState,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(errorData.error || "Failed to send program")
+      }
+
+      const result = await response.json()
+      debugLog("Program sent successfully:", result)
+
+      // Log the timestamp debugging information
+      if (result.timestampDebug) {
+        console.log("Timestamp debugging info:", result.timestampDebug)
+      }
+
+      toast({
+        title: "Program Sent Successfully!",
+        description: `The program "${programState.name || programState.program_title}" has been sent to ${selectedClient.name}.`,
+      })
+
+      setSelectedClientId("")
+      setCustomMessage("")
+      setShowSendDialog(false)
+    } catch (error) {
+      errorLog("Error sending program:", error)
+      toast({
+        title: "Failed to Send Program",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSending(false)
+    }
+  }, [selectedClientId, programState, clients, toast])
 
   const handleTogglePeriodization = useCallback(
     (checked: boolean) => {
@@ -466,7 +435,6 @@ export default function ReviewProgramClient({
         if (checked && !programState.is_periodized) {
           debugLog("Converting to periodized")
           setPeriodizationAction("to-periodized")
-          // Use current duration_weeks for the conversion
           setNumberOfWeeks(programState.duration_weeks || 4)
           setShowPeriodizationDialog(true)
         } else if (!checked && programState.is_periodized) {
@@ -481,7 +449,7 @@ export default function ReviewProgramClient({
         errorLog("Error in handleTogglePeriodization:", err)
       }
     },
-    [programState, setPeriodizationAction, setShowPeriodizationDialog],
+    [programState],
   )
 
   const confirmPeriodizationChange = useCallback(() => {
@@ -497,10 +465,8 @@ export default function ReviewProgramClient({
       if (periodizationAction === "to-periodized") {
         debugLog("Converting to periodized with weeks:", numberOfWeeks)
 
-        // FIXED: Get base routines with proper fallback logic
         let baseRoutines: Routine[] = programState.routines || []
 
-        // CRITICAL FIX: If routines array is empty, check weeks[0].routines
         if (baseRoutines.length === 0 && programState.weeks && programState.weeks.length > 0) {
           baseRoutines = programState.weeks[0]?.routines || []
           debugLog("Using fallback routines from weeks[0] for conversion:", baseRoutines.length)
@@ -544,7 +510,7 @@ export default function ReviewProgramClient({
             is_periodized: true,
             weeks,
             routines: undefined,
-            duration_weeks: numberOfWeeks, // Keep the selected duration
+            duration_weeks: numberOfWeeks,
           }
           debugLog("New program state after conversion to periodized:", newState)
           return newState
@@ -573,7 +539,6 @@ export default function ReviewProgramClient({
           return
         }
 
-        // Remove week suffixes from routine names
         const cleanedRoutines = routinesToKeep.map((routine) => ({
           ...routine,
           name: routine.name?.replace(/ - Week \d+$/, "") || routine.name,
@@ -591,8 +556,7 @@ export default function ReviewProgramClient({
             is_periodized: false,
             routines: cleanedRoutines,
             weeks: undefined,
-            // FIXED: Keep the original duration_weeks, don't change it to 1
-            duration_weeks: prev.duration_weeks, // Preserve original duration
+            duration_weeks: prev.duration_weeks,
           }
           debugLog("New program state after conversion to non-periodized:", newState)
           return newState
@@ -640,7 +604,7 @@ export default function ReviewProgramClient({
         debugLog("Updated program state:", newState)
         return newState
       })
-      setHasChanges(true) // This should trigger the Save Changes button to appear
+      setHasChanges(true)
     },
     [programState],
   )
@@ -665,23 +629,18 @@ export default function ReviewProgramClient({
         }
 
         const newState = { ...prev }
-
-        // Handle both periodized (weeks) and non-periodized structures
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
-          // For periodized programs, update the current week being viewed
           const currentWeek = newState.weeks[currentWeekIndex]
           if (currentWeek && currentWeek.routines) {
             targetRoutines = currentWeek.routines
             debugLog("Using periodized routines from current week:", currentWeekIndex)
           }
         } else if (newState.routines && newState.routines.length > 0) {
-          // For non-periodized programs, use the routines array
           targetRoutines = newState.routines
           debugLog("Using non-periodized routines")
         } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
-          // Fallback: use first week's routines if routines array is empty
           targetRoutines = newState.weeks[0].routines
           debugLog("Using fallback routines from first week")
         }
@@ -703,7 +662,7 @@ export default function ReviewProgramClient({
       })
       setHasChanges(true)
     },
-    [currentWeekIndex], // Add currentWeekIndex as dependency
+    [currentWeekIndex],
   )
 
   const addSet = useCallback(
@@ -714,7 +673,6 @@ export default function ReviewProgramClient({
         if (!prev) return prev
 
         const newState = { ...prev }
-
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
@@ -759,7 +717,6 @@ export default function ReviewProgramClient({
         if (!prev) return prev
 
         const newState = { ...prev }
-
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
@@ -793,7 +750,6 @@ export default function ReviewProgramClient({
         if (!prev) return prev
 
         const newState = { ...prev }
-
         let targetRoutines: Routine[] = []
 
         if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
@@ -837,7 +793,21 @@ export default function ReviewProgramClient({
     router.back()
   }
 
-  // Add this useEffect to debug hasChanges state
+  const createSafeClickHandler = useCallback((handler: () => void, handlerName: string) => {
+    return (event?: React.MouseEvent) => {
+      try {
+        if (event) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        debugLog(`Executing safe click handler: ${handlerName}`)
+        handler()
+      } catch (err) {
+        errorLog(`Error in ${handlerName}:`, err)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     debugLog("hasChanges state changed:", hasChanges)
   }, [hasChanges])
@@ -897,135 +867,708 @@ export default function ReviewProgramClient({
   })
 
   return (
-    <div className="space-y-6">
-      {/* Program Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Dumbbell className="h-5 w-5" />
-            {programData.name || programData.program_title || "Untitled Program"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              {programData.duration_weeks} weeks
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              {programData.routines.length} routines
-            </div>
+    <div className="container mx-auto p-6 max-w-6xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={createSafeClickHandler(handleBackClick, "handleBackClick")}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Review Program</h1>
+            <p className="text-gray-600">Review and edit your imported program before sending to clients</p>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Routines Preview */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Program Routines</h3>
-        <div className="grid gap-4">
-          {programData.routines.map((routine, index) => (
-            <Card key={index}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">{routine.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {routine.exercises.map((exercise, exerciseIndex) => (
-                    <div key={exerciseIndex} className="flex items-center justify-between">
-                      <span className="font-medium">{exercise.name}</span>
-                      <Badge variant="secondary">
-                        {exercise.sets.length} set{exercise.sets.length !== 1 ? "s" : ""}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={createSafeClickHandler(handleCancelChanges, "handleCancelChanges")}
+            variant="outline"
+            disabled={!hasChanges || isSaving}
+          >
+            Cancel Changes
+          </Button>
+          <Button
+            onClick={createSafeClickHandler(handleSaveChanges, "handleSaveChanges")}
+            disabled={!hasChanges || isSaving}
+            variant="outline"
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+          <Button
+            onClick={createSafeClickHandler(() => setShowSendDialog(true), "setShowSendDialog")}
+            disabled={!programState}
+          >
+            Send to Client
+          </Button>
         </div>
       </div>
 
-      <Separator />
+      {/* Program Details */}
+      <Card className="p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">Program Details</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="program-name">Program Name</Label>
+            <Input
+              id="program-name"
+              value={programState.name || ""}
+              onChange={(e) => updateProgramField("name", e.target.value)}
+              placeholder="Enter program name"
+            />
+          </div>
+          <div>
+            <Label htmlFor="duration">Duration (weeks)</Label>
+            <Input
+              id="duration"
+              type="number"
+              min="1"
+              max="52"
+              value={programState.duration_weeks || 1}
+              onChange={(e) => {
+                const newDuration = Number.parseInt(e.target.value) || 1
+                updateProgramField("duration_weeks", newDuration)
+              }}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={programState.description || ""}
+              onChange={(e) => updateProgramField("description", e.target.value)}
+              placeholder="Enter program description"
+              rows={3}
+            />
+          </div>
+        </div>
 
-      {/* Send to Client Section */}
-      <div className="flex justify-end">
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700">
-              <Send className="h-4 w-4 mr-2" />
-              Send to Client
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Send Program to Client</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Select Client</label>
-                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a client..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          <span>{client.name}</span>
-                          <span className="text-muted-foreground">({client.email})</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        {/* Periodization Toggle */}
+        <div className="mt-6 pt-4 border-t">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="periodization-toggle" className="text-base font-medium">
+                Periodization
+              </Label>
+              <p className="text-sm text-gray-600 mt-1">
+                {programState.is_periodized
+                  ? `Different routines for each week over ${programState.duration_weeks} weeks (periodized)`
+                  : `Same routines repeated each week for ${programState.duration_weeks} weeks (non-periodized)`}
+              </p>
+            </div>
+            <Switch
+              id="periodization-toggle"
+              checked={programState.is_periodized || false}
+              onCheckedChange={handleTogglePeriodization}
+            />
+          </div>
+        </div>
+      </Card>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">Custom Message (Optional)</label>
-                <Textarea
-                  placeholder="Add a personal message for your client..."
-                  value={customMessage}
-                  onChange={(e) => setCustomMessage(e.target.value)}
-                  rows={3}
-                />
-              </div>
+      {/* Program Structure */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Program Structure</h2>
+          <div className="flex gap-2">
+            <Badge variant="outline">{programState.is_periodized ? "Periodized" : "Non-Periodized"}</Badge>
+            {displayAllWeeks ? (
+              <Badge variant="secondary">{programState.weeks?.length} Weeks</Badge>
+            ) : (
+              <Badge variant="secondary">{currentRoutines.length} Routines</Badge>
+            )}
+          </div>
+        </div>
 
-              {selectedClient && (
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-sm">
-                    <strong>Sending to:</strong> {selectedClient.name} ({selectedClient.email})
+        {displayAllWeeks ? (
+          // Show weeks carousel for periodized programs
+          <div className="space-y-4">
+            {/* Week Navigation Header */}
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={createSafeClickHandler(goToPreviousWeek, "goToPreviousWeek")}
+                  disabled={currentWeekIndex === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+
+                <div className="text-center">
+                  <h3 className="font-semibold text-lg">
+                    Week {programState.weeks?.[currentWeekIndex]?.week_number || 1}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {currentWeekIndex + 1} of {programState.weeks?.length || 0}
                   </p>
                 </div>
-              )}
 
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={createSafeClickHandler(goToNextWeek, "goToNextWeek")}
+                  disabled={currentWeekIndex === (programState.weeks?.length || 1) - 1}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Week Dots Indicator */}
+              <div className="flex gap-2">
+                {programState.weeks?.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => goToWeek(index)}
+                    className={`w-3 h-3 rounded-full transition-colors ${
+                      index === currentWeekIndex ? "bg-blue-500" : "bg-gray-300 hover:bg-gray-400"
+                    }`}
+                    title={`Go to Week ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Current Week Content */}
+            {programState.weeks?.[currentWeekIndex] && (
+              <Card className="border-l-4 border-l-green-500">
+                <div className="p-4">
+                  <div className="space-y-4">
+                    {programState.weeks[currentWeekIndex].routines?.map((routine, routineIndex) => (
+                      <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                        <div className="p-4">
+                          <div
+                            className="flex items-center justify-between cursor-pointer"
+                            onClick={createSafeClickHandler(
+                              () => toggleRoutineExpansion(routineIndex),
+                              `toggleRoutineExpansion-${routineIndex}`,
+                            )}
+                          >
+                            <div>
+                              <h3 className="font-medium">
+                                {routine.name || routine.title || `Routine ${routineIndex + 1}`}
+                              </h3>
+                              <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                            </div>
+                            {expandedRoutines[routineIndex] ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </div>
+
+                          {expandedRoutines[routineIndex] && (
+                            <div className="mt-4 space-y-4">
+                              {routine.exercises?.map((exercise, exerciseIndex) => (
+                                <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                                  <h4 className="font-medium mb-3">{exercise.name}</h4>
+                                  {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
+
+                                  {/* Sets Table */}
+                                  {exercise.sets && exercise.sets.length > 0 && (
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="border-b">
+                                            <th className="text-left p-2">Set</th>
+                                            {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                            {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                            {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                            {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                            {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                            <th className="text-left p-2">Actions</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {exercise.sets.map((set, setIndex) => (
+                                            <tr key={setIndex} className="border-b">
+                                              <td className="p-2 font-medium">{setIndex + 1}</td>
+                                              {availableFields.hasReps && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.reps || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "reps",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-20"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasWeight && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.weight || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "weight",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-24"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasRpe && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.rpe || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "rpe",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-16"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasRest && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.rest || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "rest",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-20"
+                                                  />
+                                                </td>
+                                              )}
+                                              {availableFields.hasNotes && (
+                                                <td className="p-2">
+                                                  <Input
+                                                    value={set.notes || ""}
+                                                    onChange={(e) =>
+                                                      updateSetField(
+                                                        routineIndex,
+                                                        exerciseIndex,
+                                                        setIndex,
+                                                        "notes",
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="w-32"
+                                                  />
+                                                </td>
+                                              )}
+                                              <td className="p-2">
+                                                <div className="flex gap-1">
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={createSafeClickHandler(
+                                                      () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                                      `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                    )}
+                                                    title="Duplicate set"
+                                                  >
+                                                    <Copy className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={createSafeClickHandler(
+                                                      () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                                      `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                                    )}
+                                                    title="Remove set"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </Button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                      <div className="mt-2">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={createSafeClickHandler(
+                                            () => addSet(routineIndex, exerciseIndex),
+                                            `addSet-${routineIndex}-${exerciseIndex}`,
+                                          )}
+                                        >
+                                          <Plus className="h-3 w-3 mr-1" />
+                                          Add Set
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        ) : currentRoutines.length > 0 ? (
+          <div className="space-y-4">
+            {currentRoutines.map((routine, routineIndex) => (
+              <Card key={routineIndex} className="border-l-4 border-l-blue-500">
+                <div className="p-4">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={createSafeClickHandler(
+                      () => toggleRoutineExpansion(routineIndex),
+                      `toggleRoutineExpansion-${routineIndex}`,
+                    )}
+                  >
+                    <div>
+                      <h3 className="font-medium">{routine.name || routine.title || `Routine ${routineIndex + 1}`}</h3>
+                      <p className="text-sm text-gray-600">{routine.exercises?.length || 0} exercises</p>
+                    </div>
+                    {expandedRoutines[routineIndex] ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
+
+                  {expandedRoutines[routineIndex] && (
+                    <div className="mt-4 space-y-4">
+                      {routine.exercises?.map((exercise, exerciseIndex) => (
+                        <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
+                          <h4 className="font-medium mb-3">{exercise.name}</h4>
+                          {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
+
+                          {/* Sets Table */}
+                          {exercise.sets && exercise.sets.length > 0 && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left p-2">Set</th>
+                                    {availableFields.hasReps && <th className="text-left p-2">Reps</th>}
+                                    {availableFields.hasWeight && <th className="text-left p-2">Weight</th>}
+                                    {availableFields.hasRpe && <th className="text-left p-2">RPE</th>}
+                                    {availableFields.hasRest && <th className="text-left p-2">Rest</th>}
+                                    {availableFields.hasNotes && <th className="text-left p-2">Notes</th>}
+                                    <th className="text-left p-2">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {exercise.sets.map((set, setIndex) => (
+                                    <tr key={setIndex} className="border-b">
+                                      <td className="p-2 font-medium">{setIndex + 1}</td>
+                                      {availableFields.hasReps && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.reps || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "reps",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-20"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasWeight && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.weight || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "weight",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-24"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasRpe && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.rpe || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "rpe",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-16"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasRest && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.rest || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "rest",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-20"
+                                          />
+                                        </td>
+                                      )}
+                                      {availableFields.hasNotes && (
+                                        <td className="p-2">
+                                          <Input
+                                            value={set.notes || ""}
+                                            onChange={(e) =>
+                                              updateSetField(
+                                                routineIndex,
+                                                exerciseIndex,
+                                                setIndex,
+                                                "notes",
+                                                e.target.value,
+                                              )
+                                            }
+                                            className="w-32"
+                                          />
+                                        </td>
+                                      )}
+                                      <td className="p-2">
+                                        <div className="flex gap-1">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={createSafeClickHandler(
+                                              () => duplicateSet(routineIndex, exerciseIndex, setIndex),
+                                              `duplicateSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
+                                            title="Duplicate set"
+                                          >
+                                            <Copy className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={createSafeClickHandler(
+                                              () => removeSet(routineIndex, exerciseIndex, setIndex),
+                                              `removeSet-${routineIndex}-${exerciseIndex}-${setIndex}`,
+                                            )}
+                                            title="Remove set"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="mt-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={createSafeClickHandler(
+                                    () => addSet(routineIndex, exerciseIndex),
+                                    `addSet-${routineIndex}-${exerciseIndex}`,
+                                  )}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Set
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No routines found in this program.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Send to Client Dialog */}
+      {showSendDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Send Program to Client</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="client-select">Select Client</Label>
+                  <select
+                    id="client-select"
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="">Choose a client...</option>
+                    {clients &&
+                      clients.length > 0 &&
+                      clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.name} {client.email && `(${client.email})`}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="custom-message">Custom Message (Optional)</Label>
+                  <Textarea
+                    id="custom-message"
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value)}
+                    placeholder="Add a personal message for your client..."
+                    rows={3}
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={createSafeClickHandler(() => setShowSendDialog(false), "setShowSendDialog-false")}
+                    disabled={isSending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={createSafeClickHandler(handleSendToClient, "handleSendToClient")}
+                    disabled={!selectedClientId || isSending}
+                  >
+                    {isSending ? "Sending..." : "Send Program"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Confirmation Dialog for leaving without saving */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Unsaved Changes</h3>
+              <p className="text-gray-600 mb-4">
+                You have unsaved changes. Are you sure you want to leave without saving?
+              </p>
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={createSafeClickHandler(() => setShowConfirmDialog(false), "setShowConfirmDialog-false")}
+                >
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleSendToClient}
-                  disabled={isLoading || !selectedClientId}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Send Program
-                    </>
-                  )}
+                <Button variant="destructive" onClick={createSafeClickHandler(confirmLeave, "confirmLeave")}>
+                  Leave Without Saving
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Periodization Dialog */}
+      {showPeriodizationDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">
+                {periodizationAction === "to-periodized" ? "Convert to Periodized" : "Convert to Non-Periodized"}
+              </h3>
+
+              {periodizationAction === "to-periodized" ? (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    This will create {numberOfWeeks} different weeks using your current routines as a template.
+                  </p>
+                  <div>
+                    <Label htmlFor="weeks-count">Number of Weeks</Label>
+                    <Input
+                      id="weeks-count"
+                      type="number"
+                      min="2"
+                      max="52"
+                      value={numberOfWeeks}
+                      onChange={(e) => setNumberOfWeeks(Number.parseInt(e.target.value) || 4)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    This will convert to a single routine template that repeats for {programState?.duration_weeks}{" "}
+                    weeks. Choose which week's routines to keep:
+                  </p>
+                  <div>
+                    <Label htmlFor="week-select">Week to Keep</Label>
+                    <select
+                      id="week-select"
+                      value={selectedWeekToKeep}
+                      onChange={(e) => setSelectedWeekToKeep(Number.parseInt(e.target.value))}
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md"
+                    >
+                      {programState?.weeks?.map((week) => (
+                        <option key={week.week_number} value={week.week_number}>
+                          Week {week.week_number}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end mt-6">
+                <Button
+                  variant="outline"
+                  onClick={createSafeClickHandler(
+                    () => setShowPeriodizationDialog(false),
+                    "setShowPeriodizationDialog-false",
+                  )}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={createSafeClickHandler(confirmPeriodizationChange, "confirmPeriodizationChange")}>
+                  Convert
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
