@@ -185,8 +185,11 @@ export default function DebugEnvPage() {
       addResult({
         category: "Authentication State",
         status: "warning",
-        message: "No authentication cookies found",
-        details: { allCookies: Object.keys(cookies) },
+        message: "No authentication cookies found - this explains your 401 errors!",
+        details: {
+          allCookies: Object.keys(cookies),
+          explanation: "You cleared cookies recently - need to log in again",
+        },
       })
     } else {
       addResult({
@@ -206,7 +209,10 @@ export default function DebugEnvPage() {
       category: "Authentication State",
       status: localStorageKeys.length > 0 ? "success" : "warning",
       message: `Found ${localStorageKeys.length} auth-related localStorage items`,
-      details: { localStorageKeys },
+      details: {
+        localStorageKeys,
+        note: localStorageKeys.length === 0 ? "Cleared localStorage explains missing auth state" : "",
+      },
     })
   }
 
@@ -298,6 +304,13 @@ export default function DebugEnvPage() {
         </Alert>
       )}
 
+      <Alert className="mb-6 bg-yellow-50 border-yellow-200">
+        <AlertDescription>
+          <strong>🍪 Cookie Issue Detected:</strong> You mentioned clearing cookies recently. This explains the 401
+          errors! Your app relies on authentication cookies, and clearing them means you need to log in again.
+        </AlertDescription>
+      </Alert>
+
       <div className="space-y-4">
         {results.map((result, index) => (
           <Card key={index}>
@@ -324,13 +337,13 @@ export default function DebugEnvPage() {
           <AlertDescription>
             <strong>Next Steps:</strong>
             <br />
-            1. Check the browser console for detailed diagnostic information
+            1. ✅ Try logging in again (your cleared cookies explain the 401 errors)
             <br />
-            2. Fix any missing environment variables in your Vercel dashboard
+            2. Check the browser console for detailed diagnostic information
             <br />
-            3. Add your preview domain to Firebase Console → Authentication → Settings → Authorized domains
+            3. Fix any missing environment variables in your Vercel dashboard
             <br />
-            4. For production issues, ensure all environment variables are set in the production environment
+            4. Add your preview domain to Firebase Console → Authentication → Settings → Authorized domains
           </AlertDescription>
         </Alert>
       )}
