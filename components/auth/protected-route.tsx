@@ -16,7 +16,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({
   children,
   requiredRole = "trainer",
-  fallbackPath = "/mobile-app-success",
+  fallbackPath = "/mobile-app-success", // THIS IS THE PROBLEM
 }: ProtectedRouteProps) {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
