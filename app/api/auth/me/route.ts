@@ -46,10 +46,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // The token might have different structure, let's check what we have
-    const email = tokenData.email || tokenData.user?.email
-    const uid = tokenData.uid || tokenData.user?.uid || tokenData.id
-    const role = tokenData.role || tokenData.user?.role
+    // Extract data directly from tokenData (it's already the right structure)
+    const email = tokenData.email
+    const uid = tokenData.uid
+    const role = tokenData.role
 
     console.log(`[API:me] 📋 Extracted data:`, { email, uid, role })
 

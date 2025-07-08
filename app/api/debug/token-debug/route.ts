@@ -30,8 +30,13 @@ export async function GET(request: NextRequest) {
       success: true,
       tokenData,
       tokenKeys: Object.keys(tokenData || {}),
-      hasEmail: !!(tokenData?.email || tokenData?.user?.email),
-      hasUid: !!(tokenData?.uid || tokenData?.user?.uid || tokenData?.id),
+      hasEmail: !!tokenData?.email,
+      hasUid: !!tokenData?.uid,
+      extractedData: {
+        email: tokenData?.email,
+        uid: tokenData?.uid,
+        role: tokenData?.role,
+      },
     })
   } catch (error: any) {
     console.error(`[DEBUG:token] ❌ Error:`, error)
