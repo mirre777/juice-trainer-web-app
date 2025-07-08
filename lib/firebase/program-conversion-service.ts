@@ -1,3 +1,4 @@
+import { db } from "./firebase"
 import {
   collection,
   doc,
@@ -10,7 +11,6 @@ import {
   type WriteBatch,
   serverTimestamp,
 } from "firebase/firestore"
-import { db } from "./firebase"
 import { fetchClients } from "./client-service"
 import { v4 as uuidv4 } from "uuid"
 
@@ -133,7 +133,7 @@ export class ProgramConversionService {
         return userSnapshot.docs[0].id
       }
 
-      // Create new exercise in user's collection using proper timestamp
+      // Create new exercise in user's collection using serverTimestamp()
       const exerciseId = uuidv4()
       const now = serverTimestamp()
 
@@ -229,7 +229,7 @@ export class ProgramConversionService {
     programId: string,
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
-    const now = serverTimestamp()
+    const now = serverTimestamp() // ✅ Changed from Timestamp.now() to serverTimestamp()
 
     console.log(`[createRoutineBatch] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
 
@@ -304,8 +304,8 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: now,
-      updatedAt: now,
+      createdAt: now, // ✅ Now using serverTimestamp()
+      updatedAt: now, // ✅ Now using serverTimestamp()
       deletedAt: null,
       type: "program",
       programId: programId,
@@ -356,18 +356,17 @@ export class ProgramConversionService {
    */
   async convertAndSendProgram(programData: any, clientUserId: string): Promise<string> {
     try {
-      console.log(`[convertAndSendProgram] === STARTING PROGRAM CONVERSION WITH PROPER TIMESTAMPS ===`)
+      console.log(`[convertAndSendProgram] === STARTING PROGRAM CONVERSION WITH SERVER TIMESTAMPS ===`)
       console.log(`[convertAndSendProgram] Client User ID: ${clientUserId}`)
 
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
       // Generate programId first
       const programId = uuidv4()
-      const now = serverTimestamp()
+      const now = serverTimestamp() // ✅ Changed from Timestamp.now() to serverTimestamp()
 
-      console.log(`[convertAndSendProgram] Using Timestamp.now():`, now)
+      console.log(`[convertAndSendProgram] Using serverTimestamp():`, now)
       console.log(`[convertAndSendProgram] Timestamp type:`, typeof now)
-      console.log(`[convertAndSendProgram] Has seconds:`, !!now.seconds)
 
       // Batch all Firebase operations to reduce timeout risk
       const batch = writeBatch(db)
@@ -420,14 +419,14 @@ export class ProgramConversionService {
 
       console.log(`[convertAndSendProgram] Total routines created: ${routineMap.length}`)
 
-      // Create the program document with proper Firestore Timestamps using Timestamp.now()
+      // Create the program document with proper Firestore Timestamps using serverTimestamp()
       const program: MobileProgram = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: now,
-        startedAt: now,
-        updatedAt: now,
+        createdAt: now, // ✅ Now using serverTimestamp()
+        startedAt: now, // ✅ Now using serverTimestamp()
+        updatedAt: now, // ✅ Now using serverTimestamp()
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
@@ -444,7 +443,6 @@ export class ProgramConversionService {
         name: program.name,
         createdAt: program.createdAt,
         createdAtType: typeof program.createdAt,
-        hasSeconds: !!program.createdAt.seconds,
       })
 
       // Add program to batch
