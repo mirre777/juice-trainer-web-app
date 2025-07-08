@@ -1,79 +1,78 @@
-const { initializeApp } = require("firebase/app")
-const { getFirestore, collection, getDocs, query, where, limit } = require("firebase/firestore")
+const admin = require("firebase-admin")
 
-// Firebase config from environment variables
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+// Initialize Firebase Admin if not already initialized
+if (!admin.apps.length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  })
 }
 
 async function testFirestoreConnection() {
   try {
     console.log("🔄 Testing Firestore connection...")
 
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig)
-    const db = getFirestore(app)
+    const db = admin.firestore()
 
-    console.log("✅ Firebase initialized successfully")
+    // Test basic connection
+    const usersRef = db.collection("users")
+    const snapshot = await usersRef.limit(5).get()
 
-    // Test basic query
-    const usersRef = collection(db, "users")
-    const q = query(usersRef, limit(5))
-    const snapshot = await getDocs(q)
+    console.log("✅ Firestore connection successful")
+    console.log(`📊 Found ${snapshot.size} users`)
 
-    console.log(`📊 Found ${snapshot.size} users in collection`)
+    // List all users with their emails
+    console.log("\n👥 Users in database:")
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      console.log(`- ID: ${doc.id}`)
+      console.log(`  Email: ${data.email}`)
+      console.log(`  Name: ${data.name || "N/A"}`)
+      console.log(`  Role: ${data.role || "N/A"}`)
+      console.log("---")
+    })
 
-    // Look for specific user
-    const emailToFind = "mirresnelting+4@gmail.com"
-    const userQuery = query(usersRef, where("email", "==", emailToFind))
-    const userSnapshot = await getDocs(userQuery)
+    // Search for specific user
+    const targetEmail = "mirresnelting@gmail.com"
+    const targetEmailAlt = "mirresnelting+4@gmail.com"
 
-    console.log(`🔍 Searching for user: ${emailToFind}`)
-    console.log(`📋 Found ${userSnapshot.size} matching users`)
+    console.log(`\n🔍 Searching for user with email: ${targetEmail}`)
+    const userQuery = await usersRef.where("email", "==", targetEmail).get()
 
-    if (!userSnapshot.empty) {
-      userSnapshot.forEach((doc) => {
-        const data = doc.data()
-        console.log("👤 User found:", {
-          id: doc.id,
-          email: data.email,
-          role: data.role,
-          name: data.name,
-        })
+    if (!userQuery.empty) {
+      console.log("✅ User found!")
+      userQuery.forEach((doc) => {
+        console.log("User data:", doc.data())
       })
-    }
+    } else {
+      console.log("❌ User not found with primary email")
 
-    // Also try without +4
-    const altEmail = "mirresnelting@gmail.com"
-    const altQuery = query(usersRef, where("email", "==", altEmail))
-    const altSnapshot = await getDocs(altQuery)
+      console.log(`🔍 Searching for user with email: ${targetEmailAlt}`)
+      const altQuery = await usersRef.where("email", "==", targetEmailAlt).get()
 
-    console.log(`🔍 Searching for user: ${altEmail}`)
-    console.log(`📋 Found ${altSnapshot.size} matching users`)
-
-    if (!altSnapshot.empty) {
-      altSnapshot.forEach((doc) => {
-        const data = doc.data()
-        console.log("👤 User found:", {
-          id: doc.id,
-          email: data.email,
-          role: data.role,
-          name: data.name,
+      if (!altQuery.empty) {
+        console.log("✅ User found with alternative email!")
+        altQuery.forEach((doc) => {
+          console.log("User data:", doc.data())
         })
-      })
+      } else {
+        console.log("❌ User not found with alternative email either")
+      }
     }
   } catch (error) {
-    console.error("❌ Error testing Firestore:", error)
-    console.error("Error details:", {
-      code: error.code,
-      message: error.message,
-    })
+    console.error("❌ Firestore connection failed:", error)
   }
 }
 

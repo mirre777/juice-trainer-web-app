@@ -30,22 +30,40 @@ export async function GET(request: NextRequest) {
     try {
       tokenData = await verifyToken(token)
       console.log(`[API:me] ✅ Token verified:`, {
-        email: tokenData.email,
-        uid: tokenData.uid,
-        role: tokenData.role,
+        email: tokenData?.email,
+        uid: tokenData?.uid,
+        role: tokenData?.role,
       })
     } catch (tokenError: any) {
       console.log(`[API:me] ❌ Token verification failed:`, tokenError.message)
       return NextResponse.json({ error: "Invalid token", errorId }, { status: 401 })
     }
 
+    if (!tokenData || !tokenData.email) {
+      console.log(`[API:me] ❌ Token data is missing email`)
+      return NextResponse.json(
+        {
+          error: "Invalid token data",
+          errorId,
+          debug: { tokenData },
+        },
+        { status: 401 },
+      )
+    }
+
     // Try to find user in Firestore with multiple email variants
     let userProfile = null
+    const baseEmail = tokenData.email
     const emailsToTry = [
-      tokenData.email, // Original email from token
-      tokenData.email.replace("+4@", "@"), // Remove +4 if present
-      tokenData.email.replace("@", "+4@"), // Add +4 if not present
+      baseEmail, // Original email from token
     ]
+
+    // Add email variants only if the base email is valid
+    if (baseEmail.includes("+4@")) {
+      emailsToTry.push(baseEmail.replace("+4@", "@")) // Remove +4 if present
+    } else if (baseEmail.includes("@") && !baseEmail.includes("+")) {
+      emailsToTry.push(baseEmail.replace("@", "+4@")) // Add +4 if not present
+    }
 
     console.log(`[API:me] 🔍 Searching for user with emails:`, emailsToTry)
 
@@ -132,7 +150,14 @@ export async function GET(request: NextRequest) {
       }
     } catch (firestoreError: any) {
       console.error(`[API:me] ❌ Firestore error:`, firestoreError)
-      return NextResponse.json({ error: "Database error", errorId, details: firestoreError.message }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Database error",
+          errorId,
+          details: firestoreError.message,
+        },
+        { status: 500 },
+      )
     }
 
     // Return user data
@@ -154,6 +179,7 @@ export async function GET(request: NextRequest) {
         error: "Internal server error",
         errorId,
         details: error.message,
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     )
