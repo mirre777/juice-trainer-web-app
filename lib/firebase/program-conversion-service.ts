@@ -35,11 +35,11 @@ export interface MobileRoutine {
   id: string
   name: string
   notes: string
-  createdAt: string
-  updatedAt: string
+  createdAt: any // Firestore Timestamp
+  updatedAt: any // Firestore Timestamp
   deletedAt: null
   type: "program"
-  programId: string // Add this field
+  programId: string
   exercises: Array<{
     id: string
     name: string
@@ -60,8 +60,8 @@ export interface MobileExercise {
   isCardio: boolean
   isFullBody: boolean
   isMobility: boolean
-  createdAt: any
-  updatedAt: any
+  createdAt: any // Firestore Timestamp
+  updatedAt: any // Firestore Timestamp
   deletedAt: null
 }
 
@@ -135,7 +135,6 @@ export class ProgramConversionService {
 
       // Create new exercise in user's collection
       const exerciseId = uuidv4()
-      const timestamp = Timestamp.now()
 
       const exerciseDoc: MobileExercise = {
         id: exerciseId,
@@ -144,8 +143,8 @@ export class ProgramConversionService {
         isCardio: false,
         isFullBody: false,
         isMobility: false,
-        createdAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
-        updatedAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
+        createdAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
+        updatedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
         deletedAt: null,
       }
 
@@ -229,7 +228,6 @@ export class ProgramConversionService {
     programId: string,
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
-    const timestamp = Timestamp.now()
 
     console.log(`[createRoutineBatch] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
 
@@ -304,8 +302,8 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
-      updatedAt: Timestamp.fromDate(new Date()), // Use fromDate for proper Firestore Timestamp
+      createdAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
+      updatedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
       deletedAt: null,
       type: "program",
       programId: programId,
@@ -353,14 +351,12 @@ export class ProgramConversionService {
 
   /**
    * Main function to convert and send program to client
-   * FIXED: Better error handling and always create routines
    */
   async convertAndSendProgram(programData: any, clientUserId: string): Promise<string> {
     try {
       console.log(`[convertAndSendProgram] === STARTING OPTIMIZED PROGRAM CONVERSION ===`)
       console.log(`[convertAndSendProgram] Client User ID: ${clientUserId}`)
 
-      const timestamp = Timestamp.now()
       const routineMap: Array<{ routineId: string; week: number; order: number }> = []
 
       // Generate programId first
@@ -382,7 +378,6 @@ export class ProgramConversionService {
             for (let routineIndex = 0; routineIndex < week.routines.length; routineIndex++) {
               const routine = week.routines[routineIndex]
 
-              // Pass programId to createRoutineBatch
               routinePromises.push(
                 this.createRoutineBatch(clientUserId, routine, weekNumber, routineIndex, batch, programId),
               )
@@ -400,7 +395,6 @@ export class ProgramConversionService {
           for (let routineIndex = 0; routineIndex < programData.routines.length; routineIndex++) {
             const routine = programData.routines[routineIndex]
 
-            // Pass programId to createRoutineBatch
             routinePromises.push(this.createRoutineBatch(clientUserId, routine, week, routineIndex, batch, programId))
           }
         }
@@ -419,14 +413,14 @@ export class ProgramConversionService {
 
       console.log(`[convertAndSendProgram] Total routines created: ${routineMap.length}`)
 
-      // Create the program document (programId already generated above)
+      // Create the program document with proper Firestore Timestamps
       const program: MobileProgram = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: Timestamp.fromDate(new Date()), // Use fromDate to ensure proper Firestore Timestamp
-        startedAt: Timestamp.fromDate(new Date()), // Use fromDate to ensure proper Firestore Timestamp
-        updatedAt: Timestamp.fromDate(new Date()), // Use fromDate to ensure proper Firestore Timestamp
+        createdAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
+        startedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
+        updatedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
@@ -457,7 +451,6 @@ export class ProgramConversionService {
 
   /**
    * Get client's userId from trainer's client document
-   * FIXED: Enhanced logging and validation
    */
   async getClientUserId(trainerId: string, clientId: string): Promise<string | null> {
     try {
@@ -524,7 +517,6 @@ export class ProgramConversionService {
 
   /**
    * Send program to client - main method called by the API
-   * FIXED: Better error handling and validation
    */
   async sendProgramToClient(clientId: string, programData: any, customMessage?: string): Promise<any> {
     try {
