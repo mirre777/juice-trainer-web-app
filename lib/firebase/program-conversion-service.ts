@@ -7,9 +7,9 @@ import {
   getDocs,
   query,
   where,
-  Timestamp,
   writeBatch,
   type WriteBatch,
+  serverTimestamp,
 } from "firebase/firestore"
 import { fetchClients } from "./client-service"
 import { v4 as uuidv4 } from "uuid"
@@ -143,8 +143,8 @@ export class ProgramConversionService {
         isCardio: false,
         isFullBody: false,
         isMobility: false,
-        createdAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
-        updatedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         deletedAt: null,
       }
 
@@ -302,8 +302,8 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
-      updatedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       deletedAt: null,
       type: "program",
       programId: programId,
@@ -418,9 +418,9 @@ export class ProgramConversionService {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
-        startedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
-        updatedAt: Timestamp.fromDate(new Date()), // Proper Firestore Timestamp
+        createdAt: serverTimestamp(),
+        startedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
