@@ -229,7 +229,7 @@ export class ProgramConversionService {
     programId: string,
   ): Promise<{ routineId: string; week: number; order: number }> {
     const routineId = uuidv4()
-    const now = serverTimestamp() // ✅ Changed from Timestamp.now() to serverTimestamp()
+    const now = serverTimestamp()
 
     console.log(`[createRoutineBatch] Creating routine ${routineIndex + 1} for week ${weekNumber}`)
 
@@ -304,20 +304,18 @@ export class ProgramConversionService {
       id: routineId,
       name: routineName,
       notes: routineData.notes && typeof routineData.notes === "string" ? routineData.notes : "",
-      createdAt: now, // ✅ Now using serverTimestamp()
-      updatedAt: now, // ✅ Now using serverTimestamp()
+      createdAt: now,
+      updatedAt: now,
       deletedAt: null,
       type: "program",
       programId: programId,
       exercises,
     }
 
-    const cleanRoutineDoc = this.removeUndefinedValues(routineDoc)
-
-    // Add to batch instead of immediate write
+    // Add to batch WITHOUT calling removeUndefinedValues to preserve serverTimestamp()
     const routinesRef = collection(db, "users", userId, "routines")
     const routineDocRef = doc(routinesRef, routineId)
-    batch.set(routineDocRef, cleanRoutineDoc)
+    batch.set(routineDocRef, routineDoc)
 
     return {
       routineId,
@@ -328,10 +326,17 @@ export class ProgramConversionService {
 
   /**
    * Recursively remove undefined values from an object to prevent Firestore errors
+   * FIXED: Now preserves serverTimestamp() sentinel values
    */
   private removeUndefinedValues(obj: any): any {
     if (obj === null || obj === undefined) {
       return null
+    }
+
+    // CRITICAL FIX: Check if this is a serverTimestamp() sentinel value
+    if (obj && typeof obj === "object" && obj._methodName === "serverTimestamp") {
+      console.log("[removeUndefinedValues] Preserving serverTimestamp sentinel value")
+      return obj // Return the serverTimestamp() as-is without processing
     }
 
     if (Array.isArray(obj)) {
@@ -363,7 +368,7 @@ export class ProgramConversionService {
 
       // Generate programId first
       const programId = uuidv4()
-      const now = serverTimestamp() // ✅ Changed from Timestamp.now() to serverTimestamp()
+      const now = serverTimestamp()
 
       console.log(`[convertAndSendProgram] Using serverTimestamp():`, now)
       console.log(`[convertAndSendProgram] Timestamp type:`, typeof now)
@@ -424,9 +429,9 @@ export class ProgramConversionService {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
         notes: "",
-        createdAt: now, // ✅ Now using serverTimestamp()
-        startedAt: now, // ✅ Now using serverTimestamp()
-        updatedAt: now, // ✅ Now using serverTimestamp()
+        createdAt: now,
+        startedAt: now,
+        updatedAt: now,
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
@@ -445,10 +450,10 @@ export class ProgramConversionService {
         createdAtType: typeof program.createdAt,
       })
 
-      // Add program to batch
+      // Add program to batch WITHOUT removeUndefinedValues to preserve serverTimestamp()
       const programsRef = collection(db, "users", clientUserId, "programs")
       const programDocRef = doc(programsRef, programId)
-      batch.set(programDocRef, this.removeUndefinedValues(program))
+      batch.set(programDocRef, program)
 
       // Commit the entire batch at once
       console.log(`[convertAndSendProgram] Committing batch with program and all routines`)
