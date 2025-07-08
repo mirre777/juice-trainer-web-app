@@ -6,6 +6,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
   serverTimestamp,
   onSnapshot,
@@ -33,6 +34,63 @@ export async function getCurrentUser(): Promise<User | null> {
       resolve(user)
     })
   })
+}
+
+// Get user data by email from Firestore
+export async function getUserByEmail(email: string): Promise<any> {
+  try {
+    if (!email) {
+      console.error("[getUserByEmail] No email provided")
+      return null
+    }
+
+    console.log(`[getUserByEmail] 🔍 Searching for user with email: ${email}`)
+
+    // Query users collection by email field
+    const usersRef = collection(db, "users")
+    const q = query(usersRef, where("email", "==", email))
+
+    console.log(`[getUserByEmail] 📋 Executing Firestore query...`)
+    const querySnapshot = await getDocs(q)
+
+    console.log(`[getUserByEmail] 📊 Query returned ${querySnapshot.size} documents`)
+
+    if (querySnapshot.empty) {
+      console.log(`[getUserByEmail] ❌ No user found with email: ${email}`)
+      return null
+    }
+
+    // Get the first matching document
+    const userDoc = querySnapshot.docs[0]
+    const userData = userDoc.data()
+
+    console.log(`[getUserByEmail] ✅ Found user:`, {
+      id: userDoc.id,
+      email: userData.email,
+      hasFirebaseAuth: userData.hasFirebaseAuth || false,
+      role: userData.role || "user",
+    })
+
+    return {
+      id: userDoc.id,
+      ...userData,
+    }
+  } catch (error: any) {
+    console.error(`[getUserByEmail] ❌ Error fetching user data for ${email}:`, error)
+    console.error(`[getUserByEmail] Error code:`, error.code)
+    console.error(`[getUserByEmail] Error message:`, error.message)
+
+    // Log specific Firestore errors
+    if (error.code) {
+      console.error(`[getUserByEmail] Firestore error details:`, {
+        code: error.code,
+        message: error.message,
+        details: error.details || "No additional details",
+      })
+    }
+
+    throw error // Re-throw to be handled by the calling function
+  }
 }
 
 // Get user data by ID from Firestore
@@ -78,6 +136,65 @@ export async function getCurrentUserData(): Promise<any> {
   } catch (error) {
     console.error("[getCurrentUserData] Error getting current user data:", error)
     return null
+  }
+}
+
+// Update user document
+export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!userId) {
+      const error = createError(ErrorType.API_MISSING_PARAMS, null, { function: "updateUser" }, "User ID is required")
+      logError(error)
+      return { success: false, error }
+    }
+
+    console.log(`[updateUser] Updating user ${userId} with:`, updates)
+
+    const userRef = doc(db, "users", userId)
+    const [, updateError] = await tryCatch(
+      () =>
+        updateDoc(userRef, {
+          ...updates,
+          updatedAt: serverTimestamp(),
+        }),
+      ErrorType.DB_WRITE_FAILED,
+      { function: "updateUser", userId },
+    )
+
+    if (updateError) {
+      console.error(`[updateUser] Failed to update user ${userId}:`, updateError)
+      return { success: false, error: updateError }
+    }
+
+    console.log(`[updateUser] Successfully updated user ${userId}`)
+    return { success: true }
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "updateUser", userId },
+      "Unexpected error updating user",
+    )
+    logError(appError)
+    return { success: false, error: appError }
+  }
+}
+
+// Store invitation code for a user
+export async function storeInvitationCode(
+  userId: string,
+  invitationCode: string,
+): Promise<{ success: boolean; error?: any }> {
+  try {
+    console.log(`[storeInvitationCode] Storing invitation code ${invitationCode} for user ${userId}`)
+
+    return await updateUser(userId, {
+      inviteCode: invitationCode,
+      inviteCodeStoredAt: new Date(),
+    })
+  } catch (error) {
+    console.error(`[storeInvitationCode] Error storing invitation code:`, error)
+    return { success: false, error }
   }
 }
 

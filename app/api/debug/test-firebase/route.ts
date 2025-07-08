@@ -1,61 +1,144 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/firebase/firebase"
 
 export async function GET() {
-  try {
-    const debugInfo = {
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      vercel: process.env.VERCEL === "1",
-
-      // Firebase Client Configuration
-      clientConfig: {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "Present" : "Missing",
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "Missing",
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "Missing",
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "Missing",
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ? "Present" : "Missing",
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? "Present" : "Missing",
-      },
-
-      // Firebase Server Configuration
-      serverConfig: {
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL ? "Present" : "Missing",
-        privateKey: process.env.FIREBASE_PRIVATE_KEY ? "Present" : "Missing",
-        privateKeyId: process.env.FIREBASE_PRIVATE_KEY_ID ? "Present" : "Missing",
-        clientId: process.env.FIREBASE_CLIENT_ID ? "Present" : "Missing",
-      },
-
-      // Firebase Auth Instance Test
-      authInstance: {
-        available: !!auth,
-        projectId: auth?.app?.options?.projectId || "Not available",
-        currentUser: auth?.currentUser ? "User logged in" : "No user",
-      },
-    }
-
-    // Test Firebase Auth initialization
-    try {
-      if (auth && auth.app) {
-        debugInfo.authInstance.status = "✅ Initialized"
-        debugInfo.authInstance.appName = auth.app.name
-      } else {
-        debugInfo.authInstance.status = "❌ Not initialized"
-      }
-    } catch (authError: any) {
-      debugInfo.authInstance.status = "❌ Error"
-      debugInfo.authInstance.error = authError.message
-    }
-
-    return NextResponse.json(debugInfo)
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        error: "Debug endpoint failed",
-        message: error.message,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 },
-    )
+  const results: any = {
+    timestamp: new Date().toISOString(),
+    tests: [],
   }
+
+  // Test 1: Environment Variables
+  results.tests.push({
+    name: "Environment Variables",
+    status: "running",
+    details: {
+      NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "present" : "missing",
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "missing",
+      FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL ? "present" : "missing",
+      FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY ? "present" : "missing",
+    },
+  })
+
+  // Test 2: Firebase Client Initialization
+  try {
+    const { auth } = await import("@/lib/firebase/firebase")
+    results.tests.push({
+      name: "Firebase Client Initialization",
+      status: "success",
+      details: {
+        hasAuth: !!auth,
+        projectId: auth?.app?.options?.projectId || "unknown",
+        authDomain: auth?.app?.options?.authDomain || "unknown",
+      },
+    })
+  } catch (error: any) {
+    results.tests.push({
+      name: "Firebase Client Initialization",
+      status: "error",
+      error: error.message,
+      stack: error.stack,
+    })
+  }
+
+  // Test 3: getUserByEmail Function
+  try {
+    const { getUserByEmail } = await import("@/lib/firebase/user-service")
+
+    if (typeof getUserByEmail === "function") {
+      results.tests.push({
+        name: "getUserByEmail Function Import",
+        status: "success",
+        details: {
+          type: typeof getUserByEmail,
+          available: true,
+        },
+      })
+
+      // Test with a non-existent email to avoid exposing real user data
+      try {
+        const testResult = await getUserByEmail("nonexistent@test.com")
+        results.tests.push({
+          name: "getUserByEmail Function Execution",
+          status: "success",
+          details: {
+            result: testResult === null ? "null (expected for non-existent user)" : "unexpected result",
+            executedSuccessfully: true,
+          },
+        })
+      } catch (execError: any) {
+        results.tests.push({
+          name: "getUserByEmail Function Execution",
+          status: "error",
+          error: execError.message,
+          code: execError.code,
+        })
+      }
+    } else {
+      results.tests.push({
+        name: "getUserByEmail Function Import",
+        status: "error",
+        error: "getUserByEmail is not a function",
+        type: typeof getUserByEmail,
+      })
+    }
+  } catch (error: any) {
+    results.tests.push({
+      name: "getUserByEmail Function Import",
+      status: "error",
+      error: error.message,
+      stack: error.stack,
+    })
+  }
+
+  // Test 4: Firestore Admin Connection
+  try {
+    // Try to import and test admin Firestore
+    const admin = await import("firebase-admin")
+
+    let adminApp
+    if (admin.getApps().length === 0) {
+      adminApp = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+        }),
+      })
+    } else {
+      adminApp = admin.getApps()[0]
+    }
+
+    const adminDb = admin.getFirestore(adminApp)
+
+    // Test a simple read operation
+    const testDoc = await adminDb.collection("users").limit(1).get()
+
+    results.tests.push({
+      name: "Firestore Admin Connection",
+      status: "success",
+      details: {
+        hasAdminApp: !!adminApp,
+        hasAdminDb: !!adminDb,
+        canQuery: true,
+        docsFound: testDoc.size,
+      },
+    })
+  } catch (error: any) {
+    results.tests.push({
+      name: "Firestore Admin Connection",
+      status: "error",
+      error: error.message,
+      code: error.code,
+    })
+  }
+
+  // Determine overall status
+  const hasErrors = results.tests.some((test: any) => test.status === "error")
+  results.overallStatus = hasErrors ? "error" : "success"
+
+  return NextResponse.json(results, {
+    status: hasErrors ? 500 : 200,
+    headers: {
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+    },
+  })
 }
