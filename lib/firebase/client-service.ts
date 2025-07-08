@@ -13,6 +13,7 @@ import {
   arrayUnion,
   orderBy,
   Timestamp,
+  setDoc,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
@@ -271,7 +272,7 @@ export async function fetchClients(trainerUid: string): Promise<Client[]> {
         name: client.name,
         status: client.status,
         userId: client.userId || "NO_USER_ID",
-        email: client.email || "NO_EMAIL",
+        email: client.email || "",
         hasLinkedAccount: client.hasLinkedAccount,
         userStatus: client.userStatus,
         willShowInDialog: !!(client.userId && client.hasLinkedAccount && client.status === "Active"),
@@ -597,7 +598,7 @@ export async function deleteClient(clientId: string): Promise<{ success: boolean
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "deleteClient", clientId },
+      { function: "deleteClient" },
       "Unexpected error deleting client",
     )
     logError(appError)
@@ -1233,3 +1234,86 @@ export async function processLoginInvitation(
     }
   }
 }
+
+// Client service methods
+export const clientService = {
+  async createClient(trainerId: string, clientData: Omit<Client, "id" | "createdAt" | "updatedAt">): Promise<string> {
+    try {
+      const clientId = doc(collection(db, "users", trainerId, "clients")).id
+
+      const client: Client = {
+        ...clientData,
+        id: clientId,
+        createdAt: serverTimestamp() as Timestamp,
+        updatedAt: serverTimestamp() as Timestamp,
+      }
+
+      await setDoc(doc(db, "users", trainerId, "clients", clientId), client)
+      return clientId
+    } catch (error) {
+      console.error("Error creating client:", error)
+      throw error
+    }
+  },
+
+  async updateClient(trainerId: string, clientId: string, updates: Partial<Client>): Promise<void> {
+    try {
+      const updateData = {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      }
+
+      await updateDoc(doc(db, "users", trainerId, "clients", clientId), updateData)
+    } catch (error) {
+      console.error("Error updating client:", error)
+      throw error
+    }
+  },
+
+  async getClient(trainerId: string, clientId: string): Promise<Client | null> {
+    try {
+      const clientDoc = await getDoc(doc(db, "users", trainerId, "clients", clientId))
+
+      if (!clientDoc.exists()) {
+        return null
+      }
+
+      return {
+        id: clientDoc.id,
+        ...clientDoc.data(),
+      } as Client
+    } catch (error) {
+      console.error("Error getting client:", error)
+      throw error
+    }
+  },
+
+  async getClients(trainerId: string): Promise<Client[]> {
+    try {
+      const clientsQuery = query(collection(db, "users", trainerId, "clients"), orderBy("createdAt", "desc"))
+
+      const snapshot = await getDocs(clientsQuery)
+
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Client[]
+    } catch (error) {
+      console.error("Error getting clients:", error)
+      throw error
+    }
+  },
+
+  async deleteClient(trainerId: string, clientId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, "users", trainerId, "clients", clientId))
+    } catch (error) {
+      console.error("Error deleting client:", error)
+      throw error
+    }
+  },
+}
+
+// Remove the redeclaration of fetchClients
+// The existing fetchClients function is already defined above
+</merged_code>
