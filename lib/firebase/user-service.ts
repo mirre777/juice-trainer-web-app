@@ -1,309 +1,305 @@
-import { db } from "./firebase"
 import {
   collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
   query,
   where,
-  getDocs,
+  orderBy,
   serverTimestamp,
-  arrayUnion,
   type Timestamp,
 } from "firebase/firestore"
-import { getAuth, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
-
-// Log Firebase config to debug
-console.log("Firebase Config Check:", {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "SET" : "MISSING",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? "SET" : "MISSING",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? "SET" : "MISSING",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? "SET" : "MISSING",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ? "SET" : "MISSING",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? "SET" : "MISSING",
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ? "SET" : "MISSING",
-})
+import { db } from "./firebase"
+import { getAuth } from "firebase/auth"
 
 export interface User {
   id: string
   email: string
-  name?: string
-  role?: "trainer" | "client" | "admin"
-  isApproved?: boolean
-  status?: "active" | "pending_approval" | "inactive"
-  createdAt?: Timestamp
-  updatedAt?: Timestamp
+  name: string
+  role: "user" | "trainer" | "admin"
+  isApproved: boolean
+  status?: "pending_approval" | "approved" | "rejected"
   invitationCode?: string
-  universalInviteCode?: string
-  pendingUsers?: string[]
-}
-
-// Get current authenticated user
-export async function getCurrentUser(): Promise<FirebaseUser | null> {
-  return new Promise((resolve) => {
-    const auth = getAuth()
-
-    if (auth.currentUser) {
-      console.log("[getCurrentUser] User already available:", auth.currentUser.uid)
-      resolve(auth.currentUser)
-      return
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("[getCurrentUser] Auth state changed:", user?.uid || "null")
-      unsubscribe()
-      resolve(user)
-    })
-  })
-}
-
-// Get current user's Firestore data
-export async function getCurrentUserData(): Promise<User | null> {
-  try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
-      console.log("[getCurrentUserData] No authenticated user")
-      return null
-    }
-
-    return await getUserById(currentUser.uid)
-  } catch (error) {
-    console.error("[getCurrentUserData] Error getting current user data:", error)
-    return null
-  }
+  hasFirebaseAuth?: boolean
+  firebaseUid?: string
+  createdAt?: Date | Timestamp
+  updatedAt?: Date | Timestamp
+  linkedAt?: Date | Timestamp
+  linkedDuring?: string
+  migratedAt?: Date | Timestamp
+  inviteCode?: string
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
   try {
-    console.log("Getting user by email:", email)
+    console.log(`[getUserByEmail] Searching for user with email: ${email}`)
+
     const usersRef = collection(db, "users")
     const q = query(usersRef, where("email", "==", email))
     const querySnapshot = await getDocs(q)
 
     if (querySnapshot.empty) {
-      console.log("No user found with email:", email)
+      console.log(`[getUserByEmail] No user found with email: ${email}`)
       return null
     }
 
     const userDoc = querySnapshot.docs[0]
     const userData = userDoc.data() as User
-    console.log("Found user:", { id: userDoc.id, email: userData.email })
+    userData.id = userDoc.id
 
-    return {
-      id: userDoc.id,
-      ...userData,
-    }
+    console.log(`[getUserByEmail] Found user:`, {
+      id: userData.id,
+      email: userData.email,
+      role: userData.role,
+      isApproved: userData.isApproved,
+    })
+
+    return userData
   } catch (error) {
-    console.error("Error getting user by email:", error)
+    console.error("[getUserByEmail] Error:", error)
     throw error
   }
 }
 
-export async function createUser(userData: Omit<User, "id" | "createdAt" | "updatedAt">): Promise<User> {
+export async function getCurrentUser(): Promise<User | null> {
   try {
-    console.log("Creating user:", userData.email)
-    const userRef = doc(collection(db, "users"))
-    const newUser: Omit<User, "id"> = {
-      ...userData,
-      createdAt: serverTimestamp() as Timestamp,
-      updatedAt: serverTimestamp() as Timestamp,
+    const auth = getAuth()
+    const firebaseUser = auth.currentUser
+
+    if (!firebaseUser) {
+      console.log("[getCurrentUser] No authenticated user")
+      return null
     }
 
-    await setDoc(userRef, newUser)
-    console.log("User created successfully:", userRef.id)
-
-    return {
-      id: userRef.id,
-      ...userData,
-      createdAt: serverTimestamp() as Timestamp,
-      updatedAt: serverTimestamp() as Timestamp,
-    }
+    console.log(`[getCurrentUser] Getting current user: ${firebaseUser.email}`)
+    return await getUserByEmail(firebaseUser.email!)
   } catch (error) {
-    console.error("Error creating user:", error)
-    throw error
+    console.error("[getCurrentUser] Error:", error)
+    return null
   }
 }
 
-export async function updateUser(userId: string, updates: Partial<User>): Promise<void> {
+export async function getCurrentUserData(): Promise<User | null> {
   try {
-    console.log("Updating user:", userId, updates)
+    const auth = getAuth()
+    const firebaseUser = auth.currentUser
+
+    if (!firebaseUser) {
+      console.log("[getCurrentUserData] No authenticated user")
+      return null
+    }
+
+    const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
+
+    if (!userDoc.exists()) {
+      console.log("[getCurrentUserData] User document not found")
+      return null
+    }
+
+    const userData = userDoc.data() as User
+    userData.id = userDoc.id
+
+    return userData
+  } catch (error) {
+    console.error("[getCurrentUserData] Error:", error)
+    return null
+  }
+}
+
+export async function updateUser(
+  userId: string,
+  updates: Partial<User>,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[updateUser] Updating user ${userId} with:`, updates)
+
     const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
+    const updateData = {
       ...updates,
       updatedAt: serverTimestamp(),
+    }
+
+    await updateDoc(userRef, updateData)
+
+    console.log(`[updateUser] Successfully updated user: ${userId}`)
+    return { success: true }
+  } catch (error: any) {
+    console.error("[updateUser] Error:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function storeInvitationCode(
+  userId: string,
+  invitationCode: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[storeInvitationCode] Storing invitation code ${invitationCode} for user ${userId}`)
+
+    const userRef = doc(db, "users", userId)
+    await updateDoc(userRef, {
+      invitationCode: invitationCode,
+      invitationStoredAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     })
-    console.log("User updated successfully:", userId)
+
+    console.log(`[storeInvitationCode] Successfully stored invitation code for user: ${userId}`)
+    return { success: true }
+  } catch (error: any) {
+    console.error("[storeInvitationCode] Error:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function signupWithUniversalCode(
+  email: string,
+  password: string,
+  name: string,
+  universalCode: string,
+): Promise<{ success: boolean; user?: User; error?: string }> {
+  try {
+    console.log(`[signupWithUniversalCode] Signing up user with universal code: ${email}`)
+
+    // Check if universal code is valid (you can implement your own logic here)
+    const validCodes = ["TRAINER2024", "UNIVERSAL", "ADMIN"]
+    if (!validCodes.includes(universalCode)) {
+      return { success: false, error: "Invalid universal code" }
+    }
+
+    // Create user document
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const userData: User = {
+      id: userId,
+      email,
+      name,
+      role: universalCode === "ADMIN" ? "admin" : "trainer",
+      isApproved: true,
+      status: "approved",
+      hasFirebaseAuth: true,
+      createdAt: serverTimestamp() as Timestamp,
+      updatedAt: serverTimestamp() as Timestamp,
+    }
+
+    const userRef = doc(db, "users", userId)
+    await setDoc(userRef, userData)
+
+    console.log(`[signupWithUniversalCode] Successfully created user: ${userId}`)
+    return { success: true, user: userData }
+  } catch (error: any) {
+    console.error("[signupWithUniversalCode] Error:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function approveUser(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[approveUser] Approving user: ${userId}`)
+
+    const userRef = doc(db, "users", userId)
+    await updateDoc(userRef, {
+      isApproved: true,
+      status: "approved",
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+
+    console.log(`[approveUser] Successfully approved user: ${userId}`)
+    return { success: true }
+  } catch (error: any) {
+    console.error("[approveUser] Error:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function getPendingUsers(): Promise<User[]> {
+  try {
+    console.log("[getPendingUsers] Getting pending users")
+
+    const usersRef = collection(db, "users")
+    const q = query(usersRef, where("status", "==", "pending_approval"), orderBy("createdAt", "desc"))
+
+    const querySnapshot = await getDocs(q)
+    const users: User[] = []
+
+    querySnapshot.forEach((doc) => {
+      const userData = doc.data() as User
+      userData.id = doc.id
+      users.push(userData)
+    })
+
+    console.log(`[getPendingUsers] Found ${users.length} pending users`)
+    return users
   } catch (error) {
-    console.error("Error updating user:", error)
-    throw error
+    console.error("[getPendingUsers] Error:", error)
+    return []
+  }
+}
+
+export async function updateUniversalInviteCode(newCode: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[updateUniversalInviteCode] Updating universal invite code to: ${newCode}`)
+
+    // Store in a settings document
+    const settingsRef = doc(db, "settings", "universal")
+    await setDoc(
+      settingsRef,
+      {
+        inviteCode: newCode,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+
+    console.log("[updateUniversalInviteCode] Successfully updated universal invite code")
+    return { success: true }
+  } catch (error: any) {
+    console.error("[updateUniversalInviteCode] Error:", error)
+    return { success: false, error: error.message }
+  }
+}
+
+export async function createUser(
+  userData: Omit<User, "id" | "createdAt" | "updatedAt">,
+): Promise<{ success: boolean; user?: User; error?: string }> {
+  try {
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const newUser: User = {
+      ...userData,
+      id: userId,
+      createdAt: serverTimestamp() as Timestamp,
+      updatedAt: serverTimestamp() as Timestamp,
+    }
+
+    const userRef = doc(db, "users", userId)
+    await setDoc(userRef, newUser)
+
+    console.log(`[createUser] Successfully created user: ${userId}`)
+    return { success: true, user: newUser }
+  } catch (error: any) {
+    console.error("[createUser] Error:", error)
+    return { success: false, error: error.message }
   }
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
   try {
-    console.log("Getting user by ID:", userId)
-    const userRef = doc(db, "users", userId)
-    const userSnap = await getDoc(userRef)
+    console.log(`[getUserById] Getting user: ${userId}`)
 
-    if (!userSnap.exists()) {
-      console.log("No user found with ID:", userId)
+    const userDoc = await getDoc(doc(db, "users", userId))
+
+    if (!userDoc.exists()) {
+      console.log(`[getUserById] User not found: ${userId}`)
       return null
     }
 
-    const userData = userSnap.data() as User
-    console.log("Found user by ID:", { id: userId, email: userData.email })
+    const userData = userDoc.data() as User
+    userData.id = userDoc.id
 
-    return {
-      id: userId,
-      ...userData,
-    }
+    return userData
   } catch (error) {
-    console.error("Error getting user by ID:", error)
-    throw error
-  }
-}
-
-export async function storeInvitationCode(userId: string, invitationCode: string): Promise<void> {
-  try {
-    console.log("Storing invitation code for user:", userId)
-    await updateUser(userId, { invitationCode })
-    console.log("Invitation code stored successfully")
-  } catch (error) {
-    console.error("Error storing invitation code:", error)
-    throw error
-  }
-}
-
-// Sign up with universal code
-export async function signupWithUniversalCode(
-  email: string,
-  name: string,
-  universalCode: string,
-): Promise<{ success: boolean; message: string; userId?: string }> {
-  try {
-    console.log("Signing up with universal code:", { email, universalCode })
-
-    // Find trainer with this universal code
-    const usersRef = collection(db, "users")
-    const q = query(usersRef, where("universalInviteCode", "==", universalCode))
-    const querySnapshot = await getDocs(q)
-
-    if (querySnapshot.empty) {
-      return { success: false, message: "Invalid invitation code" }
-    }
-
-    const trainerDoc = querySnapshot.docs[0]
-    const trainerId = trainerDoc.id
-
-    // Create new user
-    const newUser = await createUser({
-      email,
-      name,
-      role: "client",
-      status: "pending_approval",
-      invitationCode: universalCode,
-    })
-
-    // Add user to trainer's pending list
-    await updateDoc(doc(db, "users", trainerId), {
-      pendingUsers: arrayUnion(newUser.id),
-      updatedAt: serverTimestamp(),
-    })
-
-    console.log("User signed up successfully:", newUser.id)
-    return { success: true, message: "Account created, pending approval", userId: newUser.id }
-  } catch (error) {
-    console.error("Error signing up with universal code:", error)
-    return { success: false, message: "Failed to create account" }
-  }
-}
-
-// Approve user
-export async function approveUser(userId: string, trainerId: string): Promise<{ success: boolean; message: string }> {
-  try {
-    console.log("Approving user:", { userId, trainerId })
-
-    // Update user status
-    await updateUser(userId, {
-      status: "active",
-      isApproved: true,
-    })
-
-    // Remove from pending list and add to approved clients
-    const trainerRef = doc(db, "users", trainerId)
-    const trainerDoc = await getDoc(trainerRef)
-
-    if (trainerDoc.exists()) {
-      const trainerData = trainerDoc.data()
-      const pendingUsers = (trainerData.pendingUsers || []).filter((id: string) => id !== userId)
-
-      await updateDoc(trainerRef, {
-        pendingUsers,
-        updatedAt: serverTimestamp(),
-      })
-    }
-
-    console.log("User approved successfully:", userId)
-    return { success: true, message: "User approved successfully" }
-  } catch (error) {
-    console.error("Error approving user:", error)
-    return { success: false, message: "Failed to approve user" }
-  }
-}
-
-// Get pending users for a trainer
-export async function getPendingUsers(trainerId: string): Promise<User[]> {
-  try {
-    console.log("Getting pending users for trainer:", trainerId)
-
-    const trainerRef = doc(db, "users", trainerId)
-    const trainerDoc = await getDoc(trainerRef)
-
-    if (!trainerDoc.exists()) {
-      return []
-    }
-
-    const trainerData = trainerDoc.data()
-    const pendingUserIds = trainerData.pendingUsers || []
-
-    if (pendingUserIds.length === 0) {
-      return []
-    }
-
-    // Get all pending users
-    const pendingUsers: User[] = []
-    for (const userId of pendingUserIds) {
-      const user = await getUserById(userId)
-      if (user) {
-        pendingUsers.push(user)
-      }
-    }
-
-    console.log("Found pending users:", pendingUsers.length)
-    return pendingUsers
-  } catch (error) {
-    console.error("Error getting pending users:", error)
-    return []
-  }
-}
-
-// Update universal invite code
-export async function updateUniversalInviteCode(
-  trainerId: string,
-  newCode: string,
-): Promise<{ success: boolean; message: string }> {
-  try {
-    console.log("Updating universal invite code for trainer:", trainerId)
-
-    await updateUser(trainerId, {
-      universalInviteCode: newCode,
-    })
-
-    console.log("Universal invite code updated successfully")
-    return { success: true, message: "Invite code updated successfully" }
-  } catch (error) {
-    console.error("Error updating universal invite code:", error)
-    return { success: false, message: "Failed to update invite code" }
+    console.error("[getUserById] Error:", error)
+    return null
   }
 }

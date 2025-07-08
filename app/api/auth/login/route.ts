@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { signInWithEmailAndPassword, getAuth } from "firebase/auth"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase/firebase"
 import { getUserByEmail, updateUser, storeInvitationCode } from "@/lib/firebase/user-service"
 import { processLoginInvitation } from "@/lib/firebase/client-service"
 
@@ -23,7 +24,6 @@ export async function POST(request: NextRequest) {
 
     // Authenticate with Firebase Auth
     console.log("[LOGIN] Authenticating with Firebase Auth...")
-    const auth = getAuth()
     const userCredential = await signInWithEmailAndPassword(auth, email, password)
     const firebaseUser = userCredential.user
 
@@ -46,9 +46,9 @@ export async function POST(request: NextRequest) {
       console.log("[LOGIN] No user data found in Firestore, using Firebase Auth data")
       userData = {
         id: firebaseUser.uid,
-        email: firebaseUser.email,
+        email: firebaseUser.email || email,
         name: firebaseUser.displayName || "",
-        role: "user",
+        role: "user" as const,
         isApproved: true,
       }
     }
@@ -90,13 +90,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Get Firebase ID token for authentication
+    const token = await firebaseUser.getIdToken()
+
     console.log("[LOGIN] Login successful for user:", userData.id)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       user: userData,
       message: invitationCode ? "Login successful. Your account is pending approval." : "Login successful",
     })
+
+    // Set authentication cookies
+    response.cookies.set("auth_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: "/",
+    })
+
+    response.cookies.set("user_id", userData.id, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: "/",
+    })
+
+    return response
   } catch (error: any) {
     console.error("[LOGIN] Login error:", error)
 
@@ -117,7 +139,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Too many failed login attempts. Please try again later." }, { status: 429 })
     }
 
+    if (error.code === "auth/user-disabled") {
+      return NextResponse.json({ error: "This account has been disabled. Please contact support." }, { status: 403 })
+    }
+
+    if (error.code === "auth/invalid-credential") {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+    }
+
     // Generic error response
-    return NextResponse.json({ error: "Login failed. Please check your credentials and try again." }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Login failed. Please check your credentials and try again.",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
+      { status: 500 },
+    )
   }
 }
