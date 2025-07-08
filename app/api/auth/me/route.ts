@@ -10,39 +10,52 @@ export async function GET() {
 
     const cookieStore = await cookies()
 
-    // Check for different possible cookie names
-    const authToken = cookieStore.get("auth-token")?.value || cookieStore.get("auth_token")?.value
+    // Check for ALL possible cookie names your app might use
+    const authToken =
+      cookieStore.get("auth-token")?.value ||
+      cookieStore.get("auth_token")?.value ||
+      cookieStore.get("session_token")?.value
     const userId = cookieStore.get("user_id")?.value
 
-    console.log("🍪 Cookies found:", {
-      authToken: authToken ? "Present" : "Missing",
-      userId: userId ? "Present" : "Missing",
+    console.log("🍪 Cookie check results:", {
+      "auth-token": cookieStore.get("auth-token")?.value ? "Present" : "Missing",
+      auth_token: cookieStore.get("auth_token")?.value ? "Present" : "Missing",
+      session_token: cookieStore.get("session_token")?.value ? "Present" : "Missing",
+      user_id: cookieStore.get("user_id")?.value ? "Present" : "Missing",
     })
 
     // If we have an auth token, try to decode it
     if (authToken) {
       try {
+        console.log("🔓 Attempting to verify auth token...")
         const { verifyToken } = await import("@/lib/auth/token-service")
         const decoded = await verifyToken(authToken)
-        console.log("🔓 Token decoded successfully:", { uid: decoded.uid, email: decoded.email })
+        console.log("✅ Token decoded successfully:", { uid: decoded.uid, email: decoded.email })
 
         return NextResponse.json({
           uid: decoded.uid,
           email: decoded.email,
           role: decoded.role || "user",
+          name: decoded.name || "",
         })
       } catch (tokenError) {
         console.error("❌ Token verification failed:", tokenError)
-        return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+        // Don't return error immediately, try user_id cookie as fallback
       }
     }
 
-    // If we have a user_id cookie, use that
+    // Fallback: If we have a user_id cookie, use that with Firestore
     if (userId) {
       try {
+        console.log("🔍 Using user_id cookie, fetching from Firestore...")
         const { db } = await import("@/lib/firebase/firebase")
-        const { collection, doc, getDoc } = await import("firebase/firestore")
 
+        if (!db) {
+          console.error("❌ Firestore not available")
+          return NextResponse.json({ error: "Database not available" }, { status: 500 })
+        }
+
+        const { collection, doc, getDoc } = await import("firebase/firestore")
         const userDocRef = doc(collection(db, "users"), userId)
         const userDoc = await getDoc(userDocRef)
 
@@ -54,7 +67,7 @@ export async function GET() {
         const userData = userDoc.data()
         console.log("✅ User data retrieved from Firestore")
 
-        return NextResponse.json({
+        const response = {
           uid: userId,
           email: userData?.email || "",
           name: userData?.name || "",
@@ -62,18 +75,39 @@ export async function GET() {
           user_type: userData?.user_type || "",
           universalInviteCode: userData?.universalInviteCode || "",
           inviteCode: userData?.inviteCode || "",
-        })
+        }
+
+        console.log("📤 Sending successful response:", response)
+        return NextResponse.json(response)
       } catch (firestoreError: any) {
         console.error("💥 Firestore error:", firestoreError)
-        return NextResponse.json({ error: "Database error", details: firestoreError?.message }, { status: 500 })
+        return NextResponse.json(
+          {
+            error: "Database error",
+            details: firestoreError?.message || "Database connection failed",
+          },
+          { status: 500 },
+        )
       }
     }
 
-    // No authentication found
-    console.log("❌ No authentication cookies found")
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    // No authentication found at all
+    console.log("❌ No authentication cookies found - user needs to log in")
+    return NextResponse.json(
+      {
+        error: "Not authenticated",
+        debug: "No auth-token, auth_token, session_token, or user_id cookies found",
+      },
+      { status: 401 },
+    )
   } catch (error: any) {
-    console.error("💥 Unexpected error:", error)
-    return NextResponse.json({ error: "Internal server error", details: error?.message }, { status: 500 })
+    console.error("💥 Unexpected error in /api/auth/me:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error?.message || "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
