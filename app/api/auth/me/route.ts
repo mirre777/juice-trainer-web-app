@@ -29,21 +29,35 @@ export async function GET(request: NextRequest) {
     let tokenData
     try {
       tokenData = await verifyToken(token)
-      console.log(`[API:me] ✅ Token verified:`, {
-        email: tokenData?.email,
-        uid: tokenData?.uid,
-        role: tokenData?.role,
-      })
+      console.log(`[API:me] ✅ Token verified, full data:`, tokenData)
     } catch (tokenError: any) {
       console.log(`[API:me] ❌ Token verification failed:`, tokenError.message)
       return NextResponse.json({ error: "Invalid token", errorId }, { status: 401 })
     }
 
-    if (!tokenData || !tokenData.email) {
-      console.log(`[API:me] ❌ Token data is missing email`)
+    if (!tokenData) {
+      console.log(`[API:me] ❌ Token data is null`)
       return NextResponse.json(
         {
-          error: "Invalid token data",
+          error: "Invalid token data - null",
+          errorId,
+        },
+        { status: 401 },
+      )
+    }
+
+    // The token might have different structure, let's check what we have
+    const email = tokenData.email || tokenData.user?.email
+    const uid = tokenData.uid || tokenData.user?.uid || tokenData.id
+    const role = tokenData.role || tokenData.user?.role
+
+    console.log(`[API:me] 📋 Extracted data:`, { email, uid, role })
+
+    if (!email && !uid) {
+      console.log(`[API:me] ❌ No email or uid found in token`)
+      return NextResponse.json(
+        {
+          error: "Invalid token data - missing email/uid",
           errorId,
           debug: { tokenData },
         },
@@ -51,68 +65,34 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Try to find user in Firestore with multiple email variants
+    // Try to find user in Firestore
     let userProfile = null
-    const baseEmail = tokenData.email
-    const emailsToTry = [
-      baseEmail, // Original email from token
-    ]
-
-    // Add email variants only if the base email is valid
-    if (baseEmail.includes("+4@")) {
-      emailsToTry.push(baseEmail.replace("+4@", "@")) // Remove +4 if present
-    } else if (baseEmail.includes("@") && !baseEmail.includes("+")) {
-      emailsToTry.push(baseEmail.replace("@", "+4@")) // Add +4 if not present
-    }
-
-    console.log(`[API:me] 🔍 Searching for user with emails:`, emailsToTry)
 
     try {
-      for (const emailToTry of emailsToTry) {
-        console.log(`[API:me] 🔍 Trying email: ${emailToTry}`)
+      // First try by email if available
+      if (email) {
+        const emailsToTry = [email]
 
-        const usersRef = collection(db, "users")
-        const q = query(usersRef, where("email", "==", emailToTry))
-        const querySnapshot = await getDocs(q)
-
-        if (!querySnapshot.empty) {
-          const userDoc = querySnapshot.docs[0]
-          const userData = userDoc.data()
-
-          userProfile = {
-            uid: userDoc.id,
-            email: userData.email,
-            name: userData.name || "",
-            role: userData.role || "user",
-            user_type: userData.user_type,
-            hasFirebaseAuth: userData.hasFirebaseAuth,
-            profilePicture: userData.profilePicture,
-            isApproved: userData.isApproved,
-            subscriptionStatus: userData.subscriptionStatus,
-          }
-
-          console.log(`[API:me] ✅ User found with email ${emailToTry}:`, {
-            uid: userProfile.uid,
-            email: userProfile.email,
-            role: userProfile.role,
-            name: userProfile.name,
-          })
-          break
+        // Add email variants
+        if (email.includes("+4@")) {
+          emailsToTry.push(email.replace("+4@", "@"))
+        } else if (email.includes("@") && !email.includes("+")) {
+          emailsToTry.push(email.replace("@", "+4@"))
         }
-      }
 
-      if (!userProfile) {
-        console.log(`[API:me] ❌ User not found with any email variant`)
+        console.log(`[API:me] 🔍 Searching for user with emails:`, emailsToTry)
 
-        // As a fallback, try to find by UID if available
-        if (tokenData.uid) {
-          console.log(`[API:me] 🔍 Trying to find user by UID: ${tokenData.uid}`)
+        for (const emailToTry of emailsToTry) {
+          console.log(`[API:me] 🔍 Trying email: ${emailToTry}`)
 
-          const userDocRef = doc(db, "users", tokenData.uid)
-          const userDoc = await getDoc(userDocRef)
+          const usersRef = collection(db, "users")
+          const q = query(usersRef, where("email", "==", emailToTry))
+          const querySnapshot = await getDocs(q)
 
-          if (userDoc.exists()) {
+          if (!querySnapshot.empty) {
+            const userDoc = querySnapshot.docs[0]
             const userData = userDoc.data()
+
             userProfile = {
               uid: userDoc.id,
               email: userData.email,
@@ -124,12 +104,42 @@ export async function GET(request: NextRequest) {
               isApproved: userData.isApproved,
               subscriptionStatus: userData.subscriptionStatus,
             }
-            console.log(`[API:me] ✅ User found by UID:`, {
+
+            console.log(`[API:me] ✅ User found with email ${emailToTry}:`, {
               uid: userProfile.uid,
               email: userProfile.email,
               role: userProfile.role,
             })
+            break
           }
+        }
+      }
+
+      // If not found by email, try by UID
+      if (!userProfile && uid) {
+        console.log(`[API:me] 🔍 Trying to find user by UID: ${uid}`)
+
+        const userDocRef = doc(db, "users", uid)
+        const userDoc = await getDoc(userDocRef)
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data()
+          userProfile = {
+            uid: userDoc.id,
+            email: userData.email,
+            name: userData.name || "",
+            role: userData.role || "user",
+            user_type: userData.user_type,
+            hasFirebaseAuth: userData.hasFirebaseAuth,
+            profilePicture: userData.profilePicture,
+            isApproved: userData.isApproved,
+            subscriptionStatus: userData.subscriptionStatus,
+          }
+          console.log(`[API:me] ✅ User found by UID:`, {
+            uid: userProfile.uid,
+            email: userProfile.email,
+            role: userProfile.role,
+          })
         }
       }
 
@@ -140,9 +150,9 @@ export async function GET(request: NextRequest) {
             error: "User profile not found",
             errorId,
             debug: {
-              tokenEmail: tokenData.email,
-              tokenUid: tokenData.uid,
-              emailsSearched: emailsToTry,
+              tokenEmail: email,
+              tokenUid: uid,
+              tokenRole: role,
             },
           },
           { status: 404 },
