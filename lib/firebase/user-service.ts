@@ -66,7 +66,7 @@ export async function getUserById(userId: string): Promise<any> {
   }
 }
 
-// Get user data by email from Firestore
+// Get user data by email from Firestore - THIS WAS MISSING!
 export async function getUserByEmail(email: string): Promise<any> {
   try {
     if (!email) {
@@ -74,22 +74,16 @@ export async function getUserByEmail(email: string): Promise<any> {
       return null
     }
 
-    console.log(`[getUserByEmail] Fetching user data for email: ${email}`)
+    console.log(`[getUserByEmail] 🔍 Searching for user with email: ${email}`)
     const usersRef = collection(db, "users")
     const q = query(usersRef, where("email", "==", email))
 
-    const [querySnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      function: "getUserByEmail",
-      email,
-    })
-
-    if (error || !querySnapshot) {
-      console.error(`[getUserByEmail] Error querying user by email ${email}:`, error)
-      return null
-    }
+    console.log(`[getUserByEmail] 📋 Executing Firestore query...`)
+    const querySnapshot = await getDocs(q)
+    console.log(`[getUserByEmail] 📊 Query returned ${querySnapshot.size} documents`)
 
     if (querySnapshot.empty) {
-      console.log(`[getUserByEmail] No user found with email: ${email}`)
+      console.log(`[getUserByEmail] ❌ No user found with email: ${email}`)
       return null
     }
 
@@ -97,16 +91,21 @@ export async function getUserByEmail(email: string): Promise<any> {
     const userDoc = querySnapshot.docs[0]
     const userData = userDoc.data()
 
-    console.log(`[getUserByEmail] Found user data:`, {
+    console.log(`[getUserByEmail] ✅ Found user:`, {
       id: userDoc.id,
-      name: userData.name || "NO_NAME",
-      email: userData.email || "NO_EMAIL",
+      email: userData.email,
+      role: userData.role || "user",
+      hasFirebaseAuth: userData.hasFirebaseAuth || false,
     })
 
-    return { id: userDoc.id, ...userData }
-  } catch (error) {
-    console.error(`[getUserByEmail] Error fetching user data for ${email}:`, error)
-    return null
+    return {
+      id: userDoc.id,
+      ...userData,
+    }
+  } catch (error: any) {
+    console.error(`[getUserByEmail] ❌ Error fetching user data for ${email}:`, error)
+    // Re-throw the error so the calling function can handle it
+    throw error
   }
 }
 
@@ -210,7 +209,7 @@ export async function updateUserProfile(userId: string, updates: any): Promise<{
   }
 }
 
-// Update user document
+// Update user document - ADDED THIS MISSING FUNCTION
 export async function updateUser(userId: string, updates: any): Promise<{ success: boolean; error?: any }> {
   try {
     if (!userId) {
@@ -358,7 +357,7 @@ export function subscribeToUser(userId: string, callback: (userData: any, error?
   }
 }
 
-// Store invitation code for user
+// Store invitation code for user - ADDED THIS MISSING FUNCTION
 export async function storeInvitationCode(
   userId: string,
   invitationCode: string,
