@@ -468,8 +468,70 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Authentication failed: ${linkCheckError.message}` }, { status: 401 })
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("[API:login] ❌ Unexpected error:", error)
-    return NextResponse.json({ error: "An unexpected error occurred. Please try again later." }, { status: 500 })
+    console.error("[API:login] Error name:", error.name)
+    console.error("[API:login] Error message:", error.message)
+    console.error("[API:login] Error code:", error.code)
+    console.error("[API:login] Error stack:", error.stack)
+
+    // Try to get more details if it's a Firebase error
+    if (error.code && error.code.startsWith("auth/")) {
+      console.error("[API:login] Firebase Auth error details:", {
+        code: error.code,
+        message: error.message,
+        customData: error.customData,
+      })
+    }
+
+    // Try to get more details if it's a Firestore error
+    if (error.code && error.code.startsWith("firestore/")) {
+      console.error("[API:login] Firestore error details:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+      })
+    }
+
+    // Check for network errors
+    if (error.name === "NetworkError" || error.message?.includes("network")) {
+      console.error("[API:login] Possible network connectivity issue")
+      return NextResponse.json(
+        {
+          error: "Unable to connect to authentication service. Please check your network connection and try again.",
+        },
+        { status: 503 },
+      )
+    }
+
+    // Check for timeout errors
+    if (error.name === "TimeoutError" || error.message?.includes("timeout")) {
+      console.error("[API:login] Request timed out")
+      return NextResponse.json(
+        {
+          error: "Authentication request timed out. Please try again later.",
+        },
+        { status: 504 },
+      )
+    }
+
+    // Check for Firebase configuration errors
+    if (error.message?.includes("API key") || error.message?.includes("project ID")) {
+      console.error("[API:login] Firebase configuration error")
+      return NextResponse.json(
+        {
+          error: "Authentication service misconfigured. Please contact support.",
+        },
+        { status: 500 },
+      )
+    }
+
+    return NextResponse.json(
+      {
+        error: "An unexpected error occurred. Please try again later.",
+        errorId: new Date().getTime().toString(36), // Add a unique error ID for tracking
+      },
+      { status: 500 },
+    )
   }
 }

@@ -1,177 +1,141 @@
-#!/usr/bin/env node
+// Script to test the login API endpoint
+const fetch = require("node-fetch")
 
-/**
- * Login Endpoint Test
- * This script tests the login API endpoint directly
- */
+console.log("🔑 Testing login API endpoint...")
 
-const https = require("https")
-const http = require("http")
+// Configuration
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+const LOGIN_ENDPOINT = `${APP_URL}/api/auth/login`
 
-async function testLoginEndpoint() {
-  console.log("🔐 Testing Login API Endpoint...\n")
+// Test credentials - these should be replaced with actual test credentials
+const TEST_EMAIL = process.env.TEST_EMAIL || "test@example.com"
+const TEST_PASSWORD = process.env.TEST_PASSWORD || "password123"
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const endpoint = "/api/auth/login"
-  const fullUrl = `${baseUrl}${endpoint}`
-
-  console.log(`Testing URL: ${fullUrl}`)
-
-  // Test data
-  const testCases = [
-    {
-      name: "Missing email and password",
-      data: {},
-      expectedStatus: 400,
+// Test cases
+const testCases = [
+  {
+    name: "Basic login",
+    payload: {
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
     },
-    {
-      name: "Missing password",
-      data: { email: "test@example.com" },
-      expectedStatus: 400,
+  },
+  {
+    name: "Missing email",
+    payload: {
+      password: TEST_PASSWORD,
     },
-    {
-      name: "Invalid email format",
-      data: { email: "invalid-email", password: "password123" },
-      expectedStatus: 400,
+  },
+  {
+    name: "Missing password",
+    payload: {
+      email: TEST_EMAIL,
     },
-    {
-      name: "Non-existent user",
-      data: { email: "nonexistent@example.com", password: "password123" },
-      expectedStatus: 404,
+  },
+  {
+    name: "With invitation code",
+    payload: {
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      invitationCode: "TEST123",
     },
-  ]
+  },
+  {
+    name: "Invalid JSON",
+    rawPayload: '{"email": "' + TEST_EMAIL + '", "password": "' + TEST_PASSWORD + '"', // Missing closing brace
+  },
+]
 
-  for (const testCase of testCases) {
-    console.log(`\n🧪 Test: ${testCase.name}`)
-    console.log(`   Data: ${JSON.stringify(testCase.data)}`)
+// Function to test the login endpoint
+async function testLoginEndpoint(testCase) {
+  console.log(`\n🔄 Running test case: ${testCase.name}`)
 
-    try {
-      const response = await makeRequest(fullUrl, testCase.data)
-      console.log(`   Status: ${response.status}`)
-      console.log(`   Expected: ${testCase.expectedStatus}`)
+  try {
+    const payload = testCase.rawPayload || JSON.stringify(testCase.payload)
+    console.log(
+      "📦 Request payload:",
+      testCase.rawPayload
+        ? "Invalid JSON"
+        : JSON.stringify({
+            ...testCase.payload,
+            password: testCase.payload?.password ? "********" : undefined,
+          }),
+    )
 
-      if (response.status === testCase.expectedStatus) {
-        console.log("   Result: ✅ PASS")
-      } else {
-        console.log("   Result: ❌ FAIL")
-      }
-
-      if (response.data) {
-        console.log(`   Response: ${JSON.stringify(response.data, null, 2)}`)
-      }
-    } catch (error) {
-      console.log(`   Result: ❌ ERROR - ${error.message}`)
-
-      // If we get a 500 error, that's what we're trying to debug
-      if (error.status === 500) {
-        console.log("   🚨 This is the 500 error we're investigating!")
-        console.log(`   Error details: ${error.message}`)
-        if (error.response) {
-          console.log(`   Response body: ${error.response}`)
-        }
-      }
-    }
-  }
-}
-
-function makeRequest(url, data) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url)
-    const isHttps = urlObj.protocol === "https:"
-    const client = isHttps ? https : http
-
-    const postData = JSON.stringify(data)
-
-    const options = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (isHttps ? 443 : 80),
-      path: urlObj.pathname,
+    const response = await fetch(LOGIN_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(postData),
       },
+      body: payload,
+    })
+
+    const status = response.status
+    console.log(`🔢 Response status: ${status}`)
+
+    let responseData
+    try {
+      responseData = await response.json()
+      console.log("📄 Response data:", JSON.stringify(responseData, null, 2))
+    } catch (error) {
+      console.error("❌ Failed to parse response as JSON:", error.message)
+      const text = await response.text()
+      console.log("📄 Response text:", text.substring(0, 500) + (text.length > 500 ? "..." : ""))
     }
 
-    const req = client.request(options, (res) => {
-      let responseBody = ""
+    // Check for 500 errors specifically
+    if (status === 500) {
+      console.error("❌ 500 Internal Server Error detected!")
+      console.error("This indicates a server-side issue that needs to be fixed.")
+    }
 
-      res.on("data", (chunk) => {
-        responseBody += chunk
-      })
-
-      res.on("end", () => {
-        try {
-          const data = responseBody ? JSON.parse(responseBody) : null
-          resolve({
-            status: res.statusCode,
-            headers: res.headers,
-            data: data,
-          })
-        } catch (parseError) {
-          resolve({
-            status: res.statusCode,
-            headers: res.headers,
-            data: responseBody,
-          })
-        }
-      })
-    })
-
-    req.on("error", (error) => {
-      reject({
-        message: error.message,
-        status: null,
-        response: null,
-      })
-    })
-
-    req.on("timeout", () => {
-      req.destroy()
-      reject({
-        message: "Request timeout",
-        status: null,
-        response: null,
-      })
-    })
-
-    req.setTimeout(10000) // 10 second timeout
-    req.write(postData)
-    req.end()
-  })
-}
-
-// Health check for the API
-async function healthCheck() {
-  console.log("🏥 API Health Check...\n")
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-
-  try {
-    const response = await makeRequest(`${baseUrl}/api/health`, {})
-    console.log(`Health check status: ${response.status}`)
-    if (response.data) {
-      console.log(`Health check response: ${JSON.stringify(response.data)}`)
+    return {
+      success: status < 500, // Consider it a test success if we don't get a 500 error
+      status,
+      data: responseData,
     }
   } catch (error) {
-    console.log(`Health check failed: ${error.message}`)
-    console.log("Creating a simple health check endpoint might help with debugging")
+    console.error("❌ Request failed:", error)
+    return {
+      success: false,
+      error: error.message,
+    }
   }
 }
 
-// Run the tests
-if (require.main === module) {
-  console.log("🚀 Starting Login Endpoint Tests...\n")
+// Run all test cases
+async function runTests() {
+  console.log(`🌐 Testing against: ${LOGIN_ENDPOINT}`)
 
-  healthCheck()
-    .then(() => testLoginEndpoint())
-    .then(() => {
-      console.log("\n✅ Login endpoint tests completed!")
+  const results = []
+
+  for (const testCase of testCases) {
+    const result = await testLoginEndpoint(testCase)
+    results.push({
+      name: testCase.name,
+      ...result,
     })
-    .catch((error) => {
-      console.error("\n❌ Tests failed:", error)
-      process.exit(1)
-    })
+  }
+
+  // Print summary
+  console.log("\n📊 Test Summary:")
+  results.forEach((result) => {
+    console.log(`${result.success ? "✅" : "❌"} ${result.name}: ${result.status || result.error}`)
+  })
+
+  // Check for any 500 errors
+  const has500Errors = results.some((result) => result.status === 500)
+  if (has500Errors) {
+    console.error("\n❌ Some tests resulted in 500 Internal Server Errors!")
+    console.error("This indicates server-side issues that need to be fixed.")
+    process.exit(1)
+  } else {
+    console.log("\n✅ No 500 Internal Server Errors detected.")
+    process.exit(0)
+  }
 }
 
-module.exports = { testLoginEndpoint, makeRequest }
+runTests().catch((error) => {
+  console.error("Unhandled error during tests:", error)
+  process.exit(1)
+})

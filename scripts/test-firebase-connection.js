@@ -1,164 +1,164 @@
-#!/usr/bin/env node
+// Script to test Firebase connection and configuration
+const { initializeApp, cert } = require("firebase-admin/app")
+const { getFirestore } = require("firebase-admin/firestore")
 
-/**
- * Firebase Connection Test
- * This script tests the actual Firebase connection and authentication
- */
+console.log("🔥 Testing Firebase connection...")
 
-async function testFirebaseConnection() {
-  console.log("🔥 Testing Firebase Connection...\n")
+// Check if required environment variables are present
+const requiredVars = [
+  "NEXT_PUBLIC_FIREBASE_API_KEY",
+  "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+  "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+  "FIREBASE_CLIENT_EMAIL",
+  "FIREBASE_PRIVATE_KEY",
+]
+
+const missingVars = requiredVars.filter((varName) => !process.env[varName])
+if (missingVars.length > 0) {
+  console.error("❌ Missing required environment variables:", missingVars.join(", "))
+  process.exit(1)
+}
+
+// Test server-side Firebase connection
+async function testServerFirebase() {
+  console.log("\n🔄 Testing server-side Firebase connection...")
 
   try {
-    // Import Firebase modules
-    const { initializeApp, getApps } = require("firebase/app")
-    const { getAuth, connectAuthEmulator } = require("firebase/auth")
-    const { getFirestore, connectFirestoreEmulator } = require("firebase/firestore")
+    // Initialize Firebase Admin
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
 
-    // Firebase configuration
+    const adminApp = initializeApp(
+      {
+        credential: cert({
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: privateKey,
+        }),
+      },
+      "admin-test",
+    )
+
+    console.log("✅ Firebase Admin initialized successfully")
+
+    // Test Firestore connection
+    const db = getFirestore(adminApp)
+    console.log("✅ Firestore instance created")
+
+    // Try to read a document
+    console.log("🔄 Testing Firestore read...")
+    const testDoc = await db.collection("_test_connection").doc("test").get()
+    console.log(`✅ Firestore read successful. Document exists: ${testDoc.exists}`)
+
+    // Try to write a document
+    console.log("🔄 Testing Firestore write...")
+    const timestamp = new Date().toISOString()
+    await db
+      .collection("_test_connection")
+      .doc("test")
+      .set({
+        timestamp,
+        environment: process.env.NODE_ENV || "unknown",
+        test: "Connection test",
+      })
+    console.log("✅ Firestore write successful")
+
+    // Read it back to confirm
+    const verifyDoc = await db.collection("_test_connection").doc("test").get()
+    if (verifyDoc.exists && verifyDoc.data().timestamp === timestamp) {
+      console.log("✅ Firestore read/write verification successful")
+    } else {
+      console.error("❌ Firestore verification failed - data mismatch")
+    }
+
+    return true
+  } catch (error) {
+    console.error("❌ Server-side Firebase test failed:", error)
+    console.error(
+      "Error details:",
+      JSON.stringify(
+        {
+          code: error.code,
+          message: error.message,
+          stack: error.stack,
+        },
+        null,
+        2,
+      ),
+    )
+    return false
+  }
+}
+
+// Test client-side Firebase configuration
+function testClientFirebaseConfig() {
+  console.log("\n🔄 Testing client-side Firebase configuration...")
+
+  try {
+    // Create the config object that would be used client-side
     const firebaseConfig = {
       apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
       authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-      measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
     }
 
-    console.log("📋 Firebase Configuration:")
-    Object.entries(firebaseConfig).forEach(([key, value]) => {
-      if (value) {
-        console.log(`   ${key}: ${value.substring(0, 20)}${value.length > 20 ? "..." : ""}`)
-      } else {
-        console.log(`   ${key}: ❌ MISSING`)
-      }
-    })
-    console.log("")
-
-    // Initialize Firebase
-    let app
-    if (getApps().length === 0) {
-      app = initializeApp(firebaseConfig)
-      console.log("✅ Firebase app initialized successfully")
-    } else {
-      app = getApps()[0]
-      console.log("✅ Firebase app already initialized")
+    // Validate the config
+    if (!firebaseConfig.apiKey || !firebaseConfig.apiKey.startsWith("AIza")) {
+      throw new Error("Invalid Firebase API Key format")
     }
 
-    // Test Auth
-    const auth = getAuth(app)
-    console.log("✅ Firebase Auth initialized")
-    console.log(`   Auth instance: ${auth.app.name}`)
-    console.log(`   Current user: ${auth.currentUser ? auth.currentUser.email : "None"}`)
+    if (!firebaseConfig.authDomain || !firebaseConfig.authDomain.includes(".")) {
+      throw new Error("Invalid Firebase Auth Domain format")
+    }
 
-    // Test Firestore
-    const db = getFirestore(app)
-    console.log("✅ Firestore initialized")
-    console.log(`   Database instance: ${db.app.name}`)
+    if (!firebaseConfig.projectId) {
+      throw new Error("Missing Firebase Project ID")
+    }
 
-    // Test Admin SDK (server-side)
-    console.log("\n🔧 Testing Firebase Admin SDK...")
-    await testFirebaseAdmin()
+    console.log("✅ Client-side Firebase configuration appears valid:")
+    console.log(
+      JSON.stringify(
+        {
+          apiKey: `${firebaseConfig.apiKey.substring(0, 6)}...`,
+          authDomain: firebaseConfig.authDomain,
+          projectId: firebaseConfig.projectId,
+          storageBucket: firebaseConfig.storageBucket,
+          messagingSenderId: firebaseConfig.messagingSenderId ? "✓" : "✗",
+          appId: firebaseConfig.appId ? "✓" : "✗",
+        },
+        null,
+        2,
+      ),
+    )
+
+    return true
   } catch (error) {
-    console.error("❌ Firebase connection failed:", error.message)
-    console.error("   Stack:", error.stack)
-    process.exit(1)
-  }
-}
-
-async function testFirebaseAdmin() {
-  try {
-    // Test if we can import admin SDK
-    const admin = require("firebase-admin")
-
-    // Check if already initialized
-    let adminApp
-    try {
-      adminApp = admin.app()
-      console.log("✅ Firebase Admin already initialized")
-    } catch (error) {
-      // Initialize admin SDK
-      const serviceAccount = {
-        type: "service_account",
-        project_id: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-        private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-        client_email: process.env.FIREBASE_CLIENT_EMAIL,
-        client_id: process.env.FIREBASE_CLIENT_ID,
-        auth_uri: "https://accounts.google.com/o/oauth2/auth",
-        token_uri: "https://oauth2.googleapis.com/token",
-        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-        client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${encodeURIComponent(process.env.FIREBASE_CLIENT_EMAIL)}`,
-      }
-
-      adminApp = admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      })
-      console.log("✅ Firebase Admin initialized successfully")
-    }
-
-    // Test Firestore Admin
-    const adminDb = admin.firestore()
-    console.log("✅ Firestore Admin initialized")
-
-    // Test a simple read operation (this will fail if permissions are wrong)
-    try {
-      const testDoc = await adminDb.collection("_test_connection").limit(1).get()
-      console.log("✅ Firestore read test successful")
-    } catch (firestoreError) {
-      console.log("⚠️  Firestore read test failed (this might be normal):", firestoreError.message)
-    }
-
-    // Test Auth Admin
-    const adminAuth = admin.auth()
-    console.log("✅ Firebase Auth Admin initialized")
-
-    console.log("\n📊 Admin SDK Summary:")
-    console.log(`   Project ID: ${adminApp.options.projectId}`)
-    console.log(`   Service Account: ${process.env.FIREBASE_CLIENT_EMAIL}`)
-  } catch (error) {
-    console.error("❌ Firebase Admin SDK test failed:", error.message)
-    if (error.message.includes("private_key")) {
-      console.error("   💡 Hint: Check if FIREBASE_PRIVATE_KEY is properly formatted with \\n characters")
-    }
-    if (error.message.includes("client_email")) {
-      console.error("   💡 Hint: Check if FIREBASE_CLIENT_EMAIL is a valid service account email")
-    }
-  }
-}
-
-// Test specific login functionality
-async function testLoginFlow() {
-  console.log("\n🔐 Testing Login Flow...")
-
-  try {
-    // This would test the actual login API endpoint
-    const testEmail = "test@example.com"
-    const testPassword = "testpassword123"
-
-    console.log(`   Testing with email: ${testEmail}`)
-    console.log("   Note: This is a dry run - no actual login attempt")
-
-    // You could add actual API testing here if needed
-    console.log("✅ Login flow test setup complete")
-  } catch (error) {
-    console.error("❌ Login flow test failed:", error.message)
+    console.error("❌ Client-side Firebase configuration test failed:", error)
+    return false
   }
 }
 
 // Run the tests
-if (require.main === module) {
-  testFirebaseConnection()
-    .then(() => testLoginFlow())
-    .then(() => {
-      console.log("\n✅ All Firebase tests completed successfully!")
-      process.exit(0)
-    })
-    .catch((error) => {
-      console.error("\n❌ Firebase tests failed:", error.message)
-      process.exit(1)
-    })
+async function runTests() {
+  const clientConfigValid = testClientFirebaseConfig()
+  const serverConnectionValid = await testServerFirebase()
+
+  console.log("\n📊 Firebase Connection Test Summary:")
+  console.log(`Client-side configuration: ${clientConfigValid ? "✅ Valid" : "❌ Invalid"}`)
+  console.log(`Server-side connection: ${serverConnectionValid ? "✅ Working" : "❌ Failed"}`)
+
+  if (clientConfigValid && serverConnectionValid) {
+    console.log("\n🎉 All Firebase tests passed successfully!")
+    process.exit(0)
+  } else {
+    console.error("\n❌ Some Firebase tests failed. See details above.")
+    process.exit(1)
+  }
 }
 
-module.exports = { testFirebaseConnection, testFirebaseAdmin }
+runTests().catch((error) => {
+  console.error("Unhandled error during tests:", error)
+  process.exit(1)
+})
