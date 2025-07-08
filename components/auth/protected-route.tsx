@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import LoadingSpinner from "@/components/shared/loading-spinner"
@@ -16,7 +15,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({
   children,
   requiredRole = "trainer",
-  fallbackPath = "/mobile-app-success", // THIS IS THE PROBLEM
+  fallbackPath = "/login", // CHANGED: Default to login instead of mobile-app-success
 }: ProtectedRouteProps) {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
@@ -29,8 +28,11 @@ export function ProtectedRoute({
         console.log(`[ProtectedRoute] Checking user role, required: ${requiredRole}`)
 
         const response = await fetch("/api/auth/me", {
-          credentials: "include", // Ensure cookies are sent
+          credentials: "include",
+          cache: "no-store", // Ensure fresh data
         })
+
+        console.log(`[ProtectedRoute] API response status: ${response.status}`)
 
         if (!response.ok) {
           console.log(`[ProtectedRoute] Failed to get user data (${response.status}), redirecting to login`)
@@ -39,21 +41,40 @@ export function ProtectedRoute({
         }
 
         const userData = await response.json()
-        console.log(`[ProtectedRoute] User data:`, userData)
+        console.log(`[ProtectedRoute] Full user data received:`, userData)
 
-        const userRole = userData.role || null
-        const hasRequiredRole = userRole === requiredRole
+        const userRole = userData.role || userData.user_type || null
+        console.log(`[ProtectedRoute] User role extracted: "${userRole}"`)
+        console.log(`[ProtectedRoute] Required role: "${requiredRole}"`)
 
-        console.log(
-          `[ProtectedRoute] User role: "${userRole}", required: "${requiredRole}", authorized: ${hasRequiredRole}`,
-        )
+        // More flexible role checking
+        const hasRequiredRole =
+          userRole === requiredRole ||
+          (requiredRole === "trainer" && userRole === "trainer") ||
+          (requiredRole === "user" && (userRole === "user" || userRole === "client"))
+
+        console.log(`[ProtectedRoute] Role match result: ${hasRequiredRole}`)
 
         if (hasRequiredRole) {
+          console.log(`[ProtectedRoute] ✅ User authorized, showing protected content`)
           setIsAuthorized(true)
-          setUserId(userData.uid || userData.id) // Set user ID for feedback button
+          setUserId(userData.uid || userData.id)
         } else {
-          console.log(`[ProtectedRoute] User not authorized, redirecting to ${fallbackPath}`)
-          router.push(fallbackPath)
+          console.log(`[ProtectedRoute] ❌ User not authorized`)
+          console.log(`[ProtectedRoute] User role: "${userRole}", Required: "${requiredRole}"`)
+
+          // Special handling for trainers who shouldn't see mobile app success
+          if (userRole === "trainer" && requiredRole === "trainer") {
+            console.log(`[ProtectedRoute] Trainer detected but role check failed - this shouldn't happen`)
+            setIsAuthorized(true) // Force authorization for trainers
+            setUserId(userData.uid || userData.id)
+          } else if (userRole === "trainer") {
+            console.log(`[ProtectedRoute] Trainer trying to access non-trainer content, redirecting to overview`)
+            router.push("/overview")
+          } else {
+            console.log(`[ProtectedRoute] Redirecting to fallback: ${fallbackPath}`)
+            router.push(fallbackPath)
+          }
           return
         }
       } catch (error) {
@@ -68,7 +89,6 @@ export function ProtectedRoute({
     checkUserRole()
   }, [requiredRole, fallbackPath, router])
 
-  // Show loading while checking authorization
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -80,12 +100,10 @@ export function ProtectedRoute({
     )
   }
 
-  // Don't render anything if not authorized (will redirect)
   if (isAuthorized !== true) {
     return null
   }
 
-  // Only render children when explicitly authorized
   return (
     <>
       {children}

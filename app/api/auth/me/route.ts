@@ -1,80 +1,148 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { verifyToken } from "@/lib/auth/token-service"
-import { getUserById } from "@/lib/firebase/user-service"
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
-export async function GET(request: NextRequest) {
+import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
+
+export async function GET() {
   try {
-    console.log("[API:auth/me] 🔄 Getting user info...")
+    console.log("🚀 Starting /api/auth/me request")
 
-    // Try to get token from multiple cookie names
+    const cookieStore = await cookies()
+
+    // Check for different possible cookie names
     const authToken =
-      request.cookies.get("auth-token")?.value ||
-      request.cookies.get("auth_token")?.value ||
-      request.cookies.get("session_token")?.value
+      cookieStore.get("auth-token")?.value ||
+      cookieStore.get("auth_token")?.value ||
+      cookieStore.get("session_token")?.value
+    const userId = cookieStore.get("user_id")?.value
 
-    const userId = request.cookies.get("user_id")?.value
+    console.log("🍪 Cookies found:", {
+      "auth-token": cookieStore.get("auth-token")?.value ? "Present" : "Missing",
+      auth_token: cookieStore.get("auth_token")?.value ? "Present" : "Missing",
+      session_token: cookieStore.get("session_token")?.value ? "Present" : "Missing",
+      user_id: userId || "Missing",
+    })
 
-    console.log("[API:auth/me] 🍪 Cookies found:")
-    console.log(`- auth-token: ${request.cookies.get("auth-token")?.value ? "Present" : "Missing"}`)
-    console.log(`- auth_token: ${request.cookies.get("auth_token")?.value ? "Present" : "Missing"}`)
-    console.log(`- user_id: ${userId || "Missing"}`)
-
-    if (!authToken && !userId) {
-      console.log("[API:auth/me] ❌ No authentication token or user ID found")
-      return NextResponse.json({ error: "No authentication token found" }, { status: 401 })
-    }
-
-    let userData = null
-
-    // Try to verify token first
+    // If we have an auth token, try to decode it
     if (authToken) {
       try {
-        console.log("[API:auth/me] 🔄 Verifying JWT token...")
+        console.log("🔓 Attempting to verify auth token...")
+        const { verifyToken } = await import("@/lib/auth/token-service")
         const decoded = await verifyToken(authToken)
-        console.log("[API:auth/me] ✅ Token verified successfully")
-        console.log(`[API:auth/me] 👤 Token user ID: ${decoded.uid}`)
-        console.log(`[API:auth/me] 🎭 Token user role: ${decoded.role}`)
+        console.log("✅ Token decoded successfully:", {
+          uid: decoded.uid,
+          email: decoded.email,
+          role: decoded.role,
+        })
 
-        // Get fresh user data from Firestore
-        userData = await getUserById(decoded.uid)
-        if (userData) {
-          console.log("[API:auth/me] ✅ User data retrieved from Firestore via token")
-          return NextResponse.json({
-            uid: decoded.uid,
-            email: decoded.email,
-            role: userData.role || decoded.role,
-            ...userData,
-          })
+        // Get fresh user data from Firestore to ensure we have the latest role
+        try {
+          const { getUserById } = await import("@/lib/firebase/user-service")
+          const freshUserData = await getUserById(decoded.uid)
+
+          if (freshUserData) {
+            console.log("✅ Fresh user data from Firestore:", {
+              uid: decoded.uid,
+              email: freshUserData.email,
+              role: freshUserData.role,
+              user_type: freshUserData.user_type,
+            })
+
+            return NextResponse.json({
+              uid: decoded.uid,
+              email: decoded.email,
+              role: freshUserData.role || decoded.role || "user",
+              user_type: freshUserData.user_type,
+              name: freshUserData.name || "",
+              universalInviteCode: freshUserData.universalInviteCode || "",
+              inviteCode: freshUserData.inviteCode || "",
+            })
+          }
+        } catch (firestoreError) {
+          console.log("⚠️ Firestore lookup failed, using token data:", firestoreError)
         }
+
+        // Fallback to token data if Firestore fails
+        return NextResponse.json({
+          uid: decoded.uid,
+          email: decoded.email,
+          role: decoded.role || "user",
+          name: decoded.name || "",
+        })
       } catch (tokenError) {
-        console.log("[API:auth/me] ⚠️ Token verification failed, trying user ID fallback...")
-        console.error("[API:auth/me] Token error:", tokenError)
+        console.error("❌ Token verification failed:", tokenError)
+        // Continue to user_id fallback
       }
     }
 
-    // Fallback to user ID cookie
-    if (userId && !userData) {
+    // Fallback: If we have a user_id cookie, use that
+    if (userId) {
       try {
-        console.log(`[API:auth/me] 🔄 Fetching user data by ID: ${userId}`)
-        userData = await getUserById(userId)
-        if (userData) {
-          console.log("[API:auth/me] ✅ User data retrieved from Firestore via user ID")
-          return NextResponse.json({
-            uid: userId,
-            email: userData.email,
-            role: userData.role || "user",
-            ...userData,
-          })
+        console.log("🔍 Using user_id cookie, fetching from Firestore...")
+        const { db } = await import("@/lib/firebase/firebase")
+
+        if (!db) {
+          console.error("❌ Firestore not available")
+          return NextResponse.json({ error: "Database not available" }, { status: 500 })
         }
-      } catch (userError) {
-        console.error("[API:auth/me] Error fetching user by ID:", userError)
+
+        console.log("🔍 Querying Firestore for user:", userId)
+
+        const { collection, doc, getDoc } = await import("firebase/firestore")
+        const userDocRef = doc(collection(db, "users"), userId)
+        const userDoc = await getDoc(userDocRef)
+
+        console.log("✅ Document query completed, exists:", userDoc.exists())
+
+        if (!userDoc.exists()) {
+          console.log("❌ User document not found for ID:", userId)
+          return NextResponse.json({ error: "User not found" }, { status: 404 })
+        }
+
+        const userData = userDoc.data()
+        console.log("✅ User data extracted:", {
+          uid: userId,
+          email: userData?.email,
+          role: userData?.role,
+          user_type: userData?.user_type,
+        })
+
+        const response = {
+          uid: userId,
+          email: userData?.email || "",
+          name: userData?.name || "",
+          role: userData?.role || "user",
+          user_type: userData?.user_type || "",
+          universalInviteCode: userData?.universalInviteCode || "",
+          inviteCode: userData?.inviteCode || "",
+        }
+
+        console.log("📤 Sending successful response:", response)
+        return NextResponse.json(response)
+      } catch (firestoreError: any) {
+        console.error("💥 Firestore error:", firestoreError)
+        return NextResponse.json(
+          {
+            error: "Database error",
+            details: firestoreError?.message || "Database connection failed",
+          },
+          { status: 500 },
+        )
       }
     }
 
-    console.log("[API:auth/me] ❌ No valid user data found")
-    return NextResponse.json({ error: "User not found" }, { status: 404 })
-  } catch (error) {
-    console.error("[API:auth/me] 💥 Unexpected error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    // No authentication found
+    console.log("❌ No authentication cookies found")
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  } catch (error: any) {
+    console.error("💥 Unexpected error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error?.message || "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

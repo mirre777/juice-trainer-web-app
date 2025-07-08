@@ -4,13 +4,10 @@ import type { NextRequest } from "next/server"
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
-  // Check if the path matches the userId/workoutId pattern (two segments with no specific prefix)
+  // Check if the path matches the userId/workoutId pattern
   const pathSegments = path.split("/").filter(Boolean)
   const isSharedWorkoutPath =
-    pathSegments.length === 2 &&
-    // Simple validation that these could be Firebase IDs (alphanumeric with some special chars)
-    /^[A-Za-z0-9_-]+$/.test(pathSegments[0]) &&
-    /^[A-Za-z0-9_-]+$/.test(pathSegments[1])
+    pathSegments.length === 2 && /^[A-Za-z0-9_-]+$/.test(pathSegments[0]) && /^[A-Za-z0-9_-]+$/.test(pathSegments[1])
 
   const isPublicPath =
     path === "/" ||
@@ -22,14 +19,14 @@ export function middleware(request: NextRequest) {
     path === "/invite-app" ||
     path.startsWith("/invite/") ||
     path.startsWith("/shared/") ||
-    isSharedWorkoutPath || // Add this condition for direct userId/workoutId URLs
+    isSharedWorkoutPath ||
     path.startsWith("/api/invitations/") ||
     path.startsWith("/api/shared/") ||
     path.startsWith("/api/auth/") ||
-    path.startsWith("/demo/") || // Demo routes remain public
-    path.startsWith("/debug-env") // Allow debug page
+    path.startsWith("/demo/") ||
+    path.startsWith("/debug-env")
 
-  // Get the token from the cookies
+  // Get authentication tokens
   const authCookie =
     request.cookies.get("auth-token") || request.cookies.get("auth_token") || request.cookies.get("session_token")
   const token = authCookie?.value
@@ -37,40 +34,44 @@ export function middleware(request: NextRequest) {
 
   console.log(`[Middleware] Path: ${path}`)
   console.log(`[Middleware] Is public path: ${isPublicPath}`)
-  console.log(`[Middleware] Is shared workout path: ${isSharedWorkoutPath}`)
-  console.log(`[Middleware] Auth cookie exists: ${!!authCookie}`)
-  console.log(`[Middleware] User ID cookie: ${userId ? "Present" : "Missing"}`)
+  console.log(`[Middleware] Auth token exists: ${!!token}`)
+  console.log(`[Middleware] User ID exists: ${!!userId}`)
 
-  // Handle redirects from old invite URL format to new format
+  // Handle old invite URL format
   const { pathname, searchParams } = request.nextUrl
   if (pathname.startsWith("/signup") && searchParams.has("invite")) {
     const inviteCode = searchParams.get("invite")
-    console.log(`[Middleware] Redirecting old invite format to new: /invite/${inviteCode}`)
+    console.log(`[Middleware] Redirecting old invite format to: /invite/${inviteCode}`)
     return NextResponse.redirect(`${request.nextUrl.origin}/invite/${inviteCode}`)
   }
 
-  // If the path is not public and there's no valid token or user ID, redirect to login
-  if (!isPublicPath && (!token || token.trim() === "") && !userId) {
-    console.log(`[Middleware] Redirecting to login - private path without valid authentication`)
+  // Redirect unauthenticated users from private paths
+  if (!isPublicPath && !token && !userId) {
+    console.log(`[Middleware] Redirecting to login - no authentication found`)
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // If the path is login or signup and there's a valid token, redirect to overview
-  // BUT allow login/signup with invite code to proceed regardless of token
-  if (((path === "/login" || path === "/signup") && token && token.trim() !== "") || userId) {
-    // Allow login/signup page if there's an invite code in the URL
+  // Handle authenticated users on auth pages
+  if ((path === "/login" || path === "/signup") && (token || userId)) {
+    // Allow if there's an invite code
     if (searchParams.has("code")) {
-      console.log(`[Middleware] Allowing ${path} with invite code despite existing token`)
+      console.log(`[Middleware] Allowing ${path} with invite code`)
       return NextResponse.next()
     }
 
-    console.log(`[Middleware] Redirecting to overview - auth page with valid token`)
+    console.log(`[Middleware] Authenticated user on auth page, redirecting to overview`)
     return NextResponse.redirect(new URL("/overview", request.url))
   }
 
-  // If the path is root (/) and there's a valid token, redirect to overview
-  if (path === "/" && ((token && token.trim() !== "") || userId)) {
-    console.log(`[Middleware] Redirecting from root to overview - authenticated user`)
+  // Redirect authenticated users from root to overview
+  if (path === "/" && (token || userId)) {
+    console.log(`[Middleware] Redirecting authenticated user from root to overview`)
+    return NextResponse.redirect(new URL("/overview", request.url))
+  }
+
+  // IMPORTANT: Don't redirect trainers to mobile-app-success
+  if (path === "/mobile-app-success" && (token || userId)) {
+    console.log(`[Middleware] Authenticated user trying to access mobile-app-success, redirecting to overview`)
     return NextResponse.redirect(new URL("/overview", request.url))
   }
 
@@ -79,14 +80,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public (public files)
-     */
-    "/((?!_next/static|_next/image|favicon.ico|public).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
 }
