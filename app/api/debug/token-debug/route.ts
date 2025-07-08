@@ -4,9 +4,6 @@ import { verifyToken } from "@/lib/auth/token-service"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`[DEBUG:token] 🔍 Debugging token data`)
-
-    // Get token from cookies
     const cookieStore = cookies()
     const token = cookieStore.get("auth-token")?.value
 
@@ -14,32 +11,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No token found" }, { status: 401 })
     }
 
-    console.log(`[DEBUG:token] 🔑 Token found: ${token.substring(0, 50)}...`)
-
-    // Verify token
-    let tokenData
-    try {
-      tokenData = await verifyToken(token)
-      console.log(`[DEBUG:token] ✅ Token data:`, tokenData)
-    } catch (tokenError: any) {
-      console.log(`[DEBUG:token] ❌ Token verification failed:`, tokenError.message)
-      return NextResponse.json({ error: "Token verification failed", details: tokenError.message }, { status: 401 })
-    }
+    const tokenData = await verifyToken(token)
 
     return NextResponse.json({
-      success: true,
+      tokenExists: !!token,
+      tokenPreview: token.substring(0, 20) + "...",
       tokenData,
-      tokenKeys: Object.keys(tokenData || {}),
-      hasEmail: !!tokenData?.email,
-      hasUid: !!tokenData?.uid,
-      extractedData: {
-        email: tokenData?.email,
-        uid: tokenData?.uid,
-        role: tokenData?.role,
-      },
+      tokenDataType: typeof tokenData,
+      isArray: Array.isArray(tokenData),
+      arrayLength: Array.isArray(tokenData) ? tokenData.length : null,
+      firstElement: Array.isArray(tokenData) ? tokenData[0] : null,
     })
   } catch (error: any) {
-    console.error(`[DEBUG:token] ❌ Error:`, error)
-    return NextResponse.json({ error: "Debug failed", details: error.message }, { status: 500 })
+    return NextResponse.json({
+      error: "Token verification failed",
+      details: error.message,
+    })
   }
 }

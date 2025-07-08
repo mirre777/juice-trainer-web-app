@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
     try {
       tokenData = await verifyToken(token)
       console.log(`[API:me] ✅ Token verified, full data:`, tokenData)
+      console.log(`[API:me] 🔍 Token data type:`, typeof tokenData, Array.isArray(tokenData))
     } catch (tokenError: any) {
       console.log(`[API:me] ❌ Token verification failed:`, tokenError.message)
       return NextResponse.json({ error: "Invalid token", errorId }, { status: 401 })
@@ -46,20 +47,42 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Extract data directly from tokenData (it's already the right structure)
-    const email = tokenData.email
-    const uid = tokenData.uid
-    const role = tokenData.role
+    // Handle array response from token verification
+    let userData
+    if (Array.isArray(tokenData)) {
+      console.log(`[API:me] 📋 Token data is array, taking first element`)
+      userData = tokenData[0]
+    } else {
+      console.log(`[API:me] 📋 Token data is object`)
+      userData = tokenData
+    }
+
+    if (!userData) {
+      console.log(`[API:me] ❌ No user data found in token`)
+      return NextResponse.json(
+        {
+          error: "Invalid token data - no user data",
+          errorId,
+          debug: { tokenData },
+        },
+        { status: 401 },
+      )
+    }
+
+    // Extract data from userData
+    const email = userData.email
+    const uid = userData.uid
+    const role = userData.role
 
     console.log(`[API:me] 📋 Extracted data:`, { email, uid, role })
 
     if (!email && !uid) {
-      console.log(`[API:me] ❌ No email or uid found in token`)
+      console.log(`[API:me] ❌ No email or uid found in user data`)
       return NextResponse.json(
         {
           error: "Invalid token data - missing email/uid",
           errorId,
-          debug: { tokenData },
+          debug: { tokenData, userData },
         },
         { status: 401 },
       )
