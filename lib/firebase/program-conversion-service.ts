@@ -1,6 +1,6 @@
 import { getFirestore, doc, setDoc, collection, Timestamp, getDoc } from "firebase/firestore"
 import { v4 as uuidv4 } from "uuid"
-import { clientService } from "../client/client-service"
+import { clientService } from "./client-service"
 
 const db = getFirestore()
 
