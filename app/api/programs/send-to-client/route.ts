@@ -91,10 +91,23 @@ export async function POST(request: NextRequest) {
 
     console.log("[send-to-client API] ✅ Program sent successfully:", result)
 
+    // Return the result including timestamp information
     return NextResponse.json({
       success: true,
       message: "Program sent to client successfully",
       data: result,
+      // Include timestamp debugging info in the response
+      timestampDebug: {
+        createdAt: result.timestamps?.createdAt,
+        startedAt: result.timestamps?.startedAt,
+        updatedAt: result.timestamps?.updatedAt,
+        originalTimestamp: result.timestamps?.originalTimestamp,
+        timestampTypes: {
+          createdAt: typeof result.timestamps?.createdAt,
+          startedAt: typeof result.timestamps?.startedAt,
+          updatedAt: typeof result.timestamps?.updatedAt,
+        },
+      },
     })
   } catch (error) {
     console.error("[send-to-client API] ❌ Error sending program to client:", error)
