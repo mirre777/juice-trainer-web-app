@@ -1,156 +1,309 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { signInWithEmailAndPassword } from "firebase/auth"
+import { NextResponse } from "next/server"
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
 import { getUserByEmail, updateUser, storeInvitationCode } from "@/lib/firebase/user-service"
-import { processLoginInvitation } from "@/lib/firebase/client-service"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    console.log("[LOGIN] Starting login process")
+    const { email, password, invitationCode } = await request.json()
 
-    const body = await request.json()
-    const { email, password, invitationCode } = body
-
-    console.log("[LOGIN] Login attempt:", {
-      email,
-      hasPassword: !!password,
-      hasInvitationCode: !!invitationCode,
-    })
+    console.log(`[API:login] Processing login for ${email}`)
 
     if (!email || !password) {
-      console.log("[LOGIN] Missing email or password")
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    // Authenticate with Firebase Auth
-    console.log("[LOGIN] Authenticating with Firebase Auth...")
-    const userCredential = await signInWithEmailAndPassword(auth, email, password)
-    const firebaseUser = userCredential.user
-
-    console.log("[LOGIN] Firebase Auth successful:", {
-      uid: firebaseUser.uid,
-      email: firebaseUser.email,
-    })
-
-    // Get user data from Firestore
-    console.log("[LOGIN] Getting user data from Firestore...")
-    let userData = null
+    let user = null
     try {
-      userData = await getUserByEmail(email)
-    } catch (firestoreError) {
-      console.error("[LOGIN] Error getting user from Firestore:", firestoreError)
-      // Continue with Firebase Auth data if Firestore fails
+      user = await getUserByEmail(email)
+    } catch (firestoreError: any) {
+      console.error(`[API:login] Firestore error:`, firestoreError)
+      return NextResponse.json(
+        {
+          error: "Database error occurred while checking user account",
+          details: process.env.NODE_ENV === "development" ? firestoreError.message : undefined,
+        },
+        { status: 500 },
+      )
     }
 
-    if (!userData) {
-      console.log("[LOGIN] No user data found in Firestore, using Firebase Auth data")
-      userData = {
-        id: firebaseUser.uid,
-        email: firebaseUser.email || email,
-        name: firebaseUser.displayName || "",
-        role: "user" as const,
-        isApproved: true,
+    if (!user) {
+      console.log(`[API:login] User not found: ${email}`)
+      if (invitationCode) {
+        return NextResponse.json(
+          {
+            error: "Account not found. Please sign up first.",
+            suggestSignup: true,
+          },
+          { status: 404 },
+        )
       }
+      return NextResponse.json({ error: "No account found with this email address" }, { status: 404 })
     }
 
-    console.log("[LOGIN] User data retrieved:", {
-      id: userData.id,
-      email: userData.email,
-      role: userData.role,
-      isApproved: userData.isApproved,
+    console.log(`[API:login] User found:`, {
+      id: user.id,
+      email: user.email,
+      hasFirebaseAuth: user.hasFirebaseAuth,
+      role: user.role,
     })
 
-    // Process invitation code if provided
-    if (invitationCode) {
-      console.log("[LOGIN] Processing invitation code:", invitationCode)
+    if (user.hasFirebaseAuth) {
+      console.log(`[API:login] User has Firebase Auth, authenticating`)
+
       try {
-        // Store invitation code
-        await storeInvitationCode(userData.id, invitationCode)
-        console.log("[LOGIN] Invitation code stored successfully")
+        const userCredential = await signInWithEmailAndPassword(auth, email, password)
+        const firebaseUser = userCredential.user
 
-        // Process login invitation
-        const invitationResult = await processLoginInvitation(invitationCode, userData.id)
-        if (invitationResult.success) {
-          console.log("[LOGIN] Invitation processed successfully")
+        const token = await firebaseUser.getIdToken()
 
-          // Update user status
-          await updateUser(userData.id, {
-            status: "pending_approval",
-            invitationCode: invitationCode,
-          })
+        console.log(`[API:login] Firebase Auth successful for user: ${user.id}`)
 
-          userData.status = "pending_approval"
-          userData.invitationCode = invitationCode
-        } else {
-          console.log("[LOGIN] Invitation processing failed:", invitationResult.error)
+        if (invitationCode) {
+          console.log(`[API:login] Processing invitation code: ${invitationCode}`)
+
+          try {
+            const storeResult = await storeInvitationCode(user.id, invitationCode)
+
+            if (storeResult.success) {
+              console.log(`[API:login] Successfully stored invitation code`)
+            } else {
+              console.error(`[API:login] Failed to store invitation code:`, storeResult.error)
+            }
+
+            try {
+              const { processLoginInvitation } = await import("@/lib/firebase/client-service")
+              const inviteResult = await processLoginInvitation(invitationCode, user.id)
+
+              if (inviteResult.success) {
+                console.log(`[API:login] Successfully processed invitation`)
+
+                const response = NextResponse.json({
+                  success: true,
+                  userId: user.id,
+                  message: "Login successful! Your request has been sent to the trainer.",
+                  authMethod: "firebase",
+                  invitationProcessed: true,
+                  pendingApproval: true,
+                })
+
+                response.cookies.set("auth_token", token, {
+                  httpOnly: true,
+                  secure: process.env.NODE_ENV === "production",
+                  sameSite: "lax",
+                  maxAge: 60 * 60 * 24 * 7,
+                  path: "/",
+                })
+
+                response.cookies.set("user_id", user.id, {
+                  httpOnly: false,
+                  secure: process.env.NODE_ENV === "production",
+                  sameSite: "lax",
+                  maxAge: 60 * 60 * 24 * 7,
+                  path: "/",
+                })
+
+                return response
+              }
+            } catch (clientServiceError) {
+              console.error(`[API:login] Client service not available:`, clientServiceError)
+            }
+          } catch (inviteError) {
+            console.error(`[API:login] Error during invitation processing:`, inviteError)
+          }
         }
-      } catch (invitationError) {
-        console.error("[LOGIN] Error processing invitation:", invitationError)
-        // Continue with login even if invitation processing fails
+
+        const response = NextResponse.json({
+          success: true,
+          userId: user.id,
+          message: "Login successful!",
+          authMethod: "firebase",
+        })
+
+        response.cookies.set("auth_token", token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7,
+          path: "/",
+        })
+
+        response.cookies.set("user_id", user.id, {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7,
+          path: "/",
+        })
+
+        return response
+      } catch (firebaseError: any) {
+        console.error("[API:login] Firebase Auth error:", firebaseError.code, firebaseError.message)
+
+        if (firebaseError.code === "auth/wrong-password") {
+          return NextResponse.json(
+            { error: "Incorrect password. Please check your password and try again." },
+            { status: 401 },
+          )
+        } else if (firebaseError.code === "auth/user-not-found") {
+          return NextResponse.json({ error: "No account found with this email address." }, { status: 401 })
+        } else if (firebaseError.code === "auth/too-many-requests") {
+          return NextResponse.json(
+            { error: "Too many failed login attempts. Please wait a few minutes before trying again." },
+            { status: 429 },
+          )
+        } else if (firebaseError.code === "auth/user-disabled") {
+          return NextResponse.json(
+            { error: "This account has been disabled. Please contact support." },
+            { status: 403 },
+          )
+        } else if (firebaseError.code === "auth/invalid-email") {
+          return NextResponse.json({ error: "Invalid email address format." }, { status: 400 })
+        }
+
+        return NextResponse.json({ error: `Authentication failed: ${firebaseError.message}` }, { status: 401 })
+      }
+    } else {
+      console.log(`[API:login] Legacy user detected: ${email}`)
+
+      try {
+        const existingUserCredential = await signInWithEmailAndPassword(auth, email, password)
+        const existingFirebaseUser = existingUserCredential.user
+
+        console.log(`[API:login] User exists in Firebase Auth, linking accounts`)
+
+        const updateResult = await updateUser(user.id, {
+          hasFirebaseAuth: true,
+          firebaseUid: existingFirebaseUser.uid,
+          linkedAt: new Date(),
+          linkedDuring: "login",
+        })
+
+        if (!updateResult.success) {
+          console.error("[API:login] Failed to update user document:", updateResult.error)
+          return NextResponse.json({ error: "Failed to link accounts. Please try again." }, { status: 500 })
+        }
+
+        const token = await existingFirebaseUser.getIdToken()
+
+        const response = NextResponse.json({
+          success: true,
+          userId: user.id,
+          message: "Login successful! Your account has been upgraded for enhanced security.",
+          authMethod: "firebase",
+          autoLinked: true,
+        })
+
+        response.cookies.set("auth_token", token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7,
+          path: "/",
+        })
+
+        response.cookies.set("user_id", user.id, {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 7,
+          path: "/",
+        })
+
+        return response
+      } catch (linkCheckError: any) {
+        if (linkCheckError.code === "auth/wrong-password") {
+          return NextResponse.json(
+            { error: "Incorrect password. Please check your password and try again." },
+            { status: 401 },
+          )
+        }
+
+        if (linkCheckError.code === "auth/user-not-found") {
+          try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+            const firebaseUser = userCredential.user
+
+            const updateResult = await updateUser(user.id, {
+              hasFirebaseAuth: true,
+              firebaseUid: firebaseUser.uid,
+              migratedAt: new Date(),
+            })
+
+            if (!updateResult.success) {
+              return NextResponse.json(
+                { error: "Failed to complete account setup. Please try again." },
+                { status: 500 },
+              )
+            }
+
+            const token = await firebaseUser.getIdToken()
+
+            const response = NextResponse.json({
+              success: true,
+              userId: user.id,
+              message: "Login successful! Your account has been upgraded for enhanced security.",
+              authMethod: "firebase",
+              migrated: true,
+            })
+
+            response.cookies.set("auth_token", token, {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax",
+              maxAge: 60 * 60 * 24 * 7,
+              path: "/",
+            })
+
+            response.cookies.set("user_id", user.id, {
+              httpOnly: false,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax",
+              maxAge: 60 * 60 * 24 * 7,
+              path: "/",
+            })
+
+            return response
+          } catch (createError: any) {
+            console.error("[API:login] Failed to create Firebase Auth account:", createError.code, createError.message)
+
+            if (createError.code === "auth/email-already-in-use") {
+              return NextResponse.json(
+                {
+                  error:
+                    "An account with this email already exists in our system. Please try logging in or contact support.",
+                },
+                { status: 409 },
+              )
+            } else if (createError.code === "auth/weak-password") {
+              return NextResponse.json(
+                { error: "Password is too weak. Please use at least 6 characters with a mix of letters and numbers." },
+                { status: 400 },
+              )
+            } else if (createError.code === "auth/invalid-email") {
+              return NextResponse.json({ error: "Invalid email address format." }, { status: 400 })
+            }
+
+            return NextResponse.json({ error: `Failed to create account: ${createError.message}` }, { status: 500 })
+          }
+        }
+
+        if (linkCheckError.code === "auth/too-many-requests") {
+          return NextResponse.json(
+            { error: "Too many failed login attempts. Please wait a few minutes before trying again." },
+            { status: 429 },
+          )
+        }
+
+        console.error("[API:login] Unexpected error during link check:", linkCheckError)
+        return NextResponse.json({ error: `Authentication failed: ${linkCheckError.message}` }, { status: 401 })
       }
     }
-
-    // Get Firebase ID token for authentication
-    const token = await firebaseUser.getIdToken()
-
-    console.log("[LOGIN] Login successful for user:", userData.id)
-
-    const response = NextResponse.json({
-      success: true,
-      user: userData,
-      message: invitationCode ? "Login successful. Your account is pending approval." : "Login successful",
-    })
-
-    // Set authentication cookies
-    response.cookies.set("auth_token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    })
-
-    response.cookies.set("user_id", userData.id, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    })
-
-    return response
   } catch (error: any) {
-    console.error("[LOGIN] Login error:", error)
-
-    // Handle specific Firebase Auth errors
-    if (error.code === "auth/user-not-found") {
-      return NextResponse.json({ error: "No account found with this email address" }, { status: 401 })
-    }
-
-    if (error.code === "auth/wrong-password") {
-      return NextResponse.json({ error: "Incorrect password" }, { status: 401 })
-    }
-
-    if (error.code === "auth/invalid-email") {
-      return NextResponse.json({ error: "Invalid email address" }, { status: 400 })
-    }
-
-    if (error.code === "auth/too-many-requests") {
-      return NextResponse.json({ error: "Too many failed login attempts. Please try again later." }, { status: 429 })
-    }
-
-    if (error.code === "auth/user-disabled") {
-      return NextResponse.json({ error: "This account has been disabled. Please contact support." }, { status: 403 })
-    }
-
-    if (error.code === "auth/invalid-credential") {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
-    }
-
-    // Generic error response
+    console.error("[API:login] Unexpected error:", error)
     return NextResponse.json(
       {
-        error: "Login failed. Please check your credentials and try again.",
+        error: "An unexpected error occurred during login. Please try again later.",
         details: process.env.NODE_ENV === "development" ? error.message : undefined,
       },
       { status: 500 },
