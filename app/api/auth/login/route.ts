@@ -8,7 +8,6 @@ export async function POST(request: Request) {
     const { email, password, invitationCode } = await request.json()
 
     console.log(`[API:login] 🚀 Processing login for ${email}`)
-    console.log(`[API:login] 🎫 Invitation code received:`, invitationCode)
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })

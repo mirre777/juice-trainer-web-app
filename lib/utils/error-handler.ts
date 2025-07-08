@@ -27,6 +27,7 @@ export enum ErrorType {
   AUTH_EMAIL_IN_USE = "AUTH_EMAIL_IN_USE",
   AUTH_WEAK_PASSWORD = "AUTH_WEAK_PASSWORD",
   AUTH_PROVIDER_ERROR = "AUTH_PROVIDER_ERROR",
+  AUTH_UNAUTHORIZED = "AUTH_UNAUTHORIZED",
 
   // Validation errors
   VALIDATION_FAILED = "VALIDATION_FAILED",
@@ -71,38 +72,39 @@ export interface AppError {
   type: ErrorType
   message: string
   originalError?: any
-  context?: any
+  metadata?: any
+  timestamp?: Date
+  statusCode?: number
+  stack?: string
 }
 
-export function createError(type: ErrorType, originalError: any, context: any, message: string): AppError {
-  return {
+export function createError(
+  type: ErrorType,
+  originalError: any = null,
+  metadata: any = {},
+  message?: string,
+): AppError {
+  const errorMessage = message || originalError?.message || `An error of type ${type} occurred`
+
+  const error: AppError = {
     type,
-    message,
+    message: errorMessage,
     originalError,
-    context,
+    metadata,
+    timestamp: new Date(),
   }
+
+  return error
 }
 
 export function logError(error: AppError): void {
-  console.error(`[${error.type}] ${error.message}`, {
-    context: error.context,
+  console.error("APP ERROR:", {
+    type: error.type,
+    message: error.message,
+    metadata: error.metadata,
+    timestamp: error.timestamp,
     originalError: error.originalError,
   })
-}
-
-export async function tryCatch<T>(
-  fn: () => Promise<T>,
-  errorType: ErrorType,
-  context: any,
-): Promise<[T | null, AppError | null]> {
-  try {
-    const result = await fn()
-    return [result, null]
-  } catch (error) {
-    const appError = createError(errorType, error, context, `${errorType} occurred`)
-    logError(appError)
-    return [null, appError]
-  }
 }
 
 export function handleClientError(
@@ -179,9 +181,22 @@ export function handleApiError(
   return { error: appError, statusCode }
 }
 
+export async function tryCatch<T>(
+  operation: () => Promise<T>,
+  errorType: ErrorType,
+  metadata: any = {},
+): Promise<[T | null, AppError | null]> {
+  try {
+    const result = await operation()
+    return [result, null]
+  } catch (error) {
+    const appError = createError(errorType, error, metadata)
+    logError(appError)
+    return [null, appError]
+  }
+}
+
 export function logAuditEvent(eventData: any): void {
-  // Audit logging disabled - this is a no-op function
-  // Previously would have written to the audit_logs collection
-  console.log("Audit logging disabled:", eventData)
+  console.log("Audit event:", eventData)
   return
 }
