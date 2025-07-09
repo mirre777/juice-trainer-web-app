@@ -1,42 +1,50 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    console.log("[DEBUG] Checking all cookies and authentication state")
+
     const cookieStore = cookies()
 
-    // Get all possible auth-related cookies
-    const authToken = cookieStore.get("auth-token")
-    const authTokenAlt = cookieStore.get("auth_token")
-    const sessionToken = cookieStore.get("session_token")
-    const userId = cookieStore.get("user_id")
+    // Get all cookies
+    const allCookies = {}
+    for (const [name, cookie] of cookieStore.getAll().map((c) => [c.name, c])) {
+      allCookies[name] = cookie.value
+    }
 
-    // Get all cookies for debugging
-    const allCookies: Record<string, string> = {}
-    cookieStore.getAll().forEach((cookie) => {
-      allCookies[cookie.name] = cookie.value
-    })
+    // Check specific auth-related cookies
+    const userIdCookie = cookieStore.get("user_id")
+    const authTokenCookie = cookieStore.get("auth-token")
+    const authToken2Cookie = cookieStore.get("auth_token")
+    const sessionTokenCookie = cookieStore.get("session_token")
 
-    return NextResponse.json({
+    const response = {
+      success: true,
       cookies: {
-        "auth-token": authToken?.value || null,
-        auth_token: authTokenAlt?.value || null,
-        session_token: sessionToken?.value || null,
-        user_id: userId?.value || null,
+        user_id: userIdCookie?.value || null,
+        "auth-token": authTokenCookie?.value || null,
+        auth_token: authToken2Cookie?.value || null,
+        session_token: sessionTokenCookie?.value || null,
       },
       allCookies,
       cookieCount: Object.keys(allCookies).length,
-      authCookiesFound: [
-        authToken && "auth-token",
-        authTokenAlt && "auth_token",
-        sessionToken && "session_token",
-        userId && "user_id",
-      ].filter(Boolean),
-    })
+      hasUserId: !!userIdCookie?.value,
+      hasAnyAuthToken: !!(authTokenCookie?.value || authToken2Cookie?.value || sessionTokenCookie?.value),
+      timestamp: new Date().toISOString(),
+    }
+
+    console.log("[DEBUG] Cookie analysis:", response)
+
+    return NextResponse.json(response)
   } catch (error) {
-    return NextResponse.json({
-      error: "Failed to read cookies",
-      details: error instanceof Error ? error.message : "Unknown error",
-    })
+    console.error("[DEBUG] Error analyzing cookies:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to analyze cookies",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

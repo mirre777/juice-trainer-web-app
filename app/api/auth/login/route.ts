@@ -2,8 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
 import { getUserByEmail } from "@/lib/firebase/user-service"
-import { generateToken } from "@/lib/auth/token-service"
-import { createUserSession } from "@/lib/auth/auth-service"
 
 function generateErrorId() {
   return `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -135,37 +133,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let token
-    try {
-      console.log(`[API:login] 🔄 Generating JWT token...`)
-      token = await generateToken({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email!,
-        role: userData.role || "user",
-      })
-      console.log(`[API:login] ✅ JWT token generated successfully`)
-    } catch (tokenError) {
-      logError(errorId, "Failed to generate JWT token", tokenError, {
-        userId: userCredential.user.uid,
-        email: userCredential.user.email,
-      })
-      return NextResponse.json({ error: "Failed to create session. Please try again.", errorId }, { status: 500 })
-    }
-
-    try {
-      console.log(`[API:login] 🔄 Creating user session...`)
-      await createUserSession(userCredential.user.uid, token)
-      console.log(`[API:login] ✅ User session created successfully`)
-    } catch (sessionError) {
-      logError(errorId, "Failed to create user session", sessionError, {
-        userId: userCredential.user.uid,
-        email: userCredential.user.email,
-      })
-      console.log(`[API:login] ⚠️  Session creation failed, but continuing with login`)
-    }
-
     console.log(`[API:login] 🎉 Login successful for user: ${email}`)
-    console.log(`[API:login] 🍪 Setting authentication cookies...`)
+    console.log(`[API:login] 🍪 Setting simple user_id cookie...`)
 
     const response = NextResponse.json({
       success: true,
@@ -174,10 +143,9 @@ export async function POST(request: NextRequest) {
         email: userCredential.user.email,
         role: userData.role || "user",
       },
-      token,
     })
 
-    // FIXED: Set multiple cookie formats for better compatibility
+    // Simple cookie approach - just store the user ID
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -186,17 +154,11 @@ export async function POST(request: NextRequest) {
       path: "/",
     }
 
-    // Set all possible cookie names your app might check for
-    response.cookies.set("auth-token", token, cookieOptions)
-    response.cookies.set("auth_token", token, cookieOptions)
+    // Set the user_id cookie (primary)
     response.cookies.set("user_id", userCredential.user.uid, cookieOptions)
-    response.cookies.set("session_token", token, cookieOptions)
 
-    console.log(`[API:login] ✅ Cookies set successfully:`)
-    console.log(`[API:login] - auth-token: ${token.substring(0, 20)}...`)
-    console.log(`[API:login] - auth_token: ${token.substring(0, 20)}...`)
+    console.log(`[API:login] ✅ Cookie set successfully:`)
     console.log(`[API:login] - user_id: ${userCredential.user.uid}`)
-    console.log(`[API:login] - session_token: ${token.substring(0, 20)}...`)
 
     return response
   } catch (error: any) {

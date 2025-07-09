@@ -26,15 +26,11 @@ export function middleware(request: NextRequest) {
     path.startsWith("/demo/") ||
     path.startsWith("/debug-env")
 
-  // Get authentication tokens
-  const authCookie =
-    request.cookies.get("auth-token") || request.cookies.get("auth_token") || request.cookies.get("session_token")
-  const token = authCookie?.value
+  // Get user_id cookie (simplified approach)
   const userId = request.cookies.get("user_id")?.value
 
   console.log(`[Middleware] Path: ${path}`)
   console.log(`[Middleware] Is public path: ${isPublicPath}`)
-  console.log(`[Middleware] Auth token exists: ${!!token}`)
   console.log(`[Middleware] User ID exists: ${!!userId}`)
 
   // Handle old invite URL format
@@ -46,13 +42,13 @@ export function middleware(request: NextRequest) {
   }
 
   // Redirect unauthenticated users from private paths
-  if (!isPublicPath && !token && !userId) {
-    console.log(`[Middleware] Redirecting to login - no authentication found`)
+  if (!isPublicPath && !userId) {
+    console.log(`[Middleware] Redirecting to login - no user_id cookie found`)
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
   // Handle authenticated users on auth pages
-  if ((path === "/login" || path === "/signup") && (token || userId)) {
+  if ((path === "/login" || path === "/signup") && userId) {
     // Allow if there's an invite code
     if (searchParams.has("code")) {
       console.log(`[Middleware] Allowing ${path} with invite code`)
@@ -64,13 +60,13 @@ export function middleware(request: NextRequest) {
   }
 
   // Redirect authenticated users from root to overview
-  if (path === "/" && (token || userId)) {
+  if (path === "/" && userId) {
     console.log(`[Middleware] Redirecting authenticated user from root to overview`)
     return NextResponse.redirect(new URL("/overview", request.url))
   }
 
-  // IMPORTANT: Don't redirect trainers to mobile-app-success
-  if (path === "/mobile-app-success" && (token || userId)) {
+  // Don't redirect trainers to mobile-app-success
+  if (path === "/mobile-app-success" && userId) {
     console.log(`[Middleware] Authenticated user trying to access mobile-app-success, redirecting to overview`)
     return NextResponse.redirect(new URL("/overview", request.url))
   }

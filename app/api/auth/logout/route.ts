@@ -1,46 +1,38 @@
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
-
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
-import { auth } from "@/lib/firebase/firebase"
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   try {
-    // Clear all cookies
+    console.log("[API:logout] 🔄 Processing logout request")
+
     const cookieStore = cookies()
-    const allCookies = cookieStore.getAll()
 
-    for (const cookie of allCookies) {
-      cookieStore.delete(cookie.name)
-    }
+    // Clear the user_id cookie
+    cookieStore.delete("user_id")
 
-    // Try to sign out from Firebase
-    try {
-      await auth.signOut()
-    } catch (error) {
-      console.error("Error signing out from Firebase:", error)
-      // Continue with logout even if Firebase signOut fails
-    }
+    // Also clear any legacy cookies that might exist
+    cookieStore.delete("auth-token")
+    cookieStore.delete("auth_token")
+    cookieStore.delete("session_token")
 
-    // Return success response with cleared cookies
-    return new NextResponse(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        // Set cookie to expire in the past to ensure it's deleted
-        "Set-Cookie": [
-          `token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `user_id=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `refresh_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-        ],
-      },
+    console.log("[API:logout] ✅ Cookies cleared successfully")
+
+    return NextResponse.json({
+      success: true,
+      message: "Logged out successfully",
     })
   } catch (error) {
-    console.error("Error during logout:", error)
-    return new NextResponse(JSON.stringify({ error: "Failed to logout" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    })
+    console.error("[API:logout] ❌ Error during logout:", error)
+    return NextResponse.json(
+      {
+        error: "Logout failed",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ message: "Logout endpoint - use POST method" }, { status: 405 })
 }
