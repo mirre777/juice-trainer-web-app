@@ -3,20 +3,19 @@ import { cookies } from "next/headers"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("[DEBUG] Token debug endpoint called")
+    console.log("[DEBUG] Starting token debug")
 
     const cookieStore = cookies()
 
-    // Get all possible authentication cookies
+    // Get all possible auth cookies
     const userIdCookie = cookieStore.get("user_id")
     const authTokenCookie = cookieStore.get("auth-token")
     const authToken2Cookie = cookieStore.get("auth_token")
     const sessionTokenCookie = cookieStore.get("session_token")
 
-    // Get all cookies for debugging
-    const allCookies = request.cookies.getAll()
+    const allCookies = cookieStore.getAll()
 
-    const response = {
+    const debugInfo = {
       success: true,
       cookies: {
         user_id: userIdCookie?.value || null,
@@ -28,30 +27,20 @@ export async function GET(request: NextRequest) {
         name: cookie.name,
         value: cookie.value.substring(0, 50) + (cookie.value.length > 50 ? "..." : ""),
       })),
-      environment: {
-        NODE_ENV: process.env.NODE_ENV,
-        VERCEL: process.env.VERCEL,
-        VERCEL_URL: process.env.VERCEL_URL,
-      },
-      firebaseConfig: {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? "Present" : "Missing",
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? "Present" : "Missing",
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? "Present" : "Missing",
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? "Present" : "Missing",
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ? "Present" : "Missing",
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? "Present" : "Missing",
-      },
+      cookieCount: allCookies.length,
+      timestamp: new Date().toISOString(),
     }
 
-    console.log("[DEBUG] Response:", JSON.stringify(response, null, 2))
+    console.log("[DEBUG] Cookie debug info:", debugInfo)
 
-    return NextResponse.json(response)
+    return NextResponse.json(debugInfo)
   } catch (error) {
-    console.error("[DEBUG] Error:", error)
+    console.error("[DEBUG] Error in token debug:", error)
     return NextResponse.json(
       {
-        error: "Debug endpoint failed",
-        details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

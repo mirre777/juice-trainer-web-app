@@ -4,27 +4,18 @@ export async function POST(request: NextRequest) {
   try {
     console.log("[API:logout] 🔄 Processing logout request")
 
-    const response = NextResponse.json({
-      success: true,
-      message: "Logged out successfully",
-    })
+    const response = NextResponse.json({ success: true, message: "Logged out successfully" })
 
-    // Clear all authentication cookies
-    const cookieOptions = {
+    // Clear the user_id cookie
+    response.cookies.set("user_id", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
+      sameSite: "lax",
       maxAge: 0, // Expire immediately
       path: "/",
-    }
+    })
 
-    response.cookies.set("user_id", "", cookieOptions)
-    response.cookies.set("auth-token", "", cookieOptions)
-    response.cookies.set("auth_token", "", cookieOptions)
-    response.cookies.set("session_token", "", cookieOptions)
-
-    console.log("[API:logout] ✅ All authentication cookies cleared")
-
+    console.log("[API:logout] ✅ User logged out successfully")
     return response
   } catch (error) {
     console.error("[API:logout] ❌ Logout error:", error)
@@ -36,8 +27,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   }
-}
-
-export async function GET() {
-  return NextResponse.json({ message: "Logout endpoint - use POST method" }, { status: 405 })
 }

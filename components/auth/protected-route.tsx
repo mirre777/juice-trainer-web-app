@@ -12,11 +12,7 @@ interface ProtectedRouteProps {
   fallbackPath?: string
 }
 
-export function ProtectedRoute({
-  children,
-  requiredRole = "trainer",
-  fallbackPath = "/login", // CHANGED: Default to login instead of mobile-app-success
-}: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRole = "trainer", fallbackPath = "/login" }: ProtectedRouteProps) {
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -29,7 +25,7 @@ export function ProtectedRoute({
 
         const response = await fetch("/api/auth/me", {
           credentials: "include",
-          cache: "no-store", // Ensure fresh data
+          cache: "no-store",
         })
 
         console.log(`[ProtectedRoute] API response status: ${response.status}`)
@@ -40,8 +36,16 @@ export function ProtectedRoute({
           return
         }
 
-        const userData = await response.json()
-        console.log(`[ProtectedRoute] Full user data received:`, userData)
+        const responseData = await response.json()
+        console.log(`[ProtectedRoute] Full user data received:`, responseData)
+
+        // Extract user data - the API returns {user: {...}}
+        const userData = responseData.user
+        if (!userData) {
+          console.log(`[ProtectedRoute] No user data in response`)
+          router.push("/login")
+          return
+        }
 
         const userRole = userData.role || userData.user_type || null
         console.log(`[ProtectedRoute] User role extracted: "${userRole}"`)
