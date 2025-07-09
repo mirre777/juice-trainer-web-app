@@ -11,7 +11,14 @@ export async function GET(request: NextRequest) {
     const token = cookieStore.get("auth-token")?.value
 
     if (!token) {
-      return NextResponse.json({ error: "No token found" }, { status: 401 })
+      return NextResponse.json({
+        error: "No token found",
+        cookies: {
+          "auth-token": cookieStore.get("auth-token")?.value,
+          auth_token: cookieStore.get("auth_token")?.value,
+          session_token: cookieStore.get("session_token")?.value,
+        },
+      })
     }
 
     console.log(`[DEBUG:token] 🔑 Token found: ${token.substring(0, 20)}...`)
@@ -20,16 +27,13 @@ export async function GET(request: NextRequest) {
     let tokenData
     try {
       tokenData = await verifyToken(token)
-      console.log(`[DEBUG:token] ✅ Token verified:`, tokenData)
+      console.log(`[DEBUG:token] ✅ Token verified`)
     } catch (tokenError: any) {
-      console.log(`[DEBUG:token] ❌ Token verification failed:`, tokenError)
-      return NextResponse.json(
-        {
-          error: "Token verification failed",
-          details: tokenError.message,
-        },
-        { status: 401 },
-      )
+      return NextResponse.json({
+        error: "Token verification failed",
+        details: tokenError.message,
+        token: token.substring(0, 50) + "...",
+      })
     }
 
     return NextResponse.json({
@@ -37,16 +41,14 @@ export async function GET(request: NextRequest) {
       tokenData,
       tokenType: typeof tokenData,
       isArray: Array.isArray(tokenData),
-      tokenLength: Array.isArray(tokenData) ? tokenData.length : null,
+      tokenLength: Array.isArray(tokenData) ? tokenData.length : "N/A",
+      firstElement: Array.isArray(tokenData) ? tokenData[0] : "N/A",
     })
   } catch (error: any) {
     console.error(`[DEBUG:token] ❌ Error:`, error)
-    return NextResponse.json(
-      {
-        error: "Debug failed",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({
+      error: "Debug failed",
+      details: error.message,
+    })
   }
 }

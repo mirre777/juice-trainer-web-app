@@ -90,14 +90,52 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Try to find user in Firestore
+    // Try to find user in Firestore - simplified approach to avoid index issues
     let userProfile = null
 
     try {
       console.log(`[API:me] 🔍 Starting Firestore search...`)
 
-      // First try by email if available
-      if (email) {
+      // Try by UID first (most direct, no index needed)
+      if (uid) {
+        console.log(`[API:me] 🔍 Searching by UID: ${uid}`)
+
+        try {
+          const userDocRef = doc(db, "users", uid)
+          console.log(`[API:me] 🔍 Getting document by UID...`)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            console.log(`[API:me] 📄 Raw user document data from UID:`, userData)
+
+            userProfile = {
+              uid: userDoc.id,
+              email: userData.email || "",
+              name: userData.name || "",
+              role: userData.role || "user",
+              user_type: userData.user_type || "",
+              hasFirebaseAuth: userData.hasFirebaseAuth || false,
+              profilePicture: userData.profilePicture || "",
+              isApproved: userData.isApproved || false,
+              subscriptionStatus: userData.subscriptionStatus || "",
+            }
+            console.log(`[API:me] ✅ User found by UID:`, {
+              uid: userProfile.uid,
+              email: userProfile.email,
+              role: userProfile.role,
+            })
+          } else {
+            console.log(`[API:me] ❌ No user document found with UID: ${uid}`)
+          }
+        } catch (uidError: any) {
+          console.error(`[API:me] ❌ Error querying UID ${uid}:`, uidError)
+          throw uidError
+        }
+      }
+
+      // If not found by UID, try by email (this might need an index)
+      if (!userProfile && email) {
         console.log(`[API:me] 🔍 Searching by email: ${email}`)
 
         // Validate email is a string
@@ -162,52 +200,9 @@ export async function GET(request: NextRequest) {
             }
           } catch (queryError: any) {
             console.error(`[API:me] ❌ Error querying email ${emailToTry}:`, queryError)
-            throw queryError
+            console.error(`[API:me] ❌ This might be an index issue. Error details:`, queryError.message)
+            // Don't throw here, continue to next email variant
           }
-        }
-      }
-
-      // If not found by email, try by UID
-      if (!userProfile && uid) {
-        console.log(`[API:me] 🔍 Searching by UID: ${uid}`)
-
-        // Validate UID is a string
-        if (typeof uid !== "string") {
-          console.log(`[API:me] ❌ UID is not a string:`, typeof uid, uid)
-          throw new Error(`UID is not a string: ${typeof uid}`)
-        }
-
-        try {
-          const userDocRef = doc(db, "users", uid)
-          console.log(`[API:me] 🔍 Getting document by UID...`)
-          const userDoc = await getDoc(userDocRef)
-
-          if (userDoc.exists()) {
-            const userData = userDoc.data()
-            console.log(`[API:me] 📄 Raw user document data from UID:`, userData)
-
-            userProfile = {
-              uid: userDoc.id,
-              email: userData.email || "",
-              name: userData.name || "",
-              role: userData.role || "user",
-              user_type: userData.user_type || "",
-              hasFirebaseAuth: userData.hasFirebaseAuth || false,
-              profilePicture: userData.profilePicture || "",
-              isApproved: userData.isApproved || false,
-              subscriptionStatus: userData.subscriptionStatus || "",
-            }
-            console.log(`[API:me] ✅ User found by UID:`, {
-              uid: userProfile.uid,
-              email: userProfile.email,
-              role: userProfile.role,
-            })
-          } else {
-            console.log(`[API:me] ❌ No user document found with UID: ${uid}`)
-          }
-        } catch (uidError: any) {
-          console.error(`[API:me] ❌ Error querying UID ${uid}:`, uidError)
-          throw uidError
         }
       }
 
@@ -221,6 +216,8 @@ export async function GET(request: NextRequest) {
               tokenEmail: email,
               tokenUid: uid,
               tokenRole: role,
+              searchedByUid: !!uid,
+              searchedByEmail: !!email,
             },
           },
           { status: 404 },
