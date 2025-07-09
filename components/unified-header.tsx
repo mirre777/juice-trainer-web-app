@@ -1,621 +1,188 @@
 "use client"
 
-import React from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { useState, useRef, useEffect, useCallback, useMemo } from "react"
-import {
-  User,
-  Settings,
-  CheckSquare,
-  Square,
-  Plus,
-  X,
-  Menu,
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
-  LogOut,
-} from "lucide-react"
+import { usePathname } from "next/navigation"
+import { Settings, Menu, X } from "lucide-react"
 import { LogoutButton } from "@/components/auth/logout-button"
-import { LogoutModal } from "@/components/auth/logout-modal"
 
-// Memoize the LogoutButton to prevent re-renders
-const MemoizedLogoutButton = React.memo(LogoutButton)
+interface User {
+  uid: string
+  email: string
+  name?: string
+  displayName?: string
+  role?: string
+}
 
-// Memoize the main header component
-export const UnifiedHeader = React.memo(function UnifiedHeader() {
+export function UnifiedHeader() {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const pathname = usePathname()
-  const router = useRouter()
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
-  const [showTaskList, setShowTaskList] = useState(() => {
-    // Initialize from localStorage if available
-    if (typeof window !== "undefined") {
-      const savedTaskListState = localStorage.getItem("taskListOpen")
-      return savedTaskListState ? JSON.parse(savedTaskListState) : false
-    }
-    return false
-  })
-  const [darkMode, setDarkMode] = useState(false)
-  const [tasks, setTasks] = useState(() => {
-    // Initialize tasks from localStorage if available
-    if (typeof window !== "undefined") {
-      const savedTasks = localStorage.getItem("tasks")
-      return savedTasks
-        ? JSON.parse(savedTasks)
-        : [
-            { id: 1, text: "Complete client assessment", completed: false },
-            { id: 2, text: "Send invoice to new clients", completed: true },
-            { id: 3, text: "Prepare workout plan", completed: false },
-          ]
-    }
-    return [
-      { id: 1, text: "Complete client assessment", completed: false },
-      { id: 2, text: "Send invoice to new clients", completed: true },
-      { id: 3, text: "Prepare workout plan", completed: false },
-    ]
-  })
-  const [newTask, setNewTask] = useState("")
-  const [showLogoutModal, setShowLogoutModal] = useState(false)
-  const [userName, setUserName] = useState<string>("")
-  const [isLoadingUser, setIsLoadingUser] = useState(true)
 
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const taskListRef = useRef<HTMLDivElement>(null)
-  const mobileMenuRef = useRef<HTMLDivElement>(null)
-
-  // Memoize demo mode check
-  const isDemoMode = useMemo(() => pathname?.startsWith("/demo"), [pathname])
-  const pathPrefix = useMemo(() => (isDemoMode ? "/demo" : ""), [isDemoMode])
-
-  // Fetch user data from API
   useEffect(() => {
-    if (!isDemoMode) {
-      const fetchUserData = async () => {
-        try {
-          console.log("[UnifiedHeader] Fetching user data...")
-          const response = await fetch("/api/auth/me", {
-            method: "GET",
-            credentials: "include",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          })
+    const fetchUser = async () => {
+      try {
+        console.log("[UnifiedHeader] Fetching user data...")
+        const response = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
 
-          console.log("[UnifiedHeader] API Response status:", response.status)
+        console.log("[UnifiedHeader] Response status:", response.status)
 
-          if (response.ok) {
-            const userData = await response.json()
-            console.log("[UnifiedHeader] User data received:", userData)
-
-            // Extract name from the response - try multiple fields
-            const name = userData.name || userData.displayName || userData.email?.split("@")[0] || "User"
-            console.log("[UnifiedHeader] Setting user name to:", name)
-            setUserName(name)
-
-            // Save to localStorage for faster loading next time
-            if (typeof window !== "undefined") {
-              localStorage.setItem("userName", name)
-            }
-          } else {
-            console.log("[UnifiedHeader] Failed to fetch user data, status:", response.status)
-            // Try to load from localStorage as fallback
-            if (typeof window !== "undefined") {
-              const savedName = localStorage.getItem("userName")
-              if (savedName) {
-                console.log("[UnifiedHeader] Using saved name from localStorage:", savedName)
-                setUserName(savedName)
-              }
-            }
-          }
-        } catch (error) {
-          console.error("[UnifiedHeader] Error fetching user data:", error)
-          // Try to load from localStorage as fallback
-          if (typeof window !== "undefined") {
-            const savedName = localStorage.getItem("userName")
-            if (savedName) {
-              console.log("[UnifiedHeader] Using saved name from localStorage after error:", savedName)
-              setUserName(savedName)
-            }
-          }
-        } finally {
-          setIsLoadingUser(false)
-        }
-      }
-
-      fetchUserData()
-    } else {
-      setIsLoadingUser(false)
-    }
-  }, [isDemoMode])
-
-  // Memoize display name
-  const displayName = useMemo(() => {
-    if (isDemoMode) return "Jackie SuperJacked"
-    if (isLoadingUser) return "Loading..."
-    return userName || "Guest"
-  }, [isDemoMode, userName, isLoadingUser])
-
-  // Memoize isActive function
-  const isActive = useCallback(
-    (path: string) => {
-      // Remove trailing slashes for consistency
-      const normalizedPath = path.endsWith("/") ? path.slice(0, -1) : path
-      const normalizedPathname = pathname?.endsWith("/") ? pathname.slice(0, -1) : pathname
-
-      // Handle demo paths
-      const basePath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`
-      const demoPath = `/demo${basePath}`
-
-      // Special case for overview pages
-      if (normalizedPath === "/overview") {
-        if (isDemoMode) {
-          return normalizedPathname === "/demo" || normalizedPathname === "/demo/overview"
+        if (response.ok) {
+          const userData = await response.json()
+          console.log("[UnifiedHeader] User data received:", userData)
+          setUser(userData)
         } else {
-          return normalizedPathname === "/" || normalizedPathname === "/overview"
+          console.error("[UnifiedHeader] Failed to fetch user data")
+          setUser(null)
         }
-      }
-
-      // Special case for programs/import-programs
-      if (normalizedPath === "/import-programs") {
-        if (isDemoMode) {
-          return normalizedPathname === "/demo/import-programs" || normalizedPathname === "/demo/programs"
-        } else {
-          return normalizedPathname === "/import-programs" || normalizedPathname === "/programs"
-        }
-      }
-
-      // Regular path matching
-      if (isDemoMode) {
-        return normalizedPathname === demoPath || normalizedPathname?.startsWith(`${demoPath}/`)
-      } else {
-        return normalizedPathname === basePath || normalizedPathname?.startsWith(`${basePath}/`)
-      }
-    },
-    [pathname, isDemoMode],
-  )
-
-  // Memoize navigation items
-  const navItems = useMemo(
-    () => [
-      { name: "Overview", path: "/overview" },
-      { name: "Clients", path: "/clients" },
-      { name: "Calendar", path: "/calendar" },
-      { name: "Programs", path: "/import-programs" },
-      { name: "Marketplace", path: "https://www.juice.fitness/marketplace" },
-    ],
-    [],
-  )
-
-  // Memoize current index
-  const currentIndex = useMemo(
-    () => navItems.findIndex((item) => !item.external && isActive(item.path)),
-    [navItems, isActive],
-  )
-
-  // Memoize task completion stats
-  const taskStats = useMemo(
-    () => ({
-      completed: tasks.filter((t) => t.completed).length,
-      total: tasks.length,
-    }),
-    [tasks],
-  )
-
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks))
-  }, [tasks])
-
-  useEffect(() => {
-    localStorage.setItem("taskListOpen", JSON.stringify(showTaskList))
-  }, [showTaskList])
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
-        setShowMobileMenu(false)
+      } catch (error) {
+        console.error("[UnifiedHeader] Error fetching user:", error)
+        setUser(null)
+      } finally {
+        setLoading(false)
       }
     }
 
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
+    fetchUser()
   }, [])
 
-  const toggleDarkMode = useCallback(() => {
-    setDarkMode(!darkMode)
-  }, [darkMode])
+  const getDisplayName = (user: User | null): string => {
+    if (!user) return "Loading..."
 
-  // First, add a function to play the sound when a task is completed
-  const playTaskCompleteSound = useCallback(() => {
-    const audio = new Audio("/sounds/task-complete.wav")
-    audio.volume = 0.5
-
-    // This ensures the sound plays even if the user hasn't interacted with the page
-    const playPromise = audio.play()
-
-    if (playPromise !== undefined) {
-      playPromise.catch((error) => {
-        console.error("Error playing sound:", error)
-      })
+    // Try different name fields in order of preference
+    if (user.name) return user.name
+    if (user.displayName) return user.displayName
+    if (user.email) {
+      // Extract name from email (before @)
+      const emailName = user.email.split("@")[0]
+      return emailName.charAt(0).toUpperCase() + emailName.slice(1)
     }
-  }, [])
+    return "User"
+  }
 
-  // Then update the toggleTaskCompletion function to play the sound when a task is marked as completed
-  const toggleTaskCompletion = useCallback(
-    (id: number) => {
-      const task = tasks.find((t) => t.id === id)
-      const wasCompleted = task?.completed
+  const getInitials = (user: User | null): string => {
+    if (!user) return "L"
 
-      setTasks(tasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)))
+    const displayName = getDisplayName(user)
+    if (displayName === "Loading...") return "L"
 
-      // Play sound only when marking as completed, not when unchecking
-      if (!wasCompleted) {
-        playTaskCompleteSound()
-      }
-    },
-    [tasks, playTaskCompleteSound],
-  )
-
-  const addTask = useCallback(() => {
-    if (newTask.trim()) {
-      const newId = Math.max(0, ...tasks.map((t) => t.id)) + 1
-      setTasks([...tasks, { id: newId, text: newTask.trim(), completed: false }])
-      setNewTask("")
+    const words = displayName.split(" ")
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase()
     }
-  }, [newTask, tasks])
+    return displayName.charAt(0).toUpperCase()
+  }
 
-  const removeTask = useCallback(
-    (id: number) => {
-      setTasks(tasks.filter((task) => task.id !== id))
-    },
-    [tasks],
-  )
+  const navItems = [
+    { name: "Overview", href: "/overview" },
+    { name: "Clients", href: "/clients" },
+    { name: "Calendar", href: "/calendar" },
+    { name: "Programs", href: "/programs" },
+    { name: "Marketplace", href: "/marketplace" },
+  ]
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        addTask()
-      }
-    },
-    [addTask],
-  )
-
-  const navigateTo = useCallback(
-    (direction: "prev" | "next") => {
-      if (currentIndex === -1) return
-
-      let newIndex = currentIndex
-      if (direction === "prev") {
-        newIndex = Math.max(0, currentIndex - 1)
-      } else {
-        newIndex = Math.min(navItems.length - 1, currentIndex + 1)
-      }
-
-      if (newIndex !== currentIndex) {
-        router.push(`${pathPrefix}${navItems[newIndex].path}`)
-      }
-    },
-    [currentIndex, navItems, pathPrefix, router],
-  )
+  const isActive = (href: string) => {
+    if (href === "/overview") {
+      return pathname === "/" || pathname === "/overview"
+    }
+    return pathname.startsWith(href)
+  }
 
   return (
-    <>
-      {/* Header */}
-      <div className="relative z-30 bg-white">
-        <div className="px-4 sm:px-6 md:px-8 lg:px-20">
-          <div className="max-w-[1280px] py-4 mx-auto">
-            <div className="flex items-center justify-between">
-              {/* Logo */}
-              <div className="text-2xl md:text-3xl font-bold text-black">Juice</div>
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
+          <div className="flex items-center">
+            <Link href="/overview" className="text-2xl font-bold text-black">
+              Juice
+            </Link>
+          </div>
 
-              {/* Navigation - Desktop */}
-              <div className="hidden md:flex items-center space-x-8">
-                {navItems.map((item) => (
-                  <div key={item.name}>
-                    {item.path.startsWith("http") ? (
-                      <a
-                        href={item.path}
-                        className="py-3 whitespace-nowrap text-sm text-gray-500 hover:text-gray-800 cursor-pointer"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {item.name}
-                      </a>
-                    ) : (
-                      <Link
-                        href={`${pathPrefix}${item.path}`}
-                        className={`py-3 whitespace-nowrap cursor-pointer text-sm ${
-                          isActive(item.path)
-                            ? "border-b-2 border-lime-300 font-medium"
-                            : "text-gray-500 hover:text-gray-800"
-                        }`}
-                      >
-                        {item.name}
-                      </Link>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex space-x-8">
+            {navItems.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive(item.href) ? "text-black border-b-2 border-[#CCFF00]" : "text-gray-600 hover:text-black"
+                }`}
+              >
+                {item.name}
+              </Link>
+            ))}
+          </nav>
 
-              {/* Right section with user name, upgrade button and action icons */}
-              <div className="flex items-center gap-4">
-                <div className="hidden md:block text-sm font-medium text-black min-w-[80px] text-right">
-                  {displayName}
-                </div>
+          {/* Right side - Desktop */}
+          <div className="hidden md:flex items-center space-x-4">
+            <span className="text-sm text-gray-600">{loading ? "Loading..." : getDisplayName(user)}</span>
+            <button className="bg-[#CCFF00] text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-[#b8e600] transition-colors">
+              Upgrade
+            </button>
+            <Link href="/settings">
+              <Settings className="h-5 w-5 text-gray-600 hover:text-black cursor-pointer" />
+            </Link>
+            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+              <span className="text-sm font-medium text-gray-700">{loading ? "L" : getInitials(user)}</span>
+            </div>
+          </div>
+
+          {/* Mobile menu button */}
+          <div className="md:hidden">
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-gray-600 hover:text-black">
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Navigation */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-200 py-4">
+            <div className="flex flex-col space-y-4">
+              {navItems.map((item) => (
                 <Link
-                  href="/pricing"
-                  className="hidden md:block bg-gradient-to-r from-[#d2ff28] to-[#a8cc20] text-black px-4 py-2 rounded-full text-sm font-medium hover:from-[#c2ef18] hover:to-[#98bc10] transition-colors"
+                  key={item.name}
+                  href={item.href}
+                  className={`px-3 py-2 text-sm font-medium ${
+                    isActive(item.href) ? "text-black bg-gray-50" : "text-gray-600"
+                  }`}
+                  onClick={() => setMobileMenuOpen(false)}
                 >
-                  Upgrade
+                  {item.name}
                 </Link>
-
-                {/* Task List icon */}
-                <div className="relative hidden md:block" ref={taskListRef}>
-                  <div
-                    className="w-11 h-11 relative overflow-hidden cursor-pointer hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
-                    onClick={() => {
-                      setShowTaskList(!showTaskList)
-                    }}
-                  >
-                    <CheckSquare className="h-6 w-6" />
+              ))}
+              <div className="border-t border-gray-200 pt-4">
+                <div className="flex items-center space-x-3 px-3 py-2">
+                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-gray-700">{loading ? "L" : getInitials(user)}</span>
                   </div>
-
-                  {/* Task List Dropdown */}
-                  {showTaskList && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                      <div className="p-4">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-medium text-lg">Tasks</h3>
-                          <div className="text-xs text-gray-500">
-                            {taskStats.completed}/{taskStats.total} completed
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-                          {tasks.map((task) => (
-                            <div key={task.id} className="flex items-center group">
-                              <button onClick={() => toggleTaskCompletion(task.id)} className="flex-shrink-0 mr-2">
-                                {task.completed ? (
-                                  <CheckSquare className="h-5 w-5 text-lime-500" />
-                                ) : (
-                                  <Square className="h-5 w-5 text-gray-400" />
-                                )}
-                              </button>
-                              <span className={`flex-1 text-sm ${task.completed ? "line-through text-gray-400" : ""}`}>
-                                {task.text}
-                              </span>
-                              <button
-                                onClick={() => removeTask(task.id)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="h-4 w-4 text-gray-400 hover:text-red-500" />
-                              </button>
-                            </div>
-                          ))}
-
-                          {tasks.length === 0 && (
-                            <div className="text-center text-sm text-gray-500 py-2">No tasks yet. Add one below!</div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center">
-                          <input
-                            type="text"
-                            placeholder="Add a new task..."
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-lime-300 text-sm"
-                            value={newTask}
-                            onChange={(e) => setNewTask(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                          />
-                          <button
-                            onClick={addTask}
-                            className="px-3 py-2 bg-lime-300 rounded-r-md hover:bg-lime-400 transition-colors"
-                          >
-                            <Plus className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </div>
+                  <span className="text-sm text-gray-600">{loading ? "Loading..." : getDisplayName(user)}</span>
+                </div>
+                <div className="flex flex-col space-y-2 px-3 pt-2">
+                  <button className="bg-[#CCFF00] text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-[#b8e600] transition-colors">
+                    Upgrade
+                  </button>
+                  <Link href="/settings" onClick={() => setMobileMenuOpen(false)}>
+                    <div className="flex items-center space-x-2 text-gray-600 hover:text-black">
+                      <Settings className="h-4 w-4" />
+                      <span className="text-sm">Settings</span>
                     </div>
-                  )}
+                  </Link>
+                  <LogoutButton />
                 </div>
-
-                {/* Settings dropdown */}
-                <Link
-                  href={`${pathPrefix}/settings`}
-                  className="p-2 rounded-md hover:bg-gray-100"
-                  aria-label="Settings"
-                >
-                  <Settings className="h-6 w-6" />
-                </Link>
-
-                {/* Mobile Menu Button */}
-                <button
-                  className="md:hidden p-2 rounded-md hover:bg-gray-100"
-                  onClick={() => setShowMobileMenu(!showMobileMenu)}
-                >
-                  <Menu className="h-6 w-6" />
-                </button>
               </div>
             </div>
-
-            {/* Navigation - Mobile */}
-            <div className="md:hidden relative flex items-center justify-between mt-4">
-              {/* Left Arrow */}
-              <button
-                onClick={() => navigateTo("prev")}
-                className={`p-2 rounded-full ${currentIndex > 0 ? "text-gray-700" : "text-gray-300"}`}
-                disabled={currentIndex <= 0}
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-
-              {/* Current Page Title */}
-              <div className="text-center font-medium text-sm">
-                {currentIndex >= 0 ? navItems[currentIndex].name : "Menu"}
-              </div>
-
-              {/* Right Arrow */}
-              <button
-                onClick={() => navigateTo("next")}
-                className={`p-2 rounded-full ${currentIndex < navItems.length - 1 ? "text-gray-700" : "text-gray-300"}`}
-                disabled={currentIndex >= navItems.length - 1}
-                aria-label="Next page"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Demo banner for mobile */}
-            {pathname?.startsWith("/demo") && (
-              <div className="md:hidden flex flex-col items-center mt-4 bg-lime-100 px-4 py-2 rounded-lg">
-                <span className="text-sm font-medium mb-2">🚀 You're exploring the demo version</span>
-                <Link
-                  href="/signup"
-                  className="bg-black text-white px-3 py-1 rounded-md text-sm font-medium w-full text-center"
-                >
-                  Start Now
-                </Link>
-              </div>
-            )}
           </div>
-        </div>
+        )}
       </div>
-
-      {/* Mobile Menu */}
-      {showMobileMenu && (
-        <div ref={mobileMenuRef} className="md:hidden fixed inset-0 z-50 bg-white">
-          <div className="p-4">
-            <div className="flex justify-between items-center mb-6">
-              <div className="text-2xl font-bold text-black">Juice</div>
-              <button className="p-2 rounded-md hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50 rounded-lg">
-              <div className="w-10 h-10 bg-violet-100 rounded-full flex justify-center items-center">
-                <div className="text-base font-medium text-violet-600">
-                  {isDemoMode ? "JS" : userName ? userName.charAt(0).toUpperCase() : "G"}
-                </div>
-              </div>
-              <div>
-                <div className="text-base font-medium text-black">{displayName}</div>
-                <div className="text-sm text-gray-500">Premium Plan</div>
-              </div>
-            </div>
-
-            <nav className="space-y-1">
-              <Link
-                href={`${pathPrefix}/overview`}
-                className={`flex items-center px-4 py-3 rounded-md text-sm ${isActive("/overview") ? "bg-lime-300 font-medium" : "text-gray-600 hover:bg-gray-50"}`}
-                onClick={() => setShowMobileMenu(false)}
-              >
-                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="3" y="3" width="7" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
-                  <rect x="14" y="3" width="7" height="5" rx="2" stroke="currentColor" strokeWidth="2" />
-                  <rect x="14" y="12" width="7" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
-                  <rect x="3" y="16" width="7" height="5" rx="2" stroke="currentColor" strokeWidth="2" />
-                </svg>
-                Overview
-              </Link>
-              <Link
-                href={`${pathPrefix}/clients`}
-                className={`flex items-center px-4 py-3 rounded-md text-sm ${isActive("/clients") ? "bg-lime-300 font-medium" : "text-gray-600 hover:bg-gray-50"}`}
-                onClick={() => setShowMobileMenu(false)}
-              >
-                <User className="w-5 h-5 mr-3" />
-                Clients
-              </Link>
-              <Link
-                href={`${pathPrefix}/calendar`}
-                className={`flex items-center px-4 py-3 rounded-md text-sm ${isActive("/calendar") ? "bg-lime-300 font-medium" : "text-gray-600 hover:bg-gray-50"}`}
-                onClick={() => setShowMobileMenu(false)}
-              >
-                <Calendar className="w-5 h-5 mr-3" />
-                Calendar
-              </Link>
-              <Link
-                href={`${pathPrefix}/import-programs`}
-                className={`flex items-center px-4 py-3 rounded-md text-sm ${isActive("/import-programs") ? "bg-lime-300 font-medium" : "text-gray-600 hover:bg-gray-50"}`}
-                onClick={() => setShowMobileMenu(false)}
-              >
-                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                Programs
-              </Link>
-              <a
-                href="https://www.juice.fitness/marketplace"
-                className="flex items-center px-4 py-3 rounded-md text-sm text-gray-600 hover:bg-gray-50"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setShowMobileMenu(false)}
-              >
-                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M9 22V12H15V22"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Marketplace
-              </a>
-              <Link
-                href={`${pathPrefix}/settings`}
-                className={`flex items-center px-4 py-3 rounded-md text-sm ${isActive("/settings") ? "bg-lime-300 font-medium" : "text-gray-600 hover:bg-gray-50"}`}
-                onClick={() => setShowMobileMenu(false)}
-              >
-                <Settings className="w-5 h-5 mr-3" />
-                Settings
-              </Link>
-            </nav>
-
-            <div className="mt-8 pt-4 border-t border-gray-200">
-              {!pathname?.startsWith("/demo") && (
-                <Link
-                  href="/pricing"
-                  className="flex justify-center items-center w-full mb-4 bg-gradient-to-r from-[#d2ff28] to-[#a8cc20] text-black px-4 py-3 rounded-md text-sm font-medium hover:from-[#c2ef18] hover:to-[#98bc10] transition-colors"
-                >
-                  Upgrade Your Plan
-                </Link>
-              )}
-              <button
-                onClick={() => setShowLogoutModal(true)}
-                className="w-full justify-center flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 rounded-md"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Log Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Logout Modal */}
-      <LogoutModal open={showLogoutModal} onOpenChange={setShowLogoutModal} />
-    </>
+    </header>
   )
-})
+}
