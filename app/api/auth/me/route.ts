@@ -29,11 +29,12 @@ export async function GET(request: NextRequest) {
     let tokenData
     try {
       tokenData = await verifyToken(token)
-      console.log(`[API:me] ✅ Token verified, full data:`, tokenData)
+      console.log(`[API:me] ✅ Token verified successfully`)
       console.log(`[API:me] 🔍 Token data type:`, typeof tokenData, Array.isArray(tokenData))
+      console.log(`[API:me] 🔍 Token data structure:`, JSON.stringify(tokenData, null, 2))
     } catch (tokenError: any) {
       console.log(`[API:me] ❌ Token verification failed:`, tokenError.message)
-      return NextResponse.json({ error: "Invalid token", errorId }, { status: 401 })
+      return NextResponse.json({ error: "Invalid token", errorId, details: tokenError.message }, { status: 401 })
     }
 
     if (!tokenData) {
@@ -50,8 +51,9 @@ export async function GET(request: NextRequest) {
     // Handle array response from token verification
     let userData
     if (Array.isArray(tokenData)) {
-      console.log(`[API:me] 📋 Token data is array, taking first element`)
+      console.log(`[API:me] 📋 Token data is array with length:`, tokenData.length)
       userData = tokenData[0]
+      console.log(`[API:me] 📋 Using first array element:`, userData)
     } else {
       console.log(`[API:me] 📋 Token data is object`)
       userData = tokenData
@@ -92,77 +94,120 @@ export async function GET(request: NextRequest) {
     let userProfile = null
 
     try {
+      console.log(`[API:me] 🔍 Starting Firestore search...`)
+
       // First try by email if available
       if (email) {
-        const emailsToTry = [email]
+        console.log(`[API:me] 🔍 Searching by email: ${email}`)
 
-        // Add email variants
-        if (email.includes("+4@")) {
-          emailsToTry.push(email.replace("+4@", "@"))
-        } else if (email.includes("@") && !email.includes("+")) {
-          emailsToTry.push(email.replace("@", "+4@"))
+        // Validate email is a string
+        if (typeof email !== "string") {
+          console.log(`[API:me] ❌ Email is not a string:`, typeof email, email)
+          throw new Error(`Email is not a string: ${typeof email}`)
         }
 
-        console.log(`[API:me] 🔍 Searching for user with emails:`, emailsToTry)
+        const emailsToTry = [email]
+
+        // Add email variants safely
+        try {
+          if (email.includes("+4@")) {
+            emailsToTry.push(email.replace("+4@", "@"))
+          } else if (email.includes("@") && !email.includes("+")) {
+            emailsToTry.push(email.replace("@", "+4@"))
+          }
+        } catch (emailError: any) {
+          console.log(`[API:me] ⚠️ Error creating email variants:`, emailError.message)
+        }
+
+        console.log(`[API:me] 🔍 Email variants to try:`, emailsToTry)
 
         for (const emailToTry of emailsToTry) {
-          console.log(`[API:me] 🔍 Trying email: ${emailToTry}`)
+          console.log(`[API:me] 🔍 Querying Firestore for email: ${emailToTry}`)
 
-          const usersRef = collection(db, "users")
-          const q = query(usersRef, where("email", "==", emailToTry))
-          const querySnapshot = await getDocs(q)
+          try {
+            const usersRef = collection(db, "users")
+            const q = query(usersRef, where("email", "==", emailToTry))
 
-          if (!querySnapshot.empty) {
-            const userDoc = querySnapshot.docs[0]
-            const userData = userDoc.data()
+            console.log(`[API:me] 🔍 Executing Firestore query...`)
+            const querySnapshot = await getDocs(q)
 
-            userProfile = {
-              uid: userDoc.id,
-              email: userData.email,
-              name: userData.name || "",
-              role: userData.role || "user",
-              user_type: userData.user_type,
-              hasFirebaseAuth: userData.hasFirebaseAuth,
-              profilePicture: userData.profilePicture,
-              isApproved: userData.isApproved,
-              subscriptionStatus: userData.subscriptionStatus,
+            console.log(`[API:me] 🔍 Query completed, found ${querySnapshot.size} documents`)
+
+            if (!querySnapshot.empty) {
+              const userDoc = querySnapshot.docs[0]
+              const userData = userDoc.data()
+
+              console.log(`[API:me] 📄 Raw user document data:`, userData)
+
+              userProfile = {
+                uid: userDoc.id,
+                email: userData.email || "",
+                name: userData.name || "",
+                role: userData.role || "user",
+                user_type: userData.user_type || "",
+                hasFirebaseAuth: userData.hasFirebaseAuth || false,
+                profilePicture: userData.profilePicture || "",
+                isApproved: userData.isApproved || false,
+                subscriptionStatus: userData.subscriptionStatus || "",
+              }
+
+              console.log(`[API:me] ✅ User found with email ${emailToTry}:`, {
+                uid: userProfile.uid,
+                email: userProfile.email,
+                role: userProfile.role,
+              })
+              break
+            } else {
+              console.log(`[API:me] ❌ No user found with email: ${emailToTry}`)
             }
-
-            console.log(`[API:me] ✅ User found with email ${emailToTry}:`, {
-              uid: userProfile.uid,
-              email: userProfile.email,
-              role: userProfile.role,
-            })
-            break
+          } catch (queryError: any) {
+            console.error(`[API:me] ❌ Error querying email ${emailToTry}:`, queryError)
+            throw queryError
           }
         }
       }
 
       // If not found by email, try by UID
       if (!userProfile && uid) {
-        console.log(`[API:me] 🔍 Trying to find user by UID: ${uid}`)
+        console.log(`[API:me] 🔍 Searching by UID: ${uid}`)
 
-        const userDocRef = doc(db, "users", uid)
-        const userDoc = await getDoc(userDocRef)
+        // Validate UID is a string
+        if (typeof uid !== "string") {
+          console.log(`[API:me] ❌ UID is not a string:`, typeof uid, uid)
+          throw new Error(`UID is not a string: ${typeof uid}`)
+        }
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          userProfile = {
-            uid: userDoc.id,
-            email: userData.email,
-            name: userData.name || "",
-            role: userData.role || "user",
-            user_type: userData.user_type,
-            hasFirebaseAuth: userData.hasFirebaseAuth,
-            profilePicture: userData.profilePicture,
-            isApproved: userData.isApproved,
-            subscriptionStatus: userData.subscriptionStatus,
+        try {
+          const userDocRef = doc(db, "users", uid)
+          console.log(`[API:me] 🔍 Getting document by UID...`)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            console.log(`[API:me] 📄 Raw user document data from UID:`, userData)
+
+            userProfile = {
+              uid: userDoc.id,
+              email: userData.email || "",
+              name: userData.name || "",
+              role: userData.role || "user",
+              user_type: userData.user_type || "",
+              hasFirebaseAuth: userData.hasFirebaseAuth || false,
+              profilePicture: userData.profilePicture || "",
+              isApproved: userData.isApproved || false,
+              subscriptionStatus: userData.subscriptionStatus || "",
+            }
+            console.log(`[API:me] ✅ User found by UID:`, {
+              uid: userProfile.uid,
+              email: userProfile.email,
+              role: userProfile.role,
+            })
+          } else {
+            console.log(`[API:me] ❌ No user document found with UID: ${uid}`)
           }
-          console.log(`[API:me] ✅ User found by UID:`, {
-            uid: userProfile.uid,
-            email: userProfile.email,
-            role: userProfile.role,
-          })
+        } catch (uidError: any) {
+          console.error(`[API:me] ❌ Error querying UID ${uid}:`, uidError)
+          throw uidError
         }
       }
 
@@ -183,11 +228,13 @@ export async function GET(request: NextRequest) {
       }
     } catch (firestoreError: any) {
       console.error(`[API:me] ❌ Firestore error:`, firestoreError)
+      console.error(`[API:me] ❌ Error stack:`, firestoreError.stack)
       return NextResponse.json(
         {
           error: "Database error",
           errorId,
           details: firestoreError.message,
+          stack: process.env.NODE_ENV === "development" ? firestoreError.stack : undefined,
         },
         { status: 500 },
       )
@@ -198,7 +245,7 @@ export async function GET(request: NextRequest) {
       user: userProfile,
     }
 
-    console.log(`[API:me] 🎉 Returning user data:`, {
+    console.log(`[API:me] 🎉 Successfully returning user data:`, {
       email: response.user.email,
       role: response.user.role,
       uid: response.user.uid,
@@ -207,6 +254,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response)
   } catch (error: any) {
     console.error(`[API:me] ❌ Unexpected error (${errorId}):`, error)
+    console.error(`[API:me] ❌ Error stack:`, error.stack)
     return NextResponse.json(
       {
         error: "Internal server error",
