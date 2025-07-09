@@ -1,22 +1,25 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
+  const path = request.nextUrl.pathname
 
-  // Skip middleware for static files, API routes (except auth check), and public pages
+  // Skip middleware for static files, API routes, and public paths
   if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/static") ||
-    pathname.includes(".") ||
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/invite" ||
-    pathname.startsWith("/invite/") ||
-    pathname === "/" ||
-    pathname.startsWith("/shared/") ||
-    pathname.startsWith("/demo/") ||
-    pathname === "/debug-env"
+    path.startsWith("/_next") ||
+    path.startsWith("/api") ||
+    path.startsWith("/static") ||
+    path.includes(".") ||
+    path === "/" ||
+    path === "/login" ||
+    path === "/signup" ||
+    path === "/pricing" ||
+    path.startsWith("/invite/") ||
+    path.startsWith("/shared/") ||
+    path.startsWith("/demo/") ||
+    path === "/debug-env" ||
+    path === "/mobile-app-success" ||
+    path === "/signup-juice-app"
   ) {
     return NextResponse.next()
   }
@@ -24,7 +27,7 @@ export function middleware(request: NextRequest) {
   // Check for user_id cookie
   const userId = request.cookies.get("user_id")?.value
 
-  console.log(`[Middleware] Path: ${pathname}`)
+  console.log(`[Middleware] Path: ${path}`)
   console.log(`[Middleware] User ID cookie: ${userId ? "present" : "missing"}`)
 
   if (!userId) {
@@ -36,14 +39,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 }

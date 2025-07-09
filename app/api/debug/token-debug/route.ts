@@ -1,54 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 Debug: Checking cookies and environment...")
+    const cookieStore = cookies()
 
-    // Check cookies
-    const cookies = request.cookies.getAll()
-    const cookieData = cookies.reduce(
-      (acc, cookie) => {
-        acc[cookie.name] = cookie.value
-        return acc
-      },
-      {} as Record<string, string>,
-    )
+    // Get all possible cookies
+    const userIdCookie = cookieStore.get("user_id")
+    const authTokenCookie = cookieStore.get("auth-token")
+    const authToken2Cookie = cookieStore.get("auth_token")
+    const sessionTokenCookie = cookieStore.get("session_token")
 
-    // Check specific auth cookies
-    const userId = request.cookies.get("user_id")?.value
-    const authToken = request.cookies.get("auth-token")?.value || request.cookies.get("auth_token")?.value
+    const allCookies = cookieStore.getAll()
 
-    // Check environment variables (server-side only)
-    const envCheck = {
-      NEXT_PUBLIC_FIREBASE_API_KEY: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-      NEXT_PUBLIC_FIREBASE_PROJECT_ID: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: !!process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: !!process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-      NEXT_PUBLIC_FIREBASE_APP_ID: !!process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    }
-
-    const response = {
+    return NextResponse.json({
       success: true,
-      cookies: cookieData,
-      authCookies: {
-        user_id: userId || null,
-        auth_token: authToken || null,
+      cookies: {
+        user_id: userIdCookie?.value || "Not found",
+        "auth-token": authTokenCookie?.value || "Not found",
+        auth_token: authToken2Cookie?.value || "Not found",
+        session_token: sessionTokenCookie?.value || "Not found",
       },
-      environment: envCheck,
-      timestamp: new Date().toISOString(),
-    }
-
-    console.log("🔍 Debug response:", response)
-    return NextResponse.json(response)
-  } catch (error: any) {
-    console.error("❌ Debug error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      { status: 500 },
-    )
+      allCookies: allCookies.map((cookie) => ({
+        name: cookie.name,
+        value: cookie.value.substring(0, 50) + (cookie.value.length > 50 ? "..." : ""),
+      })),
+      cookieCount: allCookies.length,
+    })
+  } catch (error) {
+    console.error("[Debug] Error:", error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    })
   }
 }
