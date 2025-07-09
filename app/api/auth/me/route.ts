@@ -51,24 +51,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No authentication found" }, { status: 401 })
     }
 
-    console.log("[API:me] Found auth token, checking if it's a simple user ID or JWT")
+    console.log("[API:me] Found auth token, treating as simple user ID:", authToken.value.substring(0, 10) + "...")
 
-    // Check if token looks like a JWT (3 parts separated by dots)
-    const tokenParts = authToken.value.split(".")
-
-    if (tokenParts.length === 3) {
-      // This looks like a JWT, but we don't have JWT_SECRET
-      console.log("[API:me] Token looks like JWT but no JWT_SECRET configured")
-      return NextResponse.json(
-        {
-          error: "JWT authentication not properly configured",
-        },
-        { status: 500 },
-      )
-    }
-
-    // Treat token as a simple user ID
-    console.log("[API:me] Treating token as simple user ID")
+    // Treat token as a simple user ID (no JWT verification)
     try {
       const userData = await getUserById(authToken.value)
 
