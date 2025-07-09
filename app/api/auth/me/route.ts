@@ -8,6 +8,13 @@ function generateErrorId() {
   return `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
+function extractStringValue(value: any): string | null {
+  if (typeof value === "string") return value
+  if (value && typeof value === "object" && value.uid) return value.uid
+  if (value && typeof value === "object" && value.email) return value.email
+  return null
+}
+
 export async function GET(request: NextRequest) {
   const errorId = generateErrorId()
 
@@ -71,12 +78,26 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Extract data from userData
-    const email = userData.email
-    const uid = userData.uid
-    const role = userData.role
+    // Extract data from userData with better handling
+    const rawEmail = userData.email
+    const rawUid = userData.uid
+    const rawRole = userData.role
 
-    console.log(`[API:me] 📋 Extracted data:`, { email, uid, role })
+    console.log(`[API:me] 📋 Raw extracted data:`, {
+      rawEmail,
+      rawUid,
+      rawRole,
+      emailType: typeof rawEmail,
+      uidType: typeof rawUid,
+      roleType: typeof rawRole,
+    })
+
+    // Convert to strings safely
+    const email = extractStringValue(rawEmail)
+    const uid = extractStringValue(rawUid)
+    const role = typeof rawRole === "string" ? rawRole : null
+
+    console.log(`[API:me] 📋 Processed data:`, { email, uid, role })
 
     if (!email && !uid) {
       console.log(`[API:me] ❌ No email or uid found in user data`)
@@ -84,20 +105,27 @@ export async function GET(request: NextRequest) {
         {
           error: "Invalid token data - missing email/uid",
           errorId,
-          debug: { tokenData, userData },
+          debug: {
+            tokenData,
+            userData,
+            rawEmail,
+            rawUid,
+            processedEmail: email,
+            processedUid: uid,
+          },
         },
         { status: 401 },
       )
     }
 
-    // Try to find user in Firestore - simplified approach to avoid index issues
+    // Try to find user in Firestore - simplified approach
     let userProfile = null
 
     try {
       console.log(`[API:me] 🔍 Starting Firestore search...`)
 
       // Try by UID first (most direct, no index needed)
-      if (uid) {
+      if (uid && typeof uid === "string") {
         console.log(`[API:me] 🔍 Searching by UID: ${uid}`)
 
         try {
@@ -132,17 +160,13 @@ export async function GET(request: NextRequest) {
           console.error(`[API:me] ❌ Error querying UID ${uid}:`, uidError)
           throw uidError
         }
+      } else {
+        console.log(`[API:me] ⚠️ UID is not a valid string:`, typeof uid, uid)
       }
 
-      // If not found by UID, try by email (this might need an index)
-      if (!userProfile && email) {
+      // If not found by UID, try by email
+      if (!userProfile && email && typeof email === "string") {
         console.log(`[API:me] 🔍 Searching by email: ${email}`)
-
-        // Validate email is a string
-        if (typeof email !== "string") {
-          console.log(`[API:me] ❌ Email is not a string:`, typeof email, email)
-          throw new Error(`Email is not a string: ${typeof email}`)
-        }
 
         const emailsToTry = [email]
 
@@ -204,6 +228,8 @@ export async function GET(request: NextRequest) {
             // Don't throw here, continue to next email variant
           }
         }
+      } else {
+        console.log(`[API:me] ⚠️ Email is not a valid string:`, typeof email, email)
       }
 
       if (!userProfile) {
@@ -218,6 +244,7 @@ export async function GET(request: NextRequest) {
               tokenRole: role,
               searchedByUid: !!uid,
               searchedByEmail: !!email,
+              rawData: { rawEmail, rawUid, rawRole },
             },
           },
           { status: 404 },

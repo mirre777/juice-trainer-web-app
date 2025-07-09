@@ -4,7 +4,7 @@ import { verifyToken } from "@/lib/auth/token-service"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`[DEBUG:token] 🔍 Starting token debug...`)
+    console.log(`[DEBUG] Token debug endpoint called`)
 
     // Get token from cookies
     const cookieStore = cookies()
@@ -12,43 +12,69 @@ export async function GET(request: NextRequest) {
 
     if (!token) {
       return NextResponse.json({
-        error: "No token found",
+        error: "No auth token found",
         cookies: {
-          "auth-token": cookieStore.get("auth-token")?.value,
-          auth_token: cookieStore.get("auth_token")?.value,
-          session_token: cookieStore.get("session_token")?.value,
+          authToken: cookieStore.get("auth-token"),
+          allCookies: cookieStore.getAll().map((c) => ({ name: c.name, hasValue: !!c.value })),
         },
       })
     }
 
-    console.log(`[DEBUG:token] 🔑 Token found: ${token.substring(0, 20)}...`)
+    console.log(`[DEBUG] Token found: ${token.substring(0, 20)}...`)
 
     // Verify token
     let tokenData
     try {
       tokenData = await verifyToken(token)
-      console.log(`[DEBUG:token] ✅ Token verified`)
+      console.log(`[DEBUG] Token verified, raw data:`, tokenData)
     } catch (tokenError: any) {
       return NextResponse.json({
         error: "Token verification failed",
         details: tokenError.message,
-        token: token.substring(0, 50) + "...",
+        token: token.substring(0, 20) + "...",
       })
+    }
+
+    // Analyze token structure
+    const analysis = {
+      tokenExists: !!token,
+      tokenDataType: typeof tokenData,
+      isArray: Array.isArray(tokenData),
+      tokenDataKeys: tokenData ? Object.keys(tokenData) : null,
+      rawTokenData: tokenData,
+    }
+
+    if (Array.isArray(tokenData)) {
+      analysis.arrayLength = tokenData.length
+      analysis.firstElement = tokenData[0]
+      analysis.firstElementType = typeof tokenData[0]
+      analysis.firstElementKeys = tokenData[0] ? Object.keys(tokenData[0]) : null
     }
 
     return NextResponse.json({
       success: true,
-      tokenData,
-      tokenType: typeof tokenData,
-      isArray: Array.isArray(tokenData),
-      tokenLength: Array.isArray(tokenData) ? tokenData.length : "N/A",
-      firstElement: Array.isArray(tokenData) ? tokenData[0] : "N/A",
+      analysis,
+      extractedData: {
+        directAccess: {
+          email: tokenData?.email,
+          uid: tokenData?.uid,
+          role: tokenData?.role,
+        },
+        arrayAccess: Array.isArray(tokenData)
+          ? {
+              email: tokenData[0]?.email,
+              uid: tokenData[0]?.uid,
+              role: tokenData[0]?.role,
+            }
+          : null,
+      },
     })
   } catch (error: any) {
-    console.error(`[DEBUG:token] ❌ Error:`, error)
+    console.error(`[DEBUG] Error in token debug:`, error)
     return NextResponse.json({
-      error: "Debug failed",
+      error: "Debug endpoint error",
       details: error.message,
+      stack: error.stack,
     })
   }
 }
