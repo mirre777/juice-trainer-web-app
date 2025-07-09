@@ -1,28 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("[API:logout] 🔄 Processing logout request")
 
-    const cookieStore = cookies()
-
-    // Clear the user_id cookie
-    cookieStore.delete("user_id")
-
-    // Also clear any legacy cookies that might exist
-    cookieStore.delete("auth-token")
-    cookieStore.delete("auth_token")
-    cookieStore.delete("session_token")
-
-    console.log("[API:logout] ✅ Cookies cleared successfully")
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Logged out successfully",
     })
+
+    // Clear all authentication cookies
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
+      maxAge: 0, // Expire immediately
+      path: "/",
+    }
+
+    response.cookies.set("user_id", "", cookieOptions)
+    response.cookies.set("auth-token", "", cookieOptions)
+    response.cookies.set("auth_token", "", cookieOptions)
+    response.cookies.set("session_token", "", cookieOptions)
+
+    console.log("[API:logout] ✅ All authentication cookies cleared")
+
+    return response
   } catch (error) {
-    console.error("[API:logout] ❌ Error during logout:", error)
+    console.error("[API:logout] ❌ Logout error:", error)
     return NextResponse.json(
       {
         error: "Logout failed",
