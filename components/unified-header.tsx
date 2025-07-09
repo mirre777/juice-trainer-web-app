@@ -75,14 +75,22 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
         try {
           console.log("[UnifiedHeader] Fetching user data...")
           const response = await fetch("/api/auth/me", {
+            method: "GET",
             credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
           })
+
+          console.log("[UnifiedHeader] API Response status:", response.status)
 
           if (response.ok) {
             const userData = await response.json()
             console.log("[UnifiedHeader] User data received:", userData)
 
-            const name = userData.name || userData.displayName || userData.email?.split("@")[0] || ""
+            // Extract name from the response - try multiple fields
+            const name = userData.name || userData.displayName || userData.email?.split("@")[0] || "User"
+            console.log("[UnifiedHeader] Setting user name to:", name)
             setUserName(name)
 
             // Save to localStorage for faster loading next time
@@ -90,11 +98,12 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
               localStorage.setItem("userName", name)
             }
           } else {
-            console.log("[UnifiedHeader] Failed to fetch user data")
+            console.log("[UnifiedHeader] Failed to fetch user data, status:", response.status)
             // Try to load from localStorage as fallback
             if (typeof window !== "undefined") {
               const savedName = localStorage.getItem("userName")
               if (savedName) {
+                console.log("[UnifiedHeader] Using saved name from localStorage:", savedName)
                 setUserName(savedName)
               }
             }
@@ -105,6 +114,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
           if (typeof window !== "undefined") {
             const savedName = localStorage.getItem("userName")
             if (savedName) {
+              console.log("[UnifiedHeader] Using saved name from localStorage after error:", savedName)
               setUserName(savedName)
             }
           }
@@ -488,7 +498,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
             <div className="flex items-center gap-3 mb-6 p-3 bg-gray-50 rounded-lg">
               <div className="w-10 h-10 bg-violet-100 rounded-full flex justify-center items-center">
                 <div className="text-base font-medium text-violet-600">
-                  {isDemoMode ? "JS" : userName ? userName.charAt(0) : "G"}
+                  {isDemoMode ? "JS" : userName ? userName.charAt(0).toUpperCase() : "G"}
                 </div>
               </div>
               <div>

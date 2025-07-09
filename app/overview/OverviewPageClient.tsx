@@ -29,43 +29,63 @@ const OverviewPageClient: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true)
+        console.log("[OverviewPageClient] Starting data fetch...")
 
         // Get trainer ID from API instead of cookie
         const response = await fetch("/api/auth/me", {
+          method: "GET",
           credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
         })
+
+        console.log("[OverviewPageClient] Auth API response status:", response.status)
 
         if (response.ok) {
           const userData = await response.json()
+          console.log("[OverviewPageClient] User data received:", userData)
+
           const currentTrainerId = userData.uid
+          console.log("[OverviewPageClient] Setting trainer ID:", currentTrainerId)
           setTrainerId(currentTrainerId)
 
           if (currentTrainerId) {
             try {
+              console.log("[OverviewPageClient] Fetching clients for trainer:", currentTrainerId)
               // Fetch clients directly from Firebase
               const clients = await fetchClients(currentTrainerId)
+              console.log("[OverviewPageClient] Clients fetched:", clients.length)
+
               const totalClients = clients.length
               setRevenue((prev) => ({ ...prev, activeClients: totalClients }))
 
               // Fetch the latest workout across all clients
+              console.log("[OverviewPageClient] Fetching latest workout...")
               const latestWorkoutData = await fetchLatestWorkoutAcrossClients(currentTrainerId)
               if (latestWorkoutData) {
+                console.log("[OverviewPageClient] Latest workout found:", latestWorkoutData.workout?.name)
                 setClientWorkout(latestWorkoutData)
+              } else {
+                console.log("[OverviewPageClient] No latest workout found")
               }
             } catch (error) {
-              console.error("Error fetching clients:", error)
+              console.error("[OverviewPageClient] Error fetching clients:", error)
             }
           }
         } else {
-          console.error("Failed to get user data")
+          console.error("[OverviewPageClient] Failed to get user data, status:", response.status)
+          const errorData = await response.json().catch(() => ({}))
+          console.error("[OverviewPageClient] Error details:", errorData)
         }
 
         // Set static fallback data for other sections
         setCheckIns([])
         setSessions([])
       } catch (error) {
-        console.error("Error fetching overview data:", error)
+        console.error("[OverviewPageClient] Error fetching overview data:", error)
       } finally {
+        console.log("[OverviewPageClient] Data fetch completed")
         setLoading(false)
       }
     }
@@ -260,6 +280,13 @@ const OverviewPageClient: React.FC = () => {
       return null
     }
   }
+
+  console.log("[OverviewPageClient] Render state:", {
+    loading,
+    trainerId,
+    clientCount: revenue.activeClients,
+    hasClientWorkout: !!clientWorkout,
+  })
 
   return (
     <OverviewPageLayout>
