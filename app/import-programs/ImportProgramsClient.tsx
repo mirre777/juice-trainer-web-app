@@ -186,7 +186,7 @@ export default function ImportProgramsClient() {
 
         if (response.ok) {
           const userData = await response.json()
-          const currentUserId = userData.uid || userData.id
+          const currentUserId = userData.uid
           console.log("[ImportPrograms] User authenticated:", currentUserId)
           setUserId(currentUserId)
         } else {

@@ -1,7 +1,6 @@
 "use client"
 
 import React from "react"
-
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
@@ -19,16 +18,10 @@ import {
   LogOut,
 } from "lucide-react"
 import { LogoutButton } from "@/components/auth/logout-button"
-import { db } from "@/lib/firebase/firebase"
-import { doc, onSnapshot } from "firebase/firestore"
-import { getCookie } from "cookies-next"
 import { LogoutModal } from "@/components/auth/logout-modal"
 
 // Memoize the LogoutButton to prevent re-renders
 const MemoizedLogoutButton = React.memo(LogoutButton)
-
-// Create a global variable to cache the username
-let cachedUserName: string | null = null
 
 // Memoize the main header component
 export const UnifiedHeader = React.memo(function UnifiedHeader() {
@@ -64,17 +57,8 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
   })
   const [newTask, setNewTask] = useState("")
   const [showLogoutModal, setShowLogoutModal] = useState(false)
-
-  // Try to load username from localStorage first, but don't rely on it exclusively
-  const [userName, setUserName] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      const savedUserName = localStorage.getItem("userName")
-      if (savedUserName && savedUserName.trim()) {
-        return savedUserName
-      }
-    }
-    return "" // Only return empty if no cached value exists
-  })
+  const [userName, setUserName] = useState<string>("")
+  const [isLoadingUser, setIsLoadingUser] = useState(true)
 
   const dropdownRef = useRef<HTMLDivElement>(null)
   const taskListRef = useRef<HTMLDivElement>(null)
@@ -84,80 +68,63 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
   const isDemoMode = useMemo(() => pathname?.startsWith("/demo"), [pathname])
   const pathPrefix = useMemo(() => (isDemoMode ? "/demo" : ""), [isDemoMode])
 
-  // Fetch user data directly from Firestore if not in demo mode
+  // Fetch user data from API
   useEffect(() => {
     if (!isDemoMode) {
       const fetchUserData = async () => {
         try {
-          // Get user ID from cookie
-          const userId = getCookie("user_id")
+          console.log("[UnifiedHeader] Fetching user data...")
+          const response = await fetch("/api/auth/me", {
+            credentials: "include",
+          })
 
-          if (!userId) {
-            console.log("No user_id cookie found")
-            return
-          }
+          if (response.ok) {
+            const userData = await response.json()
+            console.log("[UnifiedHeader] User data received:", userData)
 
-          console.log("Fetching user data for ID:", userId)
+            const name = userData.name || userData.displayName || userData.email?.split("@")[0] || ""
+            setUserName(name)
 
-          // Set up a real-time listener for the user document
-          const userDocRef = doc(db, "users", userId as string)
-          const unsubscribe = onSnapshot(
-            userDocRef,
-            { includeMetadataChanges: true },
-            (userDoc) => {
-              if (!userDoc.exists()) {
-                console.log("No user document found for ID:", userId)
-                return
+            // Save to localStorage for faster loading next time
+            if (typeof window !== "undefined") {
+              localStorage.setItem("userName", name)
+            }
+          } else {
+            console.log("[UnifiedHeader] Failed to fetch user data")
+            // Try to load from localStorage as fallback
+            if (typeof window !== "undefined") {
+              const savedName = localStorage.getItem("userName")
+              if (savedName) {
+                setUserName(savedName)
               }
-
-              const userData = userDoc.data()
-              console.log("User data fetched:", userData)
-
-              let name = ""
-              if (userData && userData.name) {
-                name = userData.name
-                console.log("Using name from user data:", name)
-              } else if (userData && userData.firstName && userData.lastName) {
-                name = `${userData.firstName} ${userData.lastName}`
-                console.log("Using firstName + lastName:", name)
-              } else if (userData && userData.email) {
-                // Use email as fallback if name is not available
-                name = userData.email.split("@")[0]
-                console.log("Using email-based name:", name)
-              }
-
-              // Update the cached username
-              cachedUserName = name
-              setUserName(name)
-
-              // Save to localStorage for faster loading next time
-              if (typeof window !== "undefined") {
-                localStorage.setItem("userName", name)
-              }
-            },
-            (error) => {
-              console.error("Error fetching user data from Firestore:", error)
-            },
-          )
-
-          // Clean up the listener when the component unmounts
-          return () => {
-            console.log("Cleaning up Firestore listener")
-            unsubscribe()
+            }
           }
         } catch (error) {
-          console.error("Error setting up Firestore listener:", error)
+          console.error("[UnifiedHeader] Error fetching user data:", error)
+          // Try to load from localStorage as fallback
+          if (typeof window !== "undefined") {
+            const savedName = localStorage.getItem("userName")
+            if (savedName) {
+              setUserName(savedName)
+            }
+          }
+        } finally {
+          setIsLoadingUser(false)
         }
       }
 
       fetchUserData()
+    } else {
+      setIsLoadingUser(false)
     }
   }, [isDemoMode])
 
   // Memoize display name
   const displayName = useMemo(() => {
-    return isDemoMode ? "Jackie SuperJacked" : userName && userName.trim() ? userName : "Loading..."
-  }, [isDemoMode, userName])
+    if (isDemoMode) return "Jackie SuperJacked"
+    if (isLoadingUser) return "Loading..."
+    return userName || "Guest"
+  }, [isDemoMode, userName, isLoadingUser])
 
   // Memoize isActive function
   const isActive = useCallback(
@@ -198,14 +165,13 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
     [pathname, isDemoMode],
   )
 
-  // Memoize navigation items - ONLY CHANGE: Removed Finance
+  // Memoize navigation items
   const navItems = useMemo(
     () => [
       { name: "Overview", path: "/overview" },
       { name: "Clients", path: "/clients" },
       { name: "Calendar", path: "/calendar" },
       { name: "Programs", path: "/import-programs" },
-      // { name: "Finance", path: "/finance" }, // Hidden but still accessible via URL
       { name: "Marketplace", path: "https://www.juice.fitness/marketplace" },
     ],
     [],
@@ -526,9 +492,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
                 </div>
               </div>
               <div>
-                <div className="text-base font-medium text-black">
-                  {isDemoMode ? "Jackie SuperJacked" : userName || "Loading..."}
-                </div>
+                <div className="text-base font-medium text-black">{displayName}</div>
                 <div className="text-sm text-gray-500">Premium Plan</div>
               </div>
             </div>

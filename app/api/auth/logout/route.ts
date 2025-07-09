@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    console.log("[API:logout] 🔄 Processing logout")
+    console.log("[API:logout] 🔄 Processing logout request")
 
-    const response = NextResponse.json({ success: true })
+    const response = NextResponse.json({ success: true, message: "Logged out successfully" })
 
     // Clear the user_id cookie
     response.cookies.set("user_id", "", {
@@ -15,11 +16,14 @@ export async function POST() {
       path: "/",
     })
 
-    console.log("[API:logout] ✅ Cleared user_id cookie")
-
+    console.log("[API:logout] ✅ User logged out successfully")
     return response
   } catch (error) {
-    console.error("[API:logout] ❌ Logout error:", error)
+    console.error("[API:logout] ❌ Error during logout:", error)
     return NextResponse.json({ error: "Logout failed" }, { status: 500 })
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ message: "Logout endpoint - use POST method" }, { status: 405 })
 }

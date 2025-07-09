@@ -30,32 +30,34 @@ const OverviewPageClient: React.FC = () => {
       try {
         setLoading(true)
 
-        // Get trainer ID from cookie (same approach as other pages)
-        const getCookie = (name: string) => {
-          const value = `; ${document.cookie}`
-          const parts = value.split(`; ${name}=`)
-          if (parts.length === 2) return parts.pop()?.split(";").shift()
-          return null
-        }
+        // Get trainer ID from API instead of cookie
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+        })
 
-        const currentTrainerId = getCookie("user_id")
-        setTrainerId(currentTrainerId)
+        if (response.ok) {
+          const userData = await response.json()
+          const currentTrainerId = userData.uid
+          setTrainerId(currentTrainerId)
 
-        if (currentTrainerId) {
-          try {
-            // Fetch clients directly from Firebase
-            const clients = await fetchClients(currentTrainerId)
-            const totalClients = clients.length
-            setRevenue((prev) => ({ ...prev, activeClients: totalClients }))
+          if (currentTrainerId) {
+            try {
+              // Fetch clients directly from Firebase
+              const clients = await fetchClients(currentTrainerId)
+              const totalClients = clients.length
+              setRevenue((prev) => ({ ...prev, activeClients: totalClients }))
 
-            // Fetch the latest workout across all clients
-            const latestWorkoutData = await fetchLatestWorkoutAcrossClients(currentTrainerId)
-            if (latestWorkoutData) {
-              setClientWorkout(latestWorkoutData)
+              // Fetch the latest workout across all clients
+              const latestWorkoutData = await fetchLatestWorkoutAcrossClients(currentTrainerId)
+              if (latestWorkoutData) {
+                setClientWorkout(latestWorkoutData)
+              }
+            } catch (error) {
+              console.error("Error fetching clients:", error)
             }
-          } catch (error) {
-            console.error("Error fetching clients:", error)
           }
+        } else {
+          console.error("Failed to get user data")
         }
 
         // Set static fallback data for other sections
