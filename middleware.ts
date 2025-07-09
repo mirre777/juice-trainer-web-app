@@ -1,50 +1,34 @@
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Skip middleware for API routes, static files, and public paths
+  // Skip middleware for static files, API routes (except auth check), and public pages
   if (
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/favicon.ico") ||
-    pathname.startsWith("/public/") ||
-    pathname.includes(".")
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/static") ||
+    pathname.includes(".") ||
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/invite" ||
+    pathname.startsWith("/invite/") ||
+    pathname === "/" ||
+    pathname.startsWith("/shared/") ||
+    pathname.startsWith("/demo/") ||
+    pathname === "/debug-env"
   ) {
-    return NextResponse.next()
-  }
-
-  // Public routes that don't require authentication
-  const publicRoutes = [
-    "/login",
-    "/signup",
-    "/",
-    "/pricing",
-    "/invite",
-    "/shared",
-    "/mobile-app-success",
-    "/signup-juice-app",
-    "/debug-env",
-  ]
-
-  // Check if current path is public or starts with public path
-  const isPublicRoute = publicRoutes.some((route) => {
-    if (route === "/") return pathname === "/"
-    return pathname.startsWith(route)
-  })
-
-  if (isPublicRoute) {
     return NextResponse.next()
   }
 
   // Check for user_id cookie
   const userId = request.cookies.get("user_id")?.value
 
-  console.log(`[Middleware] Path: ${pathname}, User ID: ${userId ? "present" : "missing"}`)
+  console.log(`[Middleware] Path: ${pathname}`)
+  console.log(`[Middleware] User ID cookie: ${userId ? "present" : "missing"}`)
 
   if (!userId) {
-    console.log(`[Middleware] No user_id cookie found, redirecting to login`)
+    console.log(`[Middleware] No user_id cookie, redirecting to login`)
     return NextResponse.redirect(new URL("/login", request.url))
   }
 

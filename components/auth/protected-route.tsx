@@ -1,10 +1,9 @@
 "use client"
 
 import type React from "react"
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import LoadingSpinner from "@/components/shared/loading-spinner"
-import { FloatingFeedbackButton } from "@/components/feedback/floating-feedback-button"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -12,106 +11,95 @@ interface ProtectedRouteProps {
   fallbackPath?: string
 }
 
-export function ProtectedRoute({ children, requiredRole = "trainer", fallbackPath = "/login" }: ProtectedRouteProps) {
-  const router = useRouter()
+export default function ProtectedRoute({ children, requiredRole, fallbackPath = "/login" }: ProtectedRouteProps) {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [userId, setUserId] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
-    const checkUserRole = async () => {
-      try {
-        console.log(`[ProtectedRoute] Checking user role, required: ${requiredRole}`)
+    checkAuthorization()
+  }, [requiredRole])
 
-        const response = await fetch("/api/auth/me", {
-          credentials: "include",
-          cache: "no-store",
-        })
+  const checkAuthorization = async () => {
+    try {
+      console.log(`[ProtectedRoute] Checking user role, required: ${requiredRole}`)
 
-        console.log(`[ProtectedRoute] API response status: ${response.status}`)
+      const response = await fetch("/api/auth/me")
+      console.log(`[ProtectedRoute] API response status: ${response.status}`)
 
-        if (!response.ok) {
-          console.log(`[ProtectedRoute] Failed to get user data (${response.status}), redirecting to login`)
-          router.push("/login")
-          return
-        }
+      if (!response.ok) {
+        console.log(`[ProtectedRoute] Failed to get user data (${response.status}), redirecting to login`)
+        setIsAuthorized(false)
+        setIsLoading(false)
+        router.push(fallbackPath)
+        return
+      }
 
-        const responseData = await response.json()
-        console.log(`[ProtectedRoute] Full user data received:`, responseData)
+      const responseData = await response.json()
+      console.log(`[ProtectedRoute] Full user data received:`, responseData)
 
-        // Extract user data - the API returns {user: {...}}
-        const userData = responseData.user
-        if (!userData) {
-          console.log(`[ProtectedRoute] No user data in response`)
-          router.push("/login")
-          return
-        }
+      // Extract user data correctly from the API response
+      const userData = responseData.user || responseData
+      console.log(`[ProtectedRoute] Extracted user data:`, userData)
 
-        const userRole = userData.role || userData.user_type || null
-        console.log(`[ProtectedRoute] User role extracted: "${userRole}"`)
-        console.log(`[ProtectedRoute] Required role: "${requiredRole}"`)
+      if (!userData) {
+        console.log(`[ProtectedRoute] No user data found`)
+        setIsAuthorized(false)
+        setIsLoading(false)
+        router.push(fallbackPath)
+        return
+      }
 
-        // More flexible role checking
-        const hasRequiredRole =
-          userRole === requiredRole ||
-          (requiredRole === "trainer" && userRole === "trainer") ||
-          (requiredRole === "user" && (userRole === "user" || userRole === "client"))
+      // Extract role from user data
+      const userRole = userData.role
+      console.log(`[ProtectedRoute] User role extracted: "${userRole}"`)
+      console.log(`[ProtectedRoute] Required role: "${requiredRole}"`)
 
+      if (requiredRole) {
+        const hasRequiredRole = userRole === requiredRole
         console.log(`[ProtectedRoute] Role match result: ${hasRequiredRole}`)
 
-        if (hasRequiredRole) {
-          console.log(`[ProtectedRoute] ✅ User authorized, showing protected content`)
-          setIsAuthorized(true)
-          setUserId(userData.uid || userData.id)
-        } else {
+        if (!hasRequiredRole) {
           console.log(`[ProtectedRoute] ❌ User not authorized`)
           console.log(`[ProtectedRoute] User role: "${userRole}", Required: "${requiredRole}"`)
-
-          // Special handling for trainers who shouldn't see mobile app success
-          if (userRole === "trainer" && requiredRole === "trainer") {
-            console.log(`[ProtectedRoute] Trainer detected but role check failed - this shouldn't happen`)
-            setIsAuthorized(true) // Force authorization for trainers
-            setUserId(userData.uid || userData.id)
-          } else if (userRole === "trainer") {
-            console.log(`[ProtectedRoute] Trainer trying to access non-trainer content, redirecting to overview`)
-            router.push("/overview")
-          } else {
-            console.log(`[ProtectedRoute] Redirecting to fallback: ${fallbackPath}`)
-            router.push(fallbackPath)
-          }
+          setIsAuthorized(false)
+          setIsLoading(false)
+          router.push(fallbackPath)
           return
         }
-      } catch (error) {
-        console.error("[ProtectedRoute] Error checking user role:", error)
-        router.push("/login")
-        return
-      } finally {
-        setIsLoading(false)
       }
-    }
 
-    checkUserRole()
-  }, [requiredRole, fallbackPath, router])
+      console.log(`[ProtectedRoute] ✅ User authorized`)
+      setIsAuthorized(true)
+      setIsLoading(false)
+    } catch (error) {
+      console.error(`[ProtectedRoute] Authorization check failed:`, error)
+      setIsAuthorized(false)
+      setIsLoading(false)
+      router.push(fallbackPath)
+    }
+  }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <LoadingSpinner />
-          <p className="mt-4 text-gray-600">Checking permissions...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Checking authorization...</p>
         </div>
       </div>
     )
   }
 
-  if (isAuthorized !== true) {
-    return null
+  if (!isAuthorized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-600">Access denied. Redirecting...</p>
+        </div>
+      </div>
+    )
   }
 
-  return (
-    <>
-      {children}
-      <FloatingFeedbackButton userId={userId} />
-    </>
-  )
+  return <>{children}</>
 }
