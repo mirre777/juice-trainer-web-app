@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button"
 import { ClientWorkouts } from "@/components/clients/client-workouts"
 import { getClient } from "@/lib/firebase/client-service"
 import { getAuthState } from "@/lib/utils/auth-utils"
+import type { Client } from "@/types/client"
 
 export default function ClientPage() {
   const params = useParams()
   const router = useRouter()
-  const [client, setClient] = useState<any>(null)
+  const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
