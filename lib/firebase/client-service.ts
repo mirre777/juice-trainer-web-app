@@ -8,15 +8,12 @@ import {
   deleteDoc,
   query,
   where,
-  onSnapshot,
   serverTimestamp,
   arrayUnion,
-  orderBy,
   Timestamp,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import type { Client } from "@/types/client"
-import { getUserById } from "@/lib/firebase/user-service"
 
 // Helper function to get initials from name
 function getInitials(name: string): string {
@@ -320,173 +317,7 @@ export async function checkDuplicateEmail(
   }
 }
 
-// Improved subscribeToClients function with better logging and error handling
-export function subscribeToClients(trainerId: string, callback: (clients: Client[], error?: any) => void): () => void {
-  if (!trainerId) {
-    console.error("[subscribeToClients] Trainer ID is required")
-    callback([], new Error("Trainer ID is required"))
-    return () => {}
-  }
-
-  try {
-    console.log("[subscribeToClients] Setting up subscription for trainer:", trainerId)
-
-    const clientsRef = collection(db, "clients")
-    const q = query(clientsRef, where("trainerId", "==", trainerId))
-
-    const unsubscribe = onSnapshot(
-      q,
-      (querySnapshot) => {
-        console.log("[subscribeToClients] Received snapshot with", querySnapshot.size, "documents")
-
-        const clients: Client[] = []
-
-        querySnapshot.forEach((doc) => {
-          try {
-            const client = mapClientData(doc.id, doc.data())
-            if (client) {
-              clients.push(client)
-              console.log("[subscribeToClients] Mapped client:", { id: client.id, name: client.name })
-            }
-          } catch (mappingError) {
-            console.error("[subscribeToClients] Error mapping client document:", doc.id, mappingError)
-          }
-        })
-
-        // Sort clients by createdAt on the client side
-        clients.sort((a, b) => {
-          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
-          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
-          return dateB.getTime() - dateA.getTime()
-        })
-
-        console.log("[subscribeToClients] Calling callback with", clients.length, "clients")
-        callback(clients)
-      },
-      (error) => {
-        console.error("[subscribeToClients] Firestore subscription error:", error)
-        callback([], error)
-      },
-    )
-
-    console.log("[subscribeToClients] Subscription setup complete")
-    return unsubscribe
-  } catch (error) {
-    console.error("[subscribeToClients] Error setting up subscription:", error)
-    callback([], error)
-    return () => {}
-  }
-}
-
-// Get clients for a trainer (one-time fetch)
-export async function getClientsByTrainer(trainerId: string): Promise<{ clients: Client[]; error?: any }> {
-  try {
-    if (!trainerId) {
-      return { clients: [], error: new Error("Trainer ID is required") }
-    }
-
-    console.log("[getClientsByTrainer] Fetching clients for trainer:", trainerId)
-
-    const clientsRef = collection(db, "clients")
-    const q = query(clientsRef, where("trainerId", "==", trainerId))
-
-    const querySnapshot = await getDocs(q)
-
-    const clients: Client[] = []
-    querySnapshot.forEach((doc) => {
-      try {
-        const client = mapClientData(doc.id, doc.data())
-        if (client) {
-          clients.push(client)
-        }
-      } catch (mappingError) {
-        console.error("[getClientsByTrainer] Error mapping client:", doc.id, mappingError)
-      }
-    })
-
-    // Sort by createdAt
-    clients.sort((a, b) => {
-      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
-      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
-      return dateB.getTime() - dateA.getTime()
-    })
-
-    console.log("[getClientsByTrainer] Found", clients.length, "clients")
-    return { clients }
-  } catch (error) {
-    console.error("[getClientsByTrainer] Error:", error)
-    return { clients: [], error }
-  }
-}
-
-// Update a client
-export async function updateClientData(
-  clientId: string,
-  updates: Partial<Client>,
-): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!clientId) {
-      return { success: false, error: new Error("Client ID is required") }
-    }
-
-    const clientRef = doc(db, "clients", clientId)
-    const updateData = {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    }
-
-    await updateDoc(clientRef, updateData)
-
-    console.log("[updateClientData] Client updated:", clientId)
-    return { success: true }
-  } catch (error) {
-    console.error("[updateClientData] Error:", error)
-    return { success: false, error }
-  }
-}
-
-// Delete a client
-export async function deleteClientData(clientId: string): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!clientId) {
-      return { success: false, error: new Error("Client ID is required") }
-    }
-
-    const clientRef = doc(db, "clients", clientId)
-    await deleteDoc(clientRef)
-
-    console.log("[deleteClientData] Client deleted:", clientId)
-    return { success: true }
-  } catch (error) {
-    console.error("[deleteClientData] Error:", error)
-    return { success: false, error }
-  }
-}
-
-// Get a single client by ID
-export async function getClientById(clientId: string): Promise<{ client: Client | null; error?: any }> {
-  try {
-    if (!clientId) {
-      return { client: null, error: new Error("Client ID is required") }
-    }
-
-    const clientRef = doc(db, "clients", clientId)
-    const clientDoc = await getDoc(clientRef)
-
-    if (!clientDoc.exists()) {
-      console.log("[getClientById] Client not found:", clientId)
-      return { client: null }
-    }
-
-    const client = mapClientData(clientDoc.id, clientDoc.data())
-    return { client }
-  } catch (error) {
-    console.error("[getClientById] Error:", error)
-    return { client: null, error }
-  }
-}
-
-// Get trainer name by ID - using the existing getUserById function
+// Get trainer name by ID
 export async function getTrainerName(trainerId: string): Promise<string> {
   try {
     console.log("Getting trainer name for ID:", trainerId)
@@ -496,13 +327,15 @@ export async function getTrainerName(trainerId: string): Promise<string> {
       return ""
     }
 
-    const userData = await getUserById(trainerId)
+    const userRef = doc(db, "users", trainerId)
+    const userDoc = await getDoc(userRef)
 
-    if (!userData) {
+    if (!userDoc.exists()) {
       console.error("Trainer not found")
       return ""
     }
 
+    const userData = userDoc.data()
     const name = userData.name || userData.firstName || ""
     console.log("Found trainer name:", name)
     return name
@@ -613,329 +446,10 @@ export async function processInvitation(
   }
 }
 
-// Find a client by invitation code
-export async function findClientByInvitationCode(
-  inviteCode: string,
-): Promise<{ exists: boolean; trainerId?: string; clientId?: string; status?: string; error?: any }> {
-  try {
-    console.log(`[findClientByInvitationCode] Searching for invitation code: ${inviteCode}`)
-
-    if (!inviteCode) {
-      console.error("[findClientByInvitationCode] Invite code is required")
-      return { exists: false, error: new Error("Invite code is required") }
-    }
-
-    // Find the client with this invitation code across all trainers
-    const clientsRef = collection(db, "users")
-    const trainersSnapshot = await getDocs(clientsRef)
-
-    console.log(`[findClientByInvitationCode] Searching across ${trainersSnapshot.size} trainers`)
-
-    // Search through each trainer's clients subcollection
-    for (const trainerDoc of trainersSnapshot.docs) {
-      try {
-        const trainerClientsRef = collection(db, "users", trainerDoc.id, "clients")
-        const q = query(trainerClientsRef, where("inviteCode", "==", inviteCode))
-
-        console.log(`[findClientByInvitationCode] Checking trainer: ${trainerDoc.id}`)
-        const clientsSnapshot = await getDocs(q)
-
-        if (!clientsSnapshot.empty) {
-          const clientDoc = clientsSnapshot.docs[0]
-          const clientData = clientDoc.data()
-
-          console.log(
-            `[findClientByInvitationCode] Found matching client: ${clientDoc.id} with status: ${clientData.status}`,
-          )
-
-          return {
-            exists: true,
-            trainerId: trainerDoc.id,
-            clientId: clientDoc.id,
-            status: clientData.status,
-          }
-        }
-      } catch (trainerError) {
-        console.error(`[findClientByInvitationCode] Error checking trainer ${trainerDoc.id}:`, trainerError)
-        // Continue to next trainer
-      }
-    }
-
-    console.log(`[findClientByInvitationCode] No client found with invitation code: ${inviteCode}`)
-    return { exists: false }
-  } catch (error) {
-    console.error("[findClientByInvitationCode] Error finding client by invitation code:", error)
-    return { exists: false, error }
-  }
-}
-
-// Check if a user already has a client profile with a trainer
-export async function checkExistingClientProfile(
-  userId: string,
-  trainerId: string,
-): Promise<{ exists: boolean; clientId?: string; error?: any }> {
-  try {
-    if (!userId || !trainerId) {
-      return { exists: false, error: new Error("User ID and trainer ID are required") }
-    }
-
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
-    const q = query(clientsCollectionRef, where("userId", "==", userId))
-
-    const querySnapshot = await getDocs(q)
-
-    if (!querySnapshot.empty) {
-      return { exists: true, clientId: querySnapshot.docs[0].id }
-    }
-
-    return { exists: false }
-  } catch (error) {
-    console.error("[checkExistingClientProfile] Error:", error)
-    return { exists: false, error }
-  }
-}
-
-// Replace a temporary client with a permanent one
-export async function replaceTemporaryClient(
-  trainerId: string,
-  temporaryClientId: string,
-  userId: string,
-): Promise<{ success: boolean; error?: any }> {
-  try {
-    if (!trainerId || !temporaryClientId || !userId) {
-      return {
-        success: false,
-        error: new Error("Trainer ID, temporary client ID, and user ID are required"),
-      }
-    }
-
-    // Get the temporary client data
-    const tempClientRef = doc(collection(db, "users", trainerId, "clients"), temporaryClientId)
-    const tempClientDoc = await getDoc(tempClientRef)
-
-    if (!tempClientDoc.exists()) {
-      return { success: false, error: new Error("Temporary client not found") }
-    }
-
-    const tempClientData = tempClientDoc.data()
-
-    // Check if there's already a permanent client for this user
-    const { exists, clientId, error: checkError } = await checkExistingClientProfile(userId, trainerId)
-
-    if (checkError) {
-      return { success: false, error: checkError }
-    }
-
-    if (exists && clientId) {
-      // Update the existing client with any new data from the temporary client
-      const clientRef = doc(collection(db, "users", trainerId, "clients"), clientId)
-      await updateDoc(clientRef, {
-        // Only update fields that might be useful from the temporary client
-        program: tempClientData.program || "",
-        goal: tempClientData.goal || "",
-        notes: tempClientData.notes || "",
-        updatedAt: serverTimestamp(),
-      })
-
-      // Delete the temporary client
-      await deleteDoc(tempClientRef)
-    } else {
-      // Convert the temporary client to a permanent one
-      await updateDoc(tempClientRef, {
-        userId: userId,
-        isTemporary: false,
-        status: "Active",
-        updatedAt: serverTimestamp(),
-      })
-    }
-
-    return { success: true }
-  } catch (error) {
-    console.error("[replaceTemporaryClient] Error:", error)
-    return { success: false, error }
-  }
-}
-
-// Add this new function to check and link pending clients with user accounts
-export async function linkPendingClientsWithUsers(trainerId: string): Promise<void> {
-  try {
-    console.log(`[linkPendingClientsWithUsers] Starting linking process for trainer: ${trainerId}`)
-
-    if (!trainerId) {
-      console.error("[linkPendingClientsWithUsers] Trainer ID is required")
-      return
-    }
-
-    // Get all users with invitation codes
-    const usersRef = collection(db, "users")
-    const userQuery = query(usersRef, where("inviteCode", "!=", ""))
-    const usersSnapshot = await getDocs(userQuery)
-
-    console.log(`[linkPendingClientsWithUsers] Found ${usersSnapshot.size} users with invitation codes`)
-
-    // Map of invitation codes to user IDs for faster lookup
-    const invitationCodeMap = new Map<string, string>()
-
-    usersSnapshot.forEach((userDoc) => {
-      const userData = userDoc.data()
-      if (userData.inviteCode) {
-        console.log(`[linkPendingClientsWithUsers] User ${userDoc.id} has invitation code: ${userData.inviteCode}`)
-        invitationCodeMap.set(userData.inviteCode, userDoc.id)
-      }
-    })
-
-    // Get all clients for this trainer
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
-    const clientsSnapshot = await getDocs(clientsCollectionRef)
-
-    console.log(`[linkPendingClientsWithUsers] Found ${clientsSnapshot.size} clients for trainer ${trainerId}`)
-
-    let updateCount = 0
-
-    // For each client, check if there's a user with a matching invitation code
-    for (const clientDoc of clientsSnapshot.docs) {
-      const clientData = clientDoc.data()
-      const clientId = clientDoc.id
-
-      // Skip if already has userId or no invite code
-      if (clientData.userId || !clientData.inviteCode) {
-        continue
-      }
-
-      console.log(
-        `[linkPendingClientsWithUsers] Checking client ${clientId} with invite code: ${clientData.inviteCode}`,
-      )
-
-      // Check if we have a user with this invitation code
-      const userId = invitationCodeMap.get(clientData.inviteCode)
-
-      if (userId) {
-        console.log(`[linkPendingClientsWithUsers] Found matching user ${userId} for client ${clientId}`)
-
-        // Update the client document with the user ID
-        await updateDoc(clientDoc.ref, {
-          userId: userId,
-          status: "Active",
-          isTemporary: false,
-          updatedAt: serverTimestamp(),
-        })
-
-        console.log(`[linkPendingClientsWithUsers] Updated client ${clientId} with user ID ${userId}`)
-
-        // Add the trainer to the user's trainers list
-        const userRef = doc(db, "users", userId)
-        await updateDoc(userRef, {
-          trainers: arrayUnion(trainerId),
-          updatedAt: serverTimestamp(),
-        })
-
-        console.log(`[linkPendingClientsWithUsers] Added trainer ${trainerId} to user ${userId} trainers list`)
-
-        updateCount++
-      }
-    }
-
-    console.log(`[linkPendingClientsWithUsers] Completed linking process. Updated ${updateCount} clients.`)
-  } catch (error) {
-    console.error("[linkPendingClientsWithUsers] Error linking pending clients with users:", error)
-  }
-}
-
-// Get pending clients for a trainer
-export async function getPendingClients(trainerId: string): Promise<Client[]> {
-  try {
-    if (!trainerId) {
-      console.error("Trainer ID is required")
-      return []
-    }
-
-    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
-    const q = query(clientsCollectionRef, where("status", "==", "Pending"), orderBy("createdAt", "desc"))
-
-    const querySnapshot = await getDocs(q)
-
-    const clients: Client[] = []
-    querySnapshot.forEach((doc) => {
-      const data = doc.data()
-      const client = mapClientData(doc.id, data)
-      if (client) {
-        clients.push(client)
-      }
-    })
-
-    return clients
-  } catch (error) {
-    console.error("Error getting pending clients:", error)
-    return []
-  }
-}
-
-// Add this new function to handle invitation codes during login
-export async function processLoginInvitation(
-  invitationCode: string,
-  userId: string,
-): Promise<{ success: boolean; trainerId?: string; error?: any }> {
-  try {
-    console.log(`[processLoginInvitation] Processing invitation code ${invitationCode} for user ${userId}`)
-
-    if (!invitationCode || !userId) {
-      console.error("[processLoginInvitation] Invitation code and user ID are required")
-      return {
-        success: false,
-        error: new Error("Invitation code and user ID are required"),
-      }
-    }
-
-    // Find trainer with this universal invite code
-    const usersRef = collection(db, "users")
-    const q = query(usersRef, where("universalInviteCode", "==", invitationCode))
-    const querySnapshot = await getDocs(q)
-
-    if (querySnapshot.empty) {
-      console.error(`[processLoginInvitation] No trainer found with invitation code: ${invitationCode}`)
-      return {
-        success: false,
-        error: new Error("Invalid invitation code"),
-      }
-    }
-
-    const trainerDoc = querySnapshot.docs[0]
-    const trainerId = trainerDoc.id
-    console.log(`[processLoginInvitation] Found trainer: ${trainerId}`)
-
-    // Update user with pending approval status
-    const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
-      status: "pending_approval",
-      invitedBy: trainerId,
-      universalInviteCode: invitationCode,
-      updatedAt: serverTimestamp(),
-    })
-
-    // Add user to trainer's pending users list
-    const trainerRef = doc(db, "users", trainerId)
-    console.log(`[processLoginInvitation] Adding user ${userId} to trainer ${trainerId} pending list`)
-
-    await updateDoc(trainerRef, {
-      pendingUsers: arrayUnion(userId),
-      updatedAt: serverTimestamp(),
-    })
-
-    console.log(`[processLoginInvitation] ✅ Successfully processed invitation for user ${userId}`)
-    return { success: true, trainerId }
-  } catch (error) {
-    console.error(`[processLoginInvitation] Unexpected error:`, error)
-    return {
-      success: false,
-      error,
-    }
-  }
-}
-
-// New functions from updates
+// Additional utility functions
 export async function createClient(
   trainerId: string,
-  clientData: Omit<Client, "id" | "trainerId" | "createdAt" | "updatedAt">,
+  clientData: Omit<Client, "id" | "createdAt" | "_lastUpdated">,
 ): Promise<string> {
   try {
     console.log("ClientService: Creating client for trainer:", trainerId)
@@ -947,12 +461,11 @@ export async function createClient(
     const now = new Date()
     const newClient = {
       ...clientData,
-      trainerId,
       createdAt: now,
-      updatedAt: now,
+      _lastUpdated: Date.now(),
     }
 
-    const clientsRef = collection(db, "clients")
+    const clientsRef = collection(db, "users", trainerId, "clients")
     const docRef = await addDoc(clientsRef, newClient)
 
     console.log("ClientService: Client created with ID:", docRef.id)
@@ -960,5 +473,49 @@ export async function createClient(
   } catch (error) {
     console.error("ClientService: Error creating client:", error)
     throw error
+  }
+}
+
+export async function updateClient(
+  trainerId: string,
+  clientId: string,
+  updates: Partial<Client>,
+): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!trainerId || !clientId) {
+      return { success: false, error: new Error("Trainer ID and Client ID are required") }
+    }
+
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    const updateData = {
+      ...updates,
+      updatedAt: serverTimestamp(),
+      _lastUpdated: Date.now(),
+    }
+
+    await updateDoc(clientRef, updateData)
+
+    console.log("[updateClient] Client updated:", clientId)
+    return { success: true }
+  } catch (error) {
+    console.error("[updateClient] Error:", error)
+    return { success: false, error }
+  }
+}
+
+export async function deleteClient(trainerId: string, clientId: string): Promise<{ success: boolean; error?: any }> {
+  try {
+    if (!trainerId || !clientId) {
+      return { success: false, error: new Error("Trainer ID and Client ID are required") }
+    }
+
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    await deleteDoc(clientRef)
+
+    console.log("[deleteClient] Client deleted:", clientId)
+    return { success: true }
+  } catch (error) {
+    console.error("[deleteClient] Error:", error)
+    return { success: false, error }
   }
 }

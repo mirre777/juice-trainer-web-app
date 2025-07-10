@@ -8,65 +8,60 @@ export interface AuthState {
 
 export function getAuthState(): AuthState {
   try {
-    // First try to get user ID from cookie
-    let userId = getCookie("user_id")
+    // Check for authentication cookies
+    const userId = getCookie("user_id")
+    const authToken = getCookie("auth_token")
 
-    if (userId) {
-      console.log("Auth: Found user ID in cookie:", userId)
+    console.log("[getAuthState] Checking auth state:", {
+      userId: userId ? "present" : "missing",
+      authToken: authToken ? "present" : "missing",
+    })
+
+    if (!userId && !authToken) {
       return {
-        isAuthenticated: true,
-        userId: userId as string,
+        isAuthenticated: false,
+        userId: null,
+        error: "No authentication found",
       }
     }
 
-    // Fallback to localStorage if available (client-side only)
-    if (typeof window !== "undefined") {
-      userId = localStorage.getItem("user_id")
-
-      if (userId) {
-        console.log("Auth: Found user ID in localStorage:", userId)
-        return {
-          isAuthenticated: true,
-          userId: userId,
-        }
-      }
-
-      // Check for other auth indicators
-      const authToken = localStorage.getItem("auth_token") || getCookie("auth_token")
-      if (authToken) {
-        console.log("Auth: Found auth token but no user ID")
-        return {
-          isAuthenticated: false,
-          userId: null,
-          error: "Authentication token found but user ID missing. Please log in again.",
-        }
-      }
-    }
-
-    console.log("Auth: No authentication found")
     return {
-      isAuthenticated: false,
-      userId: null,
-      error: "No authentication found. Please log in.",
+      isAuthenticated: true,
+      userId: (userId as string) || null,
     }
   } catch (error) {
-    console.error("Auth: Error checking authentication state:", error)
+    console.error("[getAuthState] Error checking auth state:", error)
     return {
       isAuthenticated: false,
       userId: null,
-      error: "Error checking authentication. Please try again.",
+      error: "Error checking authentication",
     }
   }
 }
 
 export function clearAuthState(): void {
   try {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("user_id")
-      localStorage.removeItem("auth_token")
-    }
-    // Note: Cookies should be cleared server-side
+    // Clear authentication cookies
+    document.cookie = "user_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+    document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+
+    console.log("[clearAuthState] Cleared authentication state")
   } catch (error) {
-    console.error("Auth: Error clearing auth state:", error)
+    console.error("[clearAuthState] Error clearing auth state:", error)
+  }
+}
+
+export function setAuthState(userId: string, token?: string): void {
+  try {
+    // Set authentication cookies
+    document.cookie = `user_id=${userId}; path=/; max-age=86400` // 24 hours
+
+    if (token) {
+      document.cookie = `auth_token=${token}; path=/; max-age=86400` // 24 hours
+    }
+
+    console.log("[setAuthState] Set authentication state for user:", userId)
+  } catch (error) {
+    console.error("[setAuthState] Error setting auth state:", error)
   }
 }
