@@ -8,26 +8,42 @@ export interface AuthState {
 
 export function getAuthState(): AuthState {
   try {
-    // First try to get from cookies (server-side compatible)
-    let userId = getCookie("userId") as string | undefined
+    console.log("[getAuthState] Starting auth state check...")
 
-    // If not in cookies, try localStorage (client-side only)
+    // Check all possible cookie names
+    const cookieNames = ["user_id", "userId", "trainerId", "auth_user_id"]
+    let userId: string | null = null
+
+    for (const cookieName of cookieNames) {
+      const cookieValue = getCookie(cookieName) as string | undefined
+      if (cookieValue) {
+        console.log(`[getAuthState] Found userId in cookie '${cookieName}':`, cookieValue)
+        userId = cookieValue
+        break
+      }
+    }
+
+    // If not found in cookies, check localStorage (client-side only)
     if (!userId && typeof window !== "undefined") {
-      userId = localStorage.getItem("userId") || undefined
+      const localStorageKeys = ["user_id", "userId", "trainerId", "auth_user_id"]
+
+      for (const key of localStorageKeys) {
+        const value = localStorage.getItem(key)
+        if (value) {
+          console.log(`[getAuthState] Found userId in localStorage '${key}':`, value)
+          userId = value
+          break
+        }
+      }
     }
 
-    // Also try alternative cookie names that might be used
+    // Log all available cookies for debugging
+    if (typeof document !== "undefined") {
+      console.log("[getAuthState] All cookies:", document.cookie)
+    }
+
     if (!userId) {
-      userId = getCookie("trainerId") as string | undefined
-    }
-
-    if (!userId && typeof window !== "undefined") {
-      userId = localStorage.getItem("trainerId") || undefined
-    }
-
-    console.log("Auth state check - userId found:", userId)
-
-    if (!userId) {
+      console.log("[getAuthState] No userId found in any location")
       return {
         isAuthenticated: false,
         userId: null,
@@ -35,12 +51,13 @@ export function getAuthState(): AuthState {
       }
     }
 
+    console.log("[getAuthState] Authentication successful with userId:", userId)
     return {
       isAuthenticated: true,
       userId: userId,
     }
   } catch (error) {
-    console.error("Error getting auth state:", error)
+    console.error("[getAuthState] Error getting auth state:", error)
     return {
       isAuthenticated: false,
       userId: null,
@@ -51,31 +68,50 @@ export function getAuthState(): AuthState {
 
 export function setAuthState(userId: string) {
   try {
-    // Set in both cookies and localStorage for redundancy
-    document.cookie = `userId=${userId}; path=/; max-age=86400; SameSite=Lax`
-    document.cookie = `trainerId=${userId}; path=/; max-age=86400; SameSite=Lax`
+    console.log("[setAuthState] Setting auth state for userId:", userId)
 
+    // Set multiple cookie variations for compatibility
+    const cookieOptions = "path=/; max-age=86400; SameSite=Lax"
+    document.cookie = `user_id=${userId}; ${cookieOptions}`
+    document.cookie = `userId=${userId}; ${cookieOptions}`
+    document.cookie = `trainerId=${userId}; ${cookieOptions}`
+    document.cookie = `auth_user_id=${userId}; ${cookieOptions}`
+
+    // Also set in localStorage
     if (typeof window !== "undefined") {
+      localStorage.setItem("user_id", userId)
       localStorage.setItem("userId", userId)
       localStorage.setItem("trainerId", userId)
+      localStorage.setItem("auth_user_id", userId)
     }
+
+    console.log("[setAuthState] Auth state set successfully")
   } catch (error) {
-    console.error("Error setting auth state:", error)
+    console.error("[setAuthState] Error setting auth state:", error)
   }
 }
 
 export function clearAuthState() {
   try {
-    // Clear cookies
-    document.cookie = "userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
-    document.cookie = "trainerId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    console.log("[clearAuthState] Clearing auth state...")
+
+    // Clear all cookie variations
+    const expiredCookie = "path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    document.cookie = `user_id=; ${expiredCookie}`
+    document.cookie = `userId=; ${expiredCookie}`
+    document.cookie = `trainerId=; ${expiredCookie}`
+    document.cookie = `auth_user_id=; ${expiredCookie}`
 
     // Clear localStorage
     if (typeof window !== "undefined") {
+      localStorage.removeItem("user_id")
       localStorage.removeItem("userId")
       localStorage.removeItem("trainerId")
+      localStorage.removeItem("auth_user_id")
     }
+
+    console.log("[clearAuthState] Auth state cleared successfully")
   } catch (error) {
-    console.error("Error clearing auth state:", error)
+    console.error("[clearAuthState] Error clearing auth state:", error)
   }
 }

@@ -20,46 +20,51 @@ export default function ClientPage() {
   useEffect(() => {
     async function fetchClientData() {
       try {
-        console.log("ClientPage: Fetching client data for ID:", params.id)
+        console.log("[ClientPage] Starting client fetch for ID:", params.id)
 
-        // Check authentication state
+        // Check authentication state with detailed logging
         const authState = getAuthState()
-        console.log("ClientPage: Auth state:", authState)
+        console.log("[ClientPage] Auth state result:", authState)
 
         if (!authState.isAuthenticated || !authState.userId) {
-          console.error("ClientPage: Authentication failed:", authState.error)
+          console.error("[ClientPage] Authentication failed:", authState.error)
           setError(authState.error || "Authentication required. Please log in.")
           setLoading(false)
-          // Redirect to login after a short delay
-          setTimeout(() => {
-            router.push("/login")
-          }, 2000)
+
+          // Don't auto-redirect, let user choose
           return
         }
 
-        console.log("ClientPage: Authenticated user ID:", authState.userId)
+        console.log("[ClientPage] Authenticated with userId:", authState.userId)
+        console.log("[ClientPage] Fetching client data...")
 
-        // Fetch real client data from Firebase
+        // Fetch client data from Firebase
         const clientData = await getClient(authState.userId, params.id as string)
-        console.log("ClientPage: Client data received:", clientData)
+        console.log("[ClientPage] Client data response:", clientData)
 
         if (!clientData) {
+          console.log("[ClientPage] No client data returned")
           setError("Client not found or you don't have permission to view this client.")
           setLoading(false)
           return
         }
 
+        console.log("[ClientPage] Successfully loaded client:", clientData.name)
         setClient(clientData)
         setLoading(false)
       } catch (err) {
-        console.error("ClientPage: Error fetching client:", err)
-        setError("Failed to load client data. Please try refreshing the page.")
+        console.error("[ClientPage] Error in fetchClientData:", err)
+        setError(`Failed to load client data: ${err instanceof Error ? err.message : "Unknown error"}`)
         setLoading(false)
       }
     }
 
     if (params.id) {
       fetchClientData()
+    } else {
+      console.error("[ClientPage] No client ID in params")
+      setError("No client ID provided")
+      setLoading(false)
     }
   }, [params.id, router])
 
@@ -67,6 +72,7 @@ export default function ClientPage() {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lime-300"></div>
+        <span className="ml-4 text-gray-600">Loading client data...</span>
       </div>
     )
   }
@@ -83,6 +89,9 @@ export default function ClientPage() {
             </Button>
             <Button onClick={() => window.location.reload()} variant="default">
               Retry
+            </Button>
+            <Button onClick={() => router.push("/login")} variant="secondary">
+              Login
             </Button>
           </div>
         </div>
@@ -108,9 +117,14 @@ export default function ClientPage() {
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Client: {client.name}</h1>
-        <Link href={`/clients/${params.id}/details-v2`}>
-          <Button variant="outline">View New Design</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href={`/clients/${params.id}/details-v2`}>
+            <Button variant="outline">View New Design</Button>
+          </Link>
+          <Button onClick={() => router.push("/clients")} variant="secondary">
+            Back to Clients
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -125,7 +139,18 @@ export default function ClientPage() {
                 <span className="font-medium">Email:</span> {client.email || "Not provided"}
               </div>
               <div>
-                <span className="font-medium">Status:</span> {client.status || "Unknown"}
+                <span className="font-medium">Status:</span>
+                <span
+                  className={`ml-2 px-2 py-1 rounded text-sm ${
+                    client.status === "Active"
+                      ? "bg-green-100 text-green-800"
+                      : client.status === "Pending"
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {client.status || "Unknown"}
+                </span>
               </div>
               {client.phone && (
                 <div>
@@ -142,6 +167,14 @@ export default function ClientPage() {
                   <span className="font-medium">Program:</span> {client.program}
                 </div>
               )}
+              <div>
+                <span className="font-medium">Client ID:</span> {client.id}
+              </div>
+              {client.userId && (
+                <div>
+                  <span className="font-medium">User ID:</span> {client.userId}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -149,7 +182,11 @@ export default function ClientPage() {
         <Card>
           <CardContent className="pt-6">
             <h2 className="text-xl font-semibold mb-4">Notes</h2>
-            {client.notes ? <p>{client.notes}</p> : <p className="text-gray-600">No notes available</p>}
+            {client.notes ? (
+              <p className="whitespace-pre-wrap">{client.notes}</p>
+            ) : (
+              <p className="text-gray-600 italic">No notes available</p>
+            )}
           </CardContent>
         </Card>
       </div>

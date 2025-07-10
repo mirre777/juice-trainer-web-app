@@ -1,40 +1,26 @@
 import type React from "react"
-import { Sen, Inter } from "next/font/google"
-import ClientLayout from "./ClientLayout"
-import { DemoBanner } from "@/components/demo-banner"
-import { ToastProvider } from "@/components/ui/toast-context"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
 import "./globals.css"
+import { ClientLayout } from "./ClientLayout"
 
-// Initialize the Sen font
-const sen = Sen({
-  subsets: ["latin"],
-  weight: ["400", "700", "800"],
-  variable: "--font-sen",
-  display: "swap",
-})
+const inter = Inter({ subsets: ["latin"] })
 
-// Initialize the Inter font
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-})
-
-// Move metadata export to the top level (server component)
-export const metadata = {
+export const metadata: Metadata = {
   title: "Juice Trainer - Personal Training Platform",
   description: "Professional personal training platform for trainers and clients",
-  generator: "Next.js",
+  generator: "v0.dev",
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <html lang="en" className={`${sen.variable} ${inter.variable}`}>
-      <body>
-        <ToastProvider>
-          <DemoBanner />
-          <ClientLayout>{children}</ClientLayout>
-        </ToastProvider>
+    <html lang="en">
+      <body className={inter.className}>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )
