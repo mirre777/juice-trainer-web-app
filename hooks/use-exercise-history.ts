@@ -116,4 +116,4 @@ export function useExerciseHistory(userId: string, exerciseName: string, exercis
   }, [userId, exerciseName, exerciseId])
 
   return { sessions, prs, loading, error }
-} 
+}

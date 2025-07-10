@@ -648,6 +648,55 @@ export async function getClientById(clientId: string): Promise<{ client: Client 
   }
 }
 
+// Get a single client by trainer ID and client ID with enhanced error handling
+export async function getClient(trainerId: string, clientId: string): Promise<Client | null> {
+  try {
+    console.log(`[getClient] Fetching client ${clientId} for trainer ${trainerId}`)
+
+    if (!trainerId) {
+      console.error("[getClient] No trainer ID provided")
+      return null
+    }
+
+    if (!clientId) {
+      console.error("[getClient] No client ID provided")
+      return null
+    }
+
+    // Get client from the trainer's clients subcollection
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    const clientDoc = await getDoc(clientRef)
+
+    if (!clientDoc.exists()) {
+      console.log(`[getClient] Client ${clientId} not found for trainer ${trainerId}`)
+      return null
+    }
+
+    const clientData = clientDoc.data()
+    console.log(`[getClient] Found client data:`, clientData)
+
+    // Use enhanced mapping that follows userId
+    const client = await mapClientDataWithUserInfo(clientId, clientData)
+
+    if (!client) {
+      console.error(`[getClient] Failed to map client data for ${clientId}`)
+      return null
+    }
+
+    console.log(`[getClient] Successfully mapped client:`, {
+      id: client.id,
+      name: client.name,
+      status: client.status,
+      email: client.email,
+    })
+
+    return client
+  } catch (error) {
+    console.error(`[getClient] Error fetching client ${clientId} for trainer ${trainerId}:`, error)
+    return null
+  }
+}
+
 // Get trainer name by ID - using the existing getUserById function
 export async function getTrainerName(trainerId: string): Promise<string> {
   try {

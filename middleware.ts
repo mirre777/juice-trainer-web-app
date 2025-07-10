@@ -26,13 +26,19 @@ export function middleware(request: NextRequest) {
 
   // Check for user_id cookie
   const userId = request.cookies.get("user_id")?.value
+  const authToken = request.cookies.get("auth_token")?.value
 
   console.log(`[Middleware] Path: ${path}`)
   console.log(`[Middleware] User ID cookie: ${userId ? "present" : "missing"}`)
+  console.log(`[Middleware] Auth token: ${authToken ? "present" : "missing"}`)
 
-  if (!userId) {
-    console.log(`[Middleware] No user_id cookie, redirecting to login`)
-    return NextResponse.redirect(new URL("/login", request.url))
+  // If no authentication found, redirect to login
+  if (!userId && !authToken) {
+    console.log(`[Middleware] No authentication found, redirecting to login`)
+    const loginUrl = new URL("/login", request.url)
+    // Add the original path as a redirect parameter
+    loginUrl.searchParams.set("redirect", path)
+    return NextResponse.redirect(loginUrl)
   }
 
   return NextResponse.next()
