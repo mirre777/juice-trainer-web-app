@@ -24,6 +24,7 @@ export default function ClientPage() {
 
         // Check authentication state
         const authState = getAuthState()
+        console.log("ClientPage: Auth state:", authState)
 
         if (!authState.isAuthenticated || !authState.userId) {
           console.error("ClientPage: Authentication failed:", authState.error)
@@ -72,16 +73,18 @@ export default function ClientPage() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-        <h2 className="text-lg font-semibold text-red-700">Error</h2>
-        <p className="text-red-600">{error}</p>
-        <div className="flex gap-2 mt-4">
-          <Button onClick={() => router.push("/clients")} variant="outline">
-            Back to Clients
-          </Button>
-          <Button onClick={() => window.location.reload()} variant="default">
-            Retry
-          </Button>
+      <div className="p-6 max-w-md mx-auto mt-8">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <h2 className="text-lg font-semibold text-red-700 mb-2">Error Loading Client</h2>
+          <p className="text-red-600 mb-4">{error}</p>
+          <div className="flex gap-2">
+            <Button onClick={() => router.push("/clients")} variant="outline">
+              Go Back
+            </Button>
+            <Button onClick={() => window.location.reload()} variant="default">
+              Retry
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -89,18 +92,20 @@ export default function ClientPage() {
 
   if (!client) {
     return (
-      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-        <h2 className="text-lg font-semibold text-yellow-700">Client Not Found</h2>
-        <p className="text-yellow-600">The requested client could not be found.</p>
-        <Button onClick={() => router.push("/clients")} className="mt-4" variant="outline">
-          Back to Clients
-        </Button>
+      <div className="p-6 max-w-md mx-auto mt-8">
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+          <h2 className="text-lg font-semibold text-yellow-700">Client Not Found</h2>
+          <p className="text-yellow-600 mb-4">The requested client could not be found.</p>
+          <Button onClick={() => router.push("/clients")} variant="outline">
+            Back to Clients
+          </Button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Client: {client.name}</h1>
         <Link href={`/clients/${params.id}/details-v2`}>
