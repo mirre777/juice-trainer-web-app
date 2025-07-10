@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ClientWorkouts } from "@/components/clients/client-workouts"
+import { getClient } from "@/lib/firebase/client-service"
 import { getAuthState } from "@/lib/utils/auth-utils"
 
 export default function ClientPage() {
@@ -15,49 +16,46 @@ export default function ClientPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  async function fetchClientData() {
-    try {
-      console.log("ClientPage: Fetching client data for ID:", params.id)
-
-      // Check authentication state
-      const authState = getAuthState()
-
-      if (!authState.isAuthenticated || !authState.userId) {
-        console.error("ClientPage: Authentication failed:", authState.error)
-        setError(authState.error || "Authentication required. Please log in.")
-        setLoading(false)
-        // Redirect to login after a short delay
-        setTimeout(() => {
-          router.push("/login")
-        }, 2000)
-        return
-      }
-
-      console.log("ClientPage: Authenticated user ID:", authState.userId)
-
-      // Import the getClient function
-      const { getClient } = await import("@/lib/firebase/client-service")
-
-      // Fetch real client data from Firebase
-      const clientData = await getClient(authState.userId, params.id as string)
-      console.log("ClientPage: Client data received:", clientData)
-
-      if (!clientData) {
-        setError("Client not found or you don't have permission to view this client.")
-        setLoading(false)
-        return
-      }
-
-      setClient(clientData)
-      setLoading(false)
-    } catch (err) {
-      console.error("ClientPage: Error fetching client:", err)
-      setError("Failed to load client data. Please try refreshing the page.")
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
+    async function fetchClientData() {
+      try {
+        console.log("ClientPage: Fetching client data for ID:", params.id)
+
+        // Check authentication state
+        const authState = getAuthState()
+
+        if (!authState.isAuthenticated || !authState.userId) {
+          console.error("ClientPage: Authentication failed:", authState.error)
+          setError(authState.error || "Authentication required. Please log in.")
+          setLoading(false)
+          // Redirect to login after a short delay
+          setTimeout(() => {
+            router.push("/login")
+          }, 2000)
+          return
+        }
+
+        console.log("ClientPage: Authenticated user ID:", authState.userId)
+
+        // Fetch real client data from Firebase
+        const clientData = await getClient(authState.userId, params.id as string)
+        console.log("ClientPage: Client data received:", clientData)
+
+        if (!clientData) {
+          setError("Client not found or you don't have permission to view this client.")
+          setLoading(false)
+          return
+        }
+
+        setClient(clientData)
+        setLoading(false)
+      } catch (err) {
+        console.error("ClientPage: Error fetching client:", err)
+        setError("Failed to load client data. Please try refreshing the page.")
+        setLoading(false)
+      }
+    }
+
     if (params.id) {
       fetchClientData()
     }
@@ -76,9 +74,14 @@ export default function ClientPage() {
       <div className="p-4 bg-red-50 border border-red-200 rounded-md">
         <h2 className="text-lg font-semibold text-red-700">Error</h2>
         <p className="text-red-600">{error}</p>
-        <Button onClick={() => router.push("/clients")} className="mt-4" variant="outline">
-          Back to Clients
-        </Button>
+        <div className="flex gap-2 mt-4">
+          <Button onClick={() => router.push("/clients")} variant="outline">
+            Back to Clients
+          </Button>
+          <Button onClick={() => window.location.reload()} variant="default">
+            Retry
+          </Button>
+        </div>
       </div>
     )
   }

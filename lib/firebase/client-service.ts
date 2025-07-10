@@ -522,7 +522,7 @@ export async function addClient(
 }
 
 // Update a client
-export async function updateClient(
+export async function updateClientData(
   clientId: string,
   updates: Partial<Client>,
 ): Promise<{ success: boolean; error?: any }> {
@@ -531,7 +531,7 @@ export async function updateClient(
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
-        { function: "updateClient" },
+        { function: "updateClientData" },
         "Client ID is required",
       )
       logError(error)
@@ -545,7 +545,7 @@ export async function updateClient(
     }
 
     const [, updateError] = await tryCatch(() => updateDoc(clientRef, updateData), ErrorType.DB_WRITE_FAILED, {
-      function: "updateClient",
+      function: "updateClientData",
       clientId,
     })
 
@@ -553,13 +553,13 @@ export async function updateClient(
       return { success: false, error: updateError }
     }
 
-    console.log("[updateClient] Client updated:", clientId)
+    console.log("[updateClientData] Client updated:", clientId)
     return { success: true }
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "updateClient", clientId },
+      { function: "updateClientData", clientId },
       "Unexpected error updating client",
     )
     logError(appError)
@@ -568,13 +568,13 @@ export async function updateClient(
 }
 
 // Delete a client
-export async function deleteClient(clientId: string): Promise<{ success: boolean; error?: any }> {
+export async function deleteClientData(clientId: string): Promise<{ success: boolean; error?: any }> {
   try {
     if (!clientId) {
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
-        { function: "deleteClient" },
+        { function: "deleteClientData" },
         "Client ID is required",
       )
       logError(error)
@@ -583,7 +583,7 @@ export async function deleteClient(clientId: string): Promise<{ success: boolean
 
     const clientRef = doc(db, "clients", clientId)
     const [, deleteError] = await tryCatch(() => deleteDoc(clientRef), ErrorType.DB_DELETE_FAILED, {
-      function: "deleteClient",
+      function: "deleteClientData",
       clientId,
     })
 
@@ -591,13 +591,13 @@ export async function deleteClient(clientId: string): Promise<{ success: boolean
       return { success: false, error: deleteError }
     }
 
-    console.log("[deleteClient] Client deleted:", clientId)
+    console.log("[deleteClientData] Client deleted:", clientId)
     return { success: true }
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "deleteClient", clientId },
+      { function: "deleteClientData", clientId },
       "Unexpected error deleting client",
     )
     logError(appError)
@@ -1280,5 +1280,36 @@ export async function processLoginInvitation(
         "Unexpected error processing invitation",
       ),
     }
+  }
+}
+
+// New functions from updates
+export async function createClient(
+  trainerId: string,
+  clientData: Omit<Client, "id" | "trainerId" | "createdAt" | "updatedAt">,
+): Promise<string> {
+  try {
+    console.log("ClientService: Creating client for trainer:", trainerId)
+
+    if (!trainerId) {
+      throw new Error("Trainer ID is required")
+    }
+
+    const now = new Date()
+    const newClient = {
+      ...clientData,
+      trainerId,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    const clientsRef = collection(db, "clients")
+    const docRef = await addDoc(clientsRef, newClient)
+
+    console.log("ClientService: Client created with ID:", docRef.id)
+    return docRef.id
+  } catch (error) {
+    console.error("ClientService: Error creating client:", error)
+    throw error
   }
 }
