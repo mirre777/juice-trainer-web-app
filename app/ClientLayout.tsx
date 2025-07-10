@@ -18,27 +18,26 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     setMounted(true)
   }, [])
 
-  // Don't render header on certain pages
-  const hideHeader =
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/pricing" ||
-    pathname?.startsWith("/invite/") ||
-    pathname?.startsWith("/shared/") ||
-    pathname === "/set-password" ||
-    pathname === "/mobile-app-success" ||
-    pathname === "/signup-juice-app"
-
+  // Don't render anything until mounted to avoid hydration issues
   if (!mounted) {
     return null
   }
+
+  // Check if we should show the header
+  const shouldShowHeader =
+    !pathname?.startsWith("/shared/") &&
+    !pathname?.startsWith("/demo/client-workout") &&
+    pathname !== "/login" &&
+    pathname !== "/signup" &&
+    pathname !== "/pricing" &&
+    !pathname?.startsWith("/invite/")
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
       <FeedbackProvider>
         <div className="min-h-screen bg-background">
-          {!hideHeader && <UnifiedHeader />}
-          <main className={hideHeader ? "" : "pt-16"}>{children}</main>
+          {shouldShowHeader && <UnifiedHeader />}
+          <main className={shouldShowHeader ? "pt-16" : ""}>{children}</main>
           <FloatingFeedbackButton />
         </div>
         <Toaster />

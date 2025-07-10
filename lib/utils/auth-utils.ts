@@ -8,51 +8,49 @@ export interface AuthState {
 
 export function getAuthState(): AuthState {
   try {
-    console.log("[getAuthState] Checking auth state...")
+    // Check for user_id cookie (this is what the system actually uses)
+    let userId = getCookie("user_id") as string | undefined
 
-    // The app uses 'user_id' cookie as seen in middleware.ts and api/auth/me/route.ts
-    const userId = getCookie("user_id") as string | undefined
+    console.log("Auth: Checking user_id cookie:", userId)
 
-    console.log("[getAuthState] user_id cookie:", userId ? "found" : "not found")
+    // Fallback to localStorage if available (client-side only)
+    if (!userId && typeof window !== "undefined") {
+      userId = localStorage.getItem("user_id") || undefined
+      console.log("Auth: Checking localStorage user_id:", userId)
+    }
 
     if (!userId) {
+      console.log("Auth: No user_id found in cookies or localStorage")
       return {
         isAuthenticated: false,
         userId: null,
-        error: "Not authenticated. Please log in.",
+        error: "No authentication found. Please log in.",
       }
     }
 
+    console.log("Auth: Found user_id:", userId)
     return {
       isAuthenticated: true,
       userId: userId,
     }
   } catch (error) {
-    console.error("[getAuthState] Error:", error)
+    console.error("Auth: Error checking authentication state:", error)
     return {
       isAuthenticated: false,
       userId: null,
-      error: "Authentication error occurred",
+      error: "Error checking authentication. Please try again.",
     }
-  }
-}
-
-export function setAuthState(userId: string) {
-  try {
-    // Set the same cookie that the backend expects
-    document.cookie = `user_id=${userId}; path=/; max-age=86400; SameSite=Lax`
-    console.log("[setAuthState] Set user_id cookie for:", userId)
-  } catch (error) {
-    console.error("[setAuthState] Error:", error)
   }
 }
 
 export function clearAuthState(): void {
   try {
-    // Clear the user_id cookie
-    document.cookie = "user_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
-    console.log("[clearAuthState] Cleared user_id cookie")
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("user_id")
+      localStorage.removeItem("auth_token")
+    }
+    // Note: Cookies should be cleared server-side
   } catch (error) {
-    console.error("[clearAuthState] Error:", error)
+    console.error("Auth: Error clearing auth state:", error)
   }
 }
