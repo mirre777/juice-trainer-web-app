@@ -1,5 +1,3 @@
-"use client";
-
 import type React from "react"
 import { Sen, Inter } from "next/font/google"
 import ClientLayout from "./ClientLayout"
@@ -22,6 +20,13 @@ const inter = Inter({
   display: "swap",
 })
 
+// Move metadata export to the top level (server component)
+export const metadata = {
+  title: "Juice Trainer - Personal Training Platform",
+  description: "Professional personal training platform for trainers and clients",
+  generator: "Next.js",
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sen.variable} ${inter.variable}`}>
@@ -34,7 +39,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   )
 }
-
-export const metadata = {
-      generator: 'v0.dev'
-    };

@@ -2,7 +2,7 @@ export interface Client {
   id: string
   name: string
   initials: string
-  status: string
+  status: "Pending" | "Active" | "Inactive" | "Deleted"
   progress: number
   sessions: {
     completed: number
@@ -19,27 +19,11 @@ export interface Client {
   }
   metrics: any[]
   email: string
+  phone: string // Added phone field
   goal: string
   program: string
-  createdAt: Date
+  createdAt: any
   inviteCode: string
   userId: string
-  phone: string
-  _lastUpdated: number
-}
-
-export interface ClientFormData {
-  name: string
-  email: string
-  phone?: string
-  goal?: string
-  program?: string
-  notes?: string
-}
-
-export interface ClientStats {
-  totalClients: number
-  activeClients: number
-  pendingClients: number
-  completedWorkouts: number
+  _lastUpdated?: number
 }
