@@ -4,8 +4,10 @@ import LoadingSpinner from "@/components/shared/loading-spinner"
 
 export default function ImportProgramsPage() {
   return (
-    <Suspense fallback={<LoadingSpinner />}>
-      <ImportProgramsClient />
-    </Suspense>
+    <div className="container mx-auto px-4 py-8">
+      <Suspense fallback={<LoadingSpinner />}>
+        <ImportProgramsClient />
+      </Suspense>
+    </div>
   )
 }

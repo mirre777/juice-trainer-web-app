@@ -1,56 +1,81 @@
-import { getCookie } from "cookies-next"
+import { cookies } from "next/headers"
 
-export interface AuthState {
-  isAuthenticated: boolean
-  userId: string | null
-  error?: string
-}
-
-export function getAuthState(): AuthState {
+export async function getTrainerIdFromCookies(): Promise<string | null> {
   try {
-    // Check for user_id cookie (this is what the system actually uses)
-    let userId = getCookie("user_id") as string | undefined
+    const cookieStore = cookies()
 
-    console.log("Auth: Checking user_id cookie:", userId)
-
-    // Fallback to localStorage if available (client-side only)
-    if (!userId && typeof window !== "undefined") {
-      userId = localStorage.getItem("user_id") || undefined
-      console.log("Auth: Checking localStorage user_id:", userId)
+    // Check for user_id cookie (this is what the middleware actually sets)
+    const userIdCookie = cookieStore.get("user_id")
+    if (userIdCookie?.value) {
+      return userIdCookie.value
     }
 
-    if (!userId) {
-      console.log("Auth: No user_id found in cookies or localStorage")
-      return {
-        isAuthenticated: false,
-        userId: null,
-        error: "No authentication found. Please log in.",
-      }
+    // Fallback to check for trainer_id cookie for backward compatibility
+    const trainerIdCookie = cookieStore.get("trainer_id")
+    if (trainerIdCookie?.value) {
+      return trainerIdCookie.value
     }
 
-    console.log("Auth: Found user_id:", userId)
-    return {
-      isAuthenticated: true,
-      userId: userId,
-    }
+    return null
   } catch (error) {
-    console.error("Auth: Error checking authentication state:", error)
-    return {
-      isAuthenticated: false,
-      userId: null,
-      error: "Error checking authentication. Please try again.",
-    }
+    console.error("Error getting trainer ID from cookies:", error)
+    return null
   }
 }
 
-export function clearAuthState(): void {
+export function getTrainerIdFromClientCookies(): string | null {
+  try {
+    // Check for user_id cookie first (this is what the middleware sets)
+    const userIdMatch = document.cookie.match(/(?:^|;\s*)user_id=([^;]+)/)
+    if (userIdMatch) {
+      return decodeURIComponent(userIdMatch[1])
+    }
+
+    // Fallback to trainer_id for backward compatibility
+    const trainerIdMatch = document.cookie.match(/(?:^|;\s*)trainer_id=([^;]+)/)
+    if (trainerIdMatch) {
+      return decodeURIComponent(trainerIdMatch[1])
+    }
+
+    // Check localStorage as fallback
+    if (typeof window !== "undefined") {
+      const storedUserId = localStorage.getItem("user_id")
+      if (storedUserId) {
+        return storedUserId
+      }
+
+      const storedTrainerId = localStorage.getItem("trainer_id")
+      if (storedTrainerId) {
+        return storedTrainerId
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error("Error getting trainer ID from client cookies:", error)
+    return null
+  }
+}
+
+export function setTrainerIdInClientStorage(trainerId: string): void {
+  try {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("user_id", trainerId)
+      // Also set trainer_id for backward compatibility
+      localStorage.setItem("trainer_id", trainerId)
+    }
+  } catch (error) {
+    console.error("Error setting trainer ID in client storage:", error)
+  }
+}
+
+export function clearTrainerIdFromClientStorage(): void {
   try {
     if (typeof window !== "undefined") {
       localStorage.removeItem("user_id")
-      localStorage.removeItem("auth_token")
+      localStorage.removeItem("trainer_id")
     }
-    // Note: Cookies should be cleared server-side
   } catch (error) {
-    console.error("Auth: Error clearing auth state:", error)
+    console.error("Error clearing trainer ID from client storage:", error)
   }
 }

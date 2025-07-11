@@ -9,7 +9,7 @@ import { UnifiedHeader } from "@/components/unified-header"
 import { FeedbackProvider } from "@/components/feedback/feedback-provider"
 import { FloatingFeedbackButton } from "@/components/feedback/floating-feedback-button"
 import { DemoBanner } from "@/components/demo-banner"
-import { ToastProvider } from "@/components/ui/toast-context"
+import { ToastProvider } from "@/components/toast-provider"
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
