@@ -1,58 +1,51 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
+// Define protected routes
+const protectedRoutes = ["/overview", "/clients", "/programs", "/import-programs", "/sessions", "/finance", "/settings"]
+
+const publicRoutes = ["/", "/login", "/signup", "/pricing", "/invite", "/shared"]
+
 export function middleware(request: NextRequest) {
-  const path = request.nextUrl.pathname
+  const { pathname } = request.nextUrl
 
-  console.log(`[Middleware] 🔍 Processing path: ${path}`)
+  // Check if the route is protected
+  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
 
-  // Skip middleware for static files, API routes, and public paths
+  // Check if the route is public
+  const isPublicRoute = publicRoutes.some((route) => pathname === route || pathname.startsWith(route))
+
+  // Allow API routes and static files
   if (
-    path.startsWith("/_next") ||
-    path.startsWith("/api") ||
-    path.startsWith("/static") ||
-    path.includes(".") ||
-    path === "/" ||
-    path === "/login" ||
-    path === "/signup" ||
-    path === "/pricing" ||
-    path.startsWith("/invite/") ||
-    path.startsWith("/shared/") ||
-    path.startsWith("/demo/") ||
-    path === "/debug-env" ||
-    path === "/mobile-app-success" ||
-    path === "/signup-juice-app"
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon.ico") ||
+    pathname.includes(".")
   ) {
-    console.log(`[Middleware] ✅ Skipping middleware for: ${path}`)
     return NextResponse.next()
   }
 
-  // Check for user_id cookie (this is what the system actually uses)
-  const userId = request.cookies.get("user_id")?.value
-  const authToken = request.cookies.get("auth_token")?.value
+  // If it's a protected route, check for auth token
+  if (isProtectedRoute) {
+    const token = request.cookies.get("auth-token")?.value
 
-  console.log(`[Middleware] 🔍 Path: ${path}`)
-  console.log(`[Middleware] 🍪 User ID cookie: ${userId ? "present (" + userId + ")" : "missing"}`)
-  console.log(`[Middleware] 🍪 Auth token: ${authToken ? "present" : "missing"}`)
-
-  // Log all cookies for debugging
-  const allCookies = request.cookies.getAll()
-  console.log(`[Middleware] 🍪 All cookies:`, allCookies.map((c) => `${c.name}=${c.value}`).join(", "))
-
-  // If we have user_id cookie, allow access
-  if (userId) {
-    console.log(`[Middleware] ✅ User authenticated with user_id: ${userId}`)
-    return NextResponse.next()
+    if (!token) {
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
   }
 
-  // If no authentication found, redirect to login
-  console.log(`[Middleware] ❌ No authentication found, redirecting to login`)
-  const loginUrl = new URL("/login", request.url)
-  // Add the original path as a redirect parameter
-  loginUrl.searchParams.set("redirect", path)
-  return NextResponse.redirect(loginUrl)
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
 }
