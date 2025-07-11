@@ -1,157 +1,133 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { PricingCard } from "@/components/payment/pricing-card"
-import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
-import { getUserSubscriptionPlan } from "@/lib/firebase/subscription-service"
+import { useState } from "react"
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 
-interface PricingClientPageProps {
-  initialPlan?: string | null
-}
+import PricingCard from "@/components/payment/pricing-card"
+import { Testimonial } from "@/components/testimonial"
 
-export function PricingClientPage({ initialPlan = null }: PricingClientPageProps) {
-  const [currentPlan, setCurrentPlan] = useState<string | null>(initialPlan)
-  const [loading, setLoading] = useState(true)
+export default function PricingPage() {
+  const [isAnnual, setIsAnnual] = useState(false)
 
-  useEffect(() => {
-    async function fetchUserPlan() {
-      try {
-        // Get user ID from auth token or session
-        const response = await fetch("/api/auth/me")
-        if (response.ok) {
-          const { user } = await response.json()
-          if (user?.id) {
-            const plan = await getUserSubscriptionPlan(user.id)
-            setCurrentPlan(plan)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching user plan:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
+  // Calculate annual price with 20% discount
+  const monthlyPrice = 49
+  const annualPrice = Math.round(monthlyPrice * 12 * 0.8)
+  const annualMonthly = Math.round(annualPrice / 12)
 
-    if (!initialPlan) {
-      fetchUserPlan()
-    } else {
-      setLoading(false)
-    }
-  }, [initialPlan])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-      </div>
-    )
-  }
+  const testimonials = [
+    {
+      quote:
+        "Juice has transformed how I manage my fitness business. The client tracking and workout builder save me hours every week.",
+      author: "Sarah Johnson",
+      role: "Personal Trainer",
+      company: "FitLife Studio",
+    },
+    {
+      quote:
+        "The analytics and reporting features have helped me understand my business better and make data-driven decisions.",
+      author: "Mark Williams",
+      role: "Fitness Coach",
+      company: "Elite Performance",
+    },
+    {
+      quote: "My clients love the mobile app experience. It's made communication and workout tracking so much easier.",
+      author: "Emma Davis",
+      role: "Nutrition Coach",
+    },
+  ]
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="container mx-auto px-4 py-16">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Choose Your Plan</h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Everything you need to <span className="bg-[#D2FF28] text-black px-1 rounded">manage your clients</span>,{" "}
-            <span className="bg-[#D2FF28] text-black px-1 rounded">import workout programs from Google Sheets</span> and
-            send them with your clients, and <span className="bg-[#D2FF28] text-black px-1 rounded">grow</span> your
-            coaching business.
-          </p>
-        </div>
+    <div className="container max-w-6xl py-12 px-4 sm:px-6 lg:px-8">
+      <div className="mb-6">
+        <button
+          onClick={() => window.history.back()}
+          className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </button>
+      </div>
 
-        {/* Pricing Cards */}
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {/* Basic Plan */}
-          <PricingCard
-            title="Basic"
-            price="0"
-            period="month"
-            description="Perfect for getting started"
-            features={[
-              "Up to 3 clients",
-              "Basic workout tracking",
-              "Client progress monitoring",
-              "Email support",
-              "Mobile app access",
-            ]}
-            buttonText={currentPlan === "trainer_basic" ? "Current Plan" : "Start Free"}
-            buttonVariant={currentPlan === "trainer_basic" ? "outline" : "default"}
-            isPopular={false}
-            isCurrent={currentPlan === "trainer_basic"}
-            planId="trainer_basic"
-            disabled={currentPlan === "trainer_basic"}
-          />
+      <div className="text-center mb-12">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Simple, transparent pricing</h1>
+        <p className="mt-4 text-md text-darkgray max-w-2xl mx-auto">
+          Everything you need to <span className="bg-[#D2FF28] text-black px-1 rounded">manage your clients</span>,{" "}
+          <span className="bg-[#D2FF28] text-black px-1 rounded">import workout programs from Google Sheets</span> and
+          send them with your clients, and <span className="bg-[#D2FF28] text-black px-1 rounded">grow</span> your
+          coaching business.
+        </p>
 
-          {/* Pro Plan */}
-          <div className="relative">
-            <ComingSoonOverlay />
-            <PricingCard
-              title="Pro"
-              price="49"
-              period="month"
-              description="For growing coaching businesses"
-              features={[
-                "Unlimited clients",
-                "Advanced workout builder",
-                "Google Sheets integration",
-                "Progress analytics",
-                "Custom branding",
-                "Email & chat support",
-              ]}
-              buttonText="Upgrade to Pro"
-              buttonVariant="default"
-              isPopular={true}
-              isCurrent={currentPlan === "trainer_pro"}
-              planId="trainer_pro"
-              disabled={true}
+        {/* Billing toggle */}
+        <div className="mt-6 flex items-center justify-center">
+          <span className={`text-sm ${!isAnnual ? "text-black font-medium" : "text-darkgray"}`}>Monthly</span>
+          <button
+            className="relative inline-flex h-6 w-11 mx-3 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-200 transition-colors duration-200 ease-in-out focus:outline-none"
+            role="switch"
+            aria-checked={isAnnual}
+            onClick={() => setIsAnnual(!isAnnual)}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#D2FF28] shadow ring-0 transition duration-200 ease-in-out ${
+                isAnnual ? "translate-x-5" : "translate-x-0"
+              }`}
             />
-          </div>
+          </button>
+          <span className={`text-sm ${isAnnual ? "text-black font-medium" : "text-darkgray"}`}>
+            Annual <span className="bg-[#D2FF28] text-xs font-medium px-2 py-0.5 rounded-full ml-1">Save 20%</span>
+          </span>
+        </div>
+      </div>
 
-          {/* Elite Plan */}
-          <div className="relative">
-            <ComingSoonOverlay />
-            <PricingCard
-              title="Elite"
-              price="99"
-              period="month"
-              description="For established coaching businesses"
-              features={[
-                "Everything in Pro",
-                "Priority support",
-                "Vacation mode",
-                "Advanced analytics",
-                "API access",
-                "White-label solution",
-                "Dedicated account manager",
-              ]}
-              buttonText="Upgrade to Elite"
-              buttonVariant="default"
-              isPopular={false}
-              isCurrent={currentPlan === "trainer_elite"}
-              planId="trainer_elite"
-              disabled={true}
+      <div className="max-w-md mx-auto">
+        <PricingCard
+          name="Elite"
+          price={isAnnual ? `${annualMonthly}` : 49}
+          currency="€"
+          description={
+            isAnnual
+              ? `€${annualPrice} billed annually (€${annualMonthly}/month)`
+              : "Premium features for established trainers with growing businesses"
+          }
+          features={[
+            "Everything in Pro",
+            "White-label mobile app",
+            "Advanced business analytics",
+            "Client payment processing",
+          ]}
+          planId={isAnnual ? "price_elite_annual" : "price_elite"}
+          comingSoon={true}
+          buttonText="Get Elite"
+        />
+      </div>
+
+      {/* Testimonials section */}
+      <div className="mt-20">
+        <h2 className="text-xl font-bold text-center mb-8">What our customers say</h2>
+        <div className="grid md:grid-cols-3 gap-6">
+          {testimonials.map((testimonial, index) => (
+            <Testimonial
+              key={index}
+              quote={testimonial.quote}
+              author={testimonial.author}
+              role={testimonial.role}
+              company={testimonial.company}
             />
-          </div>
+          ))}
         </div>
+      </div>
 
-        {/* Additional Info */}
-        <div className="text-center mt-16">
-          <p className="text-sm text-gray-500">
-            Need a custom solution?{" "}
-            <button
-              onClick={() => {
-                const message = "Hi! I'm interested in a custom solution for my coaching business."
-                const whatsappUrl = `https://wa.me/436602101427?text=${encodeURIComponent(message)}`
-                window.open(whatsappUrl, "_blank")
-              }}
-              className="text-green-600 hover:underline cursor-pointer"
-            >
-              Contact us
-            </button>
-          </p>
-        </div>
+      <div className="mt-16 text-center">
+        <h3 className="text-xl font-medium mb-2">Need a custom solution?</h3>
+        <p className="text-sm text-darkgray mb-6">
+          Contact us for a tailored plan that meets your specific requirements.
+        </p>
+        <Link
+          href="/contact"
+          className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-sm font-medium rounded-md text-black bg-[#D2FF28] hover:bg-opacity-90"
+        >
+          Contact Sales
+        </Link>
       </div>
     </div>
   )

@@ -1,28 +1,3 @@
-import { cookies } from "next/headers"
-
-export async function getTrainerIdFromCookies(): Promise<string | null> {
-  try {
-    const cookieStore = cookies()
-
-    // Check for user_id cookie (this is what the middleware actually sets)
-    const userIdCookie = cookieStore.get("user_id")
-    if (userIdCookie?.value) {
-      return userIdCookie.value
-    }
-
-    // Fallback to check for trainer_id cookie for backward compatibility
-    const trainerIdCookie = cookieStore.get("trainer_id")
-    if (trainerIdCookie?.value) {
-      return trainerIdCookie.value
-    }
-
-    return null
-  } catch (error) {
-    console.error("Error getting trainer ID from cookies:", error)
-    return null
-  }
-}
-
 export function getTrainerIdFromClientCookies(): string | null {
   try {
     // Check for user_id cookie first (this is what the middleware sets)
@@ -78,4 +53,43 @@ export function clearTrainerIdFromClientStorage(): void {
   } catch (error) {
     console.error("Error clearing trainer ID from client storage:", error)
   }
+}
+
+export interface AuthState {
+  isAuthenticated: boolean
+  userId: string | null
+  error?: string
+}
+
+export function getAuthState(): AuthState {
+  try {
+    const userId = getTrainerIdFromClientCookies()
+
+    console.log("Auth: Found user_id:", userId)
+
+    if (!userId) {
+      console.log("Auth: No user_id found in cookies or localStorage")
+      return {
+        isAuthenticated: false,
+        userId: null,
+        error: "No authentication found. Please log in.",
+      }
+    }
+
+    return {
+      isAuthenticated: true,
+      userId: userId,
+    }
+  } catch (error) {
+    console.error("Auth: Error checking authentication state:", error)
+    return {
+      isAuthenticated: false,
+      userId: null,
+      error: "Error checking authentication. Please try again.",
+    }
+  }
+}
+
+export function clearAuthState(): void {
+  clearTrainerIdFromClientStorage()
 }
