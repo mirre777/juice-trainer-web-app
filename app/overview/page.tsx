@@ -1,9 +1,10 @@
+import type { Metadata } from "next"
 import { Suspense } from "react"
 import OverviewPageClient from "./OverviewPageClient"
 import LoadingSpinner from "@/components/shared/loading-spinner"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Overview | Juice",
   description: "Your coaching dashboard overview",
 }
