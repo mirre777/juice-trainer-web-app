@@ -1,17 +1,11 @@
-import type { Metadata } from "next"
 import { Suspense } from "react"
+import ProtectedRoute from "@/components/auth/protected-route"
 import OverviewPageClient from "./OverviewPageClient"
 import LoadingSpinner from "@/components/shared/loading-spinner"
-import { ProtectedRoute } from "@/components/auth/protected-route"
-
-export const metadata: Metadata = {
-  title: "Overview | Juice",
-  description: "Your coaching dashboard overview",
-}
 
 export default function OverviewPage() {
   return (
-    <ProtectedRoute requiredRole="trainer">
+    <ProtectedRoute>
       <Suspense fallback={<LoadingSpinner />}>
         <OverviewPageClient />
       </Suspense>

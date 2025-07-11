@@ -782,4 +782,25 @@ export async function replaceTemporaryClient(
       // Delete the temporary client
       await deleteDoc(tempClientRef)
     } else {
-// Convert the temporary client to a permanent one
+      // Convert the temporary client to a permanent one
+      await updateDoc(tempClientRef, {
+        userId: userId,
+        isTemporary: false,
+        status: "Active",
+        updatedAt: serverTimestamp(),
+      })
+    }
+
+    // Add the trainer to the user's trainers list
+    const userRef = doc(db, "users", userId)
+    await updateDoc(userRef, {
+      trainers: arrayUnion(trainerId),
+      updatedAt: serverTimestamp(),
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error("[replaceTemporaryClient] Error:", error)
+    return { success: false, error }
+  }
+}
