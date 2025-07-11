@@ -1,19 +1,21 @@
 "use client"
 
+import { Badge } from "@/components/ui/badge"
+
 import type React from "react"
 import { useRouter } from "next/navigation"
-
+import { UnifiedHeader } from "@/components/unified-header"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
-import { Search, FileSpreadsheet, ChevronRight, X } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Search, Grid3X3 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { useEffect, useState, useMemo } from "react"
-import { useToast } from "@/components/ui/toast-context"
-import { useDebounce } from "@/hooks/use-debounce"
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
+import { X } from "lucide-react"
 
 interface SheetsImport {
   id: string
@@ -26,6 +28,13 @@ interface SheetsImport {
   programName?: string
   name?: string
   description?: string
+}
+
+interface ImportedProgram {
+  id: string
+  name: string
+  status: string
+  createdAt: string
 }
 
 // Utility function to format date and get day name
@@ -144,8 +153,6 @@ function EditableProgramName({
 export default function ImportProgramsClient() {
   const router = useRouter()
   const { toast } = useToast()
-  const [searchTerm, setSearchTerm] = useState("")
-  const debouncedSearchTerm = useDebounce(searchTerm, 300)
   const [programNameInput, setProgramNameInput] = useState("")
   const [googleSheetsLink, setGoogleSheetsLink] = useState("")
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -175,6 +182,9 @@ export default function ImportProgramsClient() {
     }
     return false
   })
+
+  const [importedPrograms, setImportedPrograms] = useState<ImportedProgram[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -306,7 +316,7 @@ export default function ImportProgramsClient() {
       return []
     }
 
-    const lowercaseSearchTerm = debouncedSearchTerm.toLowerCase().trim()
+    const lowercaseSearchTerm = searchTerm.toLowerCase().trim()
 
     if (!lowercaseSearchTerm) {
       return imports
@@ -320,11 +330,9 @@ export default function ImportProgramsClient() {
         importItem.spreadsheetId.toLowerCase().includes(lowercaseSearchTerm),
     )
 
-    console.log(
-      `[ImportPrograms] Filtered imports: ${filtered.length} of ${imports.length} match "${debouncedSearchTerm}"`,
-    )
+    console.log(`[ImportPrograms] Filtered imports: ${filtered.length} of ${imports.length} match "${searchTerm}"`)
     return filtered
-  }, [imports, debouncedSearchTerm])
+  }, [imports, searchTerm])
 
   // Handle name updates from the editable component
   const handleNameUpdate = (importId: string, newName: string) => {
@@ -366,22 +374,38 @@ export default function ImportProgramsClient() {
 
   const handleConvert = async () => {
     if (!programNameInput.trim()) {
-      alert("Please enter a program name.")
+      toast({
+        title: "Error",
+        description: "Please fill in both program name and Google Sheets link",
+        variant: "destructive",
+      })
       return
     }
 
     if (!googleSheetsLink.trim()) {
-      alert("Please enter a Google Sheets link.")
+      toast({
+        title: "Error",
+        description: "Please fill in both program name and Google Sheets link",
+        variant: "destructive",
+      })
       return
     }
 
     if (!isValidGoogleSheetsUrl(googleSheetsLink)) {
-      alert("Please enter a valid Google Sheets URL.")
+      toast({
+        title: "Error",
+        description: "Please enter a valid Google Sheets URL.",
+        variant: "destructive",
+      })
       return
     }
 
     if (!userId) {
-      alert("You must be logged in to import programs.")
+      toast({
+        title: "Error",
+        description: "You must be logged in to import programs.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -425,7 +449,11 @@ export default function ImportProgramsClient() {
       console.error("[ImportPrograms] Error creating document:", error)
       setIsProcessing(false)
       setIsModalOpen(false)
-      alert("Failed to start conversion. Please try again.")
+      toast({
+        title: "Error",
+        description: "Failed to start conversion. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -490,6 +518,27 @@ export default function ImportProgramsClient() {
     router.push(`/import-programs/${importItem.id}`)
   }
 
+  const loadImportedPrograms = async () => {
+    try {
+      // This would fetch from your API
+      const mockPrograms: ImportedProgram[] = [
+        {
+          id: "1",
+          name: "tfhtegtd",
+          status: "Queued",
+          createdAt: new Date().toISOString(),
+        },
+      ]
+      setImportedPrograms(mockPrograms)
+    } catch (error) {
+      console.error("Error loading programs:", error)
+    }
+  }
+
+  const filteredPrograms = importedPrograms.filter((program) =>
+    program.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
+
   console.log("[ImportPrograms] Render state:", {
     userId,
     isCheckingAuth,
@@ -502,302 +551,212 @@ export default function ImportProgramsClient() {
   })
 
   return (
-    <div className="min-h-screen bg-white font-sans">
-      {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        {/* Import Section */}
-        <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <div className="w-8 h-8 bg-green-600 rounded-sm flex items-center justify-center">
-              <div className="grid grid-cols-3 gap-0.5">
-                {[...Array(9)].map((_, i) => (
-                  <div key={i} className="w-1 h-1 bg-white rounded-sm" />
-                ))}
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-50">
+      <UnifiedHeader />
 
-          <h1 className="text-[32px] font-bold text-gray-900 mb-4 font-sen">Import Your Workout Program</h1>
-          <p className="text-[18px] text-gray-500 mb-8 font-inter">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#CCFF00] rounded-full mb-4">
+            <Grid3X3 className="h-8 w-8 text-black" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Import Your Workout Program</h1>
+          <p className="text-gray-600">
             Paste your Google Sheets link. We'll turn it into a structured program for your client.
           </p>
+        </div>
 
-          <div className="max-w-2xl mx-auto mb-6">
-            <label
-              htmlFor="program-name"
-              className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
-            >
-              Program Name <span className="text-red-500">*</span>
-            </label>
-            <Input
-              id="program-name"
-              type="text"
-              placeholder="e.g., My Client's Strength Program"
-              value={programNameInput}
-              onChange={(e) => setProgramNameInput(e.target.value)}
-              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400 mb-4"
-              required
-            />
+        {/* Import Form */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Program Details</CardTitle>
+            <CardDescription>Enter the program name and Google Sheets link to get started</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="program-name">
+                Program Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="program-name"
+                placeholder="e.g., My Client's Strength Program"
+                value={programNameInput}
+                onChange={(e) => setProgramNameInput(e.target.value)}
+              />
+            </div>
 
-            <label
-              htmlFor="google-sheets-link"
-              className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
-            >
-              Google Sheets Link <span className="text-red-500">*</span>
-            </label>
-            <Input
-              id="google-sheets-link"
-              type="url"
-              placeholder="https://docs.google.com/spreadsheets/d/..."
-              value={googleSheetsLink}
-              onChange={(e) => setGoogleSheetsLink(e.target.value)}
-              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
-              required
-              onFocus={() => {
-                if (!doNotShowInstructionsAgain) {
-                  setShowInstructionsDialog(true)
-                }
-              }}
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="sheets-link">
+                Google Sheets Link <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="sheets-link"
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                value={googleSheetsLink}
+                onChange={(e) => setGoogleSheetsLink(e.target.value)}
+                onFocus={() => {
+                  if (!doNotShowInstructionsAgain) {
+                    setShowInstructionsDialog(true)
+                  }
+                }}
+              />
+            </div>
 
-          <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
-            <p className="text-[14px] font-inter text-right text-gray-500 max-w-[160px]">
-              You can still review and edit it before you send it to your clients in the Juice mobile app.
-            </p>
-            <Button
-              onClick={handleConvert}
-              disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
-              className="w-fit px-8 h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isProcessing ? "Processing..." : "Convert"}
-            </Button>
-          </div>
+            <div className="flex items-center justify-between pt-4">
+              <p className="text-sm text-gray-600">
+                You can still review and edit it before you send it to your clients in the Juice mobile app.
+              </p>
+              <Button
+                onClick={handleConvert}
+                disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
+                className="bg-[#CCFF00] text-black hover:bg-[#b8e600] font-medium"
+              >
+                {isProcessing ? "Converting..." : "Convert"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Previously Imported Programs */}
-          <Card className="p-8" data-section="previously-imported">
-            <div className="border-t border-gray-100 pt-8">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-[18px] font-semibold text-gray-900 font-sen">Previously Imported Programs</h2>
-
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search programs..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-72 bg-white border-black text-[14px] font-inter focus:border-primary focus:ring-primary"
-                  />
-                </div>
+        {/* Previously Imported Programs */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Previously Imported Programs</CardTitle>
+                <CardDescription>View and manage your imported workout programs</CardDescription>
               </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search programs..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-64"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoadingImports ? (
+              <div className="text-center py-8">
+                <div className="animate-spin h-8 w-8 border-b-2 border-lime-400 rounded-full mx-auto mb-4"></div>
+                <p className="text-[14px] text-gray-500 font-inter">Loading your imports...</p>
+              </div>
+            ) : filteredImports.length > 0 ? (
+              <div className="space-y-3">
+                {filteredImports.map((importItem) => {
+                  const statusInfo = getStatusInfo(importItem.status)
+                  const isReady = importItem.status === "conversion_complete"
+                  const isReviewed = importItem.status === "reviewed"
+                  const isEditable = isReady || isReviewed
+                  const { date, dayName } = formatImportDate(importItem.createdAt)
 
-              {isLoadingImports && (
-                <div className="text-center py-8">
-                  <div className="animate-spin h-8 w-8 border-b-2 border-lime-400 rounded-full mx-auto mb-4"></div>
-                  <p className="text-[14px] text-gray-500 font-inter">Loading your imports...</p>
-                </div>
-              )}
-
-              {!isLoadingImports && filteredImports.length === 0 && (
-                <div className="text-center py-12">
-                  <FileSpreadsheet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-[18px] font-medium text-gray-900 mb-2 font-sen">No imports yet</h3>
-                  <p className="text-[14px] text-gray-500 font-inter">
-                    {searchTerm
-                      ? "No imports match your search. Try a different search term."
-                      : "Import your first Google Sheets workout program to get started."}
-                  </p>
-                </div>
-              )}
-
-              {!isLoadingImports && filteredImports.length > 0 && (
-                <div className="space-y-4">
-                  {filteredImports.map((importItem) => {
-                    const statusInfo = getStatusInfo(importItem.status)
-                    const isReady = importItem.status === "conversion_complete"
-                    const isReviewed = importItem.status === "reviewed"
-                    const isEditable = isReady || isReviewed
-                    const { date, dayName } = formatImportDate(importItem.createdAt)
-
-                    return (
-                      <div key={importItem.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
-                        <div className="flex-1 flex items-center space-x-3">
-                          <div className="flex flex-col">
-                            <EditableProgramName importItem={importItem} onNameUpdate={handleNameUpdate} />
-                            {date && (
-                              <div className="flex items-center space-x-2 mt-1">
-                                <span className="text-[12px] text-gray-500 font-inter">{dayName}</span>
-                                <span className="text-[12px] text-gray-400 font-inter">•</span>
-                                <span className="text-[12px] text-gray-500 font-inter">{date}</span>
-                              </div>
-                            )}
+                  return (
+                    <div
+                      key={importItem.id}
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      <div>
+                        <EditableProgramName importItem={importItem} onNameUpdate={handleNameUpdate} />
+                        {date && (
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className="text-[12px] text-gray-500 font-inter">{dayName}</span>
+                            <span className="text-[12px] text-gray-400 font-inter">•</span>
+                            <span className="text-[12px] text-gray-500 font-inter">{date}</span>
                           </div>
-                          <Badge
-                            variant={statusInfo.variant}
-                            className={`text-[12px] font-normal font-inter ${statusInfo.className}`}
-                          >
-                            {statusInfo.text}
-                          </Badge>
-                        </div>
-
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Badge
+                          variant={statusInfo.variant}
+                          className={`text-[12px] font-normal font-inter ${statusInfo.className}`}
+                        >
+                          {statusInfo.text}
+                        </Badge>
                         <Button
                           onClick={() => handleReviewClick(importItem)}
                           disabled={!isEditable}
                           className="bg-black hover:bg-gray-800 text-white font-normal text-[14px] font-sen px-4 py-2 h-8 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                         >
                           {isReviewed ? "Edit" : "Review"}
-                          <ChevronRight className="w-4 h-4" />
                         </Button>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* Processing Modal */}
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="sm:max-w-md font-sen">
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-lime-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                {isProcessing ? (
-                  <svg
-                    className="animate-spin h-8 w-8 text-lime-500"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                ) : (
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                      <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
                     </div>
-                  </div>
-                )}
+                  )
+                })}
               </div>
-
-              <h3 className="text-[24px] font-bold mb-4 text-gray-900">
-                {isProcessing ? "Processing Your Workout Program" : "You are using the new version of our Import AI"}
-              </h3>
-
-              <p className="text-[14px] text-gray-500 mb-6 leading-relaxed">
-                {isProcessing ? (
-                  "We're converting your Google Sheet into a structured workout program. This may take a few moments."
-                ) : (
-                  <>
-                    To ensure your Google Sheets data is converted accurately,{" "}
-                    <span className="font-bold text-lime-600">we've added a manual review step.</span> Your structured
-                    workout program will be ready for review within 24 hours.
-                  </>
-                )}
-              </p>
-
-              {isProcessing && (
-                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
-                  <div className="bg-lime-400 h-2.5 rounded-full w-3/4 animate-pulse"></div>
-                </div>
-              )}
-
-              {!isProcessing && (
-                <div className="mb-6">
-                  <p className="text-[14px] text-blue-600 font-medium">
-                    Note: You can import other programs while you wait.
-                  </p>
-                </div>
-              )}
-
-              {isProcessing && (
-                <p className="text-[12px] text-gray-400">
-                  Converting rows and columns into exercises, sets, and reps...
-                </p>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Instructions Dialog - Moved here */}
-        <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
-          <DialogContent className="sm:max-w-lg font-inter">
-            <DialogClose asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </Button>
-            </DialogClose>
-            <div className="p-4">
-              <div className="flex items-center mb-4">
-                <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
-                  <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
-                </div>
-                <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No programs found</p>
               </div>
-              <ol className="space-y-4 text-[14px] text-gray-700">
-                <li className="flex items-start">
-                  <span className="font-medium text-blue-600 mr-2">1.</span>
-                  <span>Open your workout program in Google Sheets.</span>
-                </li>
-                <li className="flex flex-col items-start">
-                  <div className="flex items-start">
-                    <span className="font-medium text-blue-600 mr-2">2.</span>
-                    <span>Click "Share" → "Anyone with the link can view".</span>
-                  </div>
-                  <img
-                    src="/google-sheets-share-dialog.png"
-                    alt="Google Sheets Share Dialog"
-                    className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
-                  />
-                </li>
-                <li className="flex items-start">
-                  <span className="font-medium text-blue-600 mr-2">3.</span>
-                  <span>Paste the link into the field above.</span>
-                </li>
-              </ol>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  localStorage.setItem("doNotShowInstructionsAgain", "true")
-                  setDoNotShowInstructionsAgain(true)
-                  setShowInstructionsDialog(false)
-                }}
-                className="text-[14px] font-inter"
-              >
-                Don't show me again
-              </Button>
-              <Button
-                onClick={() => setShowInstructionsDialog(false)}
-                className="bg-black hover:bg-gray-800 text-white text-[14px] font-inter"
-              >
-                Ok Thanks
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Instructions Dialog - Moved here */}
+      <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
+        <DialogContent className="sm:max-w-lg font-inter">
+          <DialogClose asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </DialogClose>
+          <div className="p-4">
+            <div className="flex items-center mb-4">
+              <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
+                <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
+              </div>
+              <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
+            </div>
+            <ol className="space-y-4 text-[14px] text-gray-700">
+              <li className="flex items-start">
+                <span className="font-medium text-blue-600 mr-2">1.</span>
+                <span>Open your workout program in Google Sheets.</span>
+              </li>
+              <li className="flex flex-col items-start">
+                <div className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">2.</span>
+                  <span>Click "Share" → "Anyone with the link can view".</span>
+                </div>
+                <img
+                  src="/google-sheets-share-dialog.png"
+                  alt="Google Sheets Share Dialog"
+                  className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
+                />
+              </li>
+              <li className="flex items-start">
+                <span className="font-medium text-blue-600 mr-2">3.</span>
+                <span>Paste the link into the field above.</span>
+              </li>
+            </ol>
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                localStorage.setItem("doNotShowInstructionsAgain", "true")
+                setDoNotShowInstructionsAgain(true)
+                setShowInstructionsDialog(false)
+              }}
+              className="text-[14px] font-inter"
+            >
+              Don't show me again
+            </Button>
+            <Button
+              onClick={() => setShowInstructionsDialog(false)}
+              className="bg-black hover:bg-gray-800 text-white text-[14px] font-inter"
+            >
+              Ok Thanks
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

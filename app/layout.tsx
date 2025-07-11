@@ -2,16 +2,17 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/context/AuthContext"
 import { Toaster } from "@/components/ui/toaster"
 import { ToastProvider } from "@/components/ui/toast-context"
+import { FeedbackProvider } from "@/components/feedback/feedback-provider"
+import { FloatingFeedbackButton } from "@/components/feedback/floating-feedback-button"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Juice - Personal Training Platform",
-  description: "Streamline your personal training business with Juice",
+  description: "The ultimate platform for personal trainers and their clients",
     generator: 'v0.dev'
 }
 
@@ -21,16 +22,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-          <ToastProvider>
-            <AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <FeedbackProvider>
               {children}
+              <FloatingFeedbackButton />
               <Toaster />
-            </AuthProvider>
-          </ToastProvider>
-        </ThemeProvider>
+            </FeedbackProvider>
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   )
