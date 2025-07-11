@@ -33,71 +33,123 @@ export default function ClientDetailPage() {
       if (!isMounted || hasStartedFetch) return
       hasStartedFetch = true
 
+      console.log("🔍 [ClientDetailPage] Starting fetchClientData...")
+      console.log("🔍 [ClientDetailPage] Client ID:", clientId)
+      console.log("🔍 [ClientDetailPage] Document cookies:", document.cookie)
+      console.log("🔍 [ClientDetailPage] Available localStorage keys:", Object.keys(localStorage))
+
       setIsLoading(true)
       try {
-        // Get trainer ID from cookie with improved cookie reading
+        // Enhanced cookie reading with multiple fallbacks
         const getCookie = (name: string) => {
           if (typeof document === "undefined") return null
+          console.log(`🔍 [ClientDetailPage] Looking for cookie: ${name}`)
           const value = `; ${document.cookie}`
           const parts = value.split(`; ${name}=`)
-          if (parts.length === 2) return parts.pop()?.split(";").shift()
+          if (parts.length === 2) {
+            const cookieValue = parts.pop()?.split(";").shift()
+            console.log(`🔍 [ClientDetailPage] Found cookie ${name}:`, cookieValue)
+            return cookieValue
+          }
+          console.log(`🔍 [ClientDetailPage] Cookie ${name} not found`)
           return null
         }
 
-        // Try multiple cookie names that might contain the trainer ID
-        let trainerId = getCookie("trainerUID") || getCookie("user_id") || getCookie("trainer_id")
+        // Try multiple cookie names and localStorage
+        let trainerId = getCookie("user_id") || getCookie("trainerUID") || getCookie("trainer_id")
 
-        // If still no trainer ID, try to get it from localStorage as fallback
+        console.log("🔍 [ClientDetailPage] Cookie search result:", trainerId)
+
+        // If still no trainer ID, try localStorage
         if (!trainerId && typeof window !== "undefined") {
-          trainerId = localStorage.getItem("trainerUID") || localStorage.getItem("user_id")
+          console.log("🔍 [ClientDetailPage] Checking localStorage...")
+          trainerId =
+            localStorage.getItem("user_id") || localStorage.getItem("trainerUID") || localStorage.getItem("trainer_id")
+          console.log("🔍 [ClientDetailPage] localStorage search result:", trainerId)
         }
 
-        // For demo purposes, use a fallback ID if in development or if URL contains 'demo'
+        // Try to get from API as fallback
         if (!trainerId) {
-          if (process.env.NODE_ENV === "development" || window.location.href.includes("demo")) {
-            console.log("Using demo trainer ID")
-            trainerId = "demoTrainerId123"
-          } else {
-            console.error("Trainer ID not found in cookies or localStorage. Available cookies:", document.cookie)
-            throw new Error("Trainer ID not found")
+          console.log("🔍 [ClientDetailPage] No trainer ID found, trying API...")
+          try {
+            const response = await fetch("/api/auth/me", {
+              method: "GET",
+              credentials: "include",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            })
+
+            console.log("🔍 [ClientDetailPage] API response status:", response.status)
+
+            if (response.ok) {
+              const userData = await response.json()
+              console.log("🔍 [ClientDetailPage] API user data:", userData)
+              trainerId = userData.uid || userData.id
+              console.log("🔍 [ClientDetailPage] Extracted trainer ID from API:", trainerId)
+            } else {
+              console.error("🔍 [ClientDetailPage] API call failed:", response.status, response.statusText)
+            }
+          } catch (apiError) {
+            console.error("🔍 [ClientDetailPage] API call error:", apiError)
           }
         }
 
-        console.log("Using trainer ID:", trainerId)
+        // For demo purposes, use a fallback ID if in development
+        if (!trainerId) {
+          if (process.env.NODE_ENV === "development" || window.location.href.includes("demo")) {
+            console.log("🔍 [ClientDetailPage] Using demo trainer ID")
+            trainerId = "demoTrainerId123"
+          } else {
+            console.error("🔍 [ClientDetailPage] ❌ No trainer ID found anywhere!")
+            throw new Error("No authentication found. Please log in.")
+          }
+        }
+
+        console.log("🔍 [ClientDetailPage] ✅ Final trainer ID:", trainerId)
 
         // Fetch client data directly from Firebase
+        console.log("🔍 [ClientDetailPage] Fetching client data...")
         const client = await getClient(trainerId, clientId)
 
         if (!client) {
+          console.error("🔍 [ClientDetailPage] ❌ Client not found")
           throw new Error("Client not found")
         }
+
+        console.log("🔍 [ClientDetailPage] ✅ Client data received:", {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          userId: client.userId,
+        })
 
         if (isMounted) {
           set_clientData(client)
 
-          // Enhanced debugging
-          console.log("=== DEBUGGING CLIENT WORKOUT FETCH ===")
-          console.log("Client data:", JSON.stringify(client, null, 2))
-          console.log("Client ID:", clientId)
-          console.log("Trainer ID:", trainerId)
-          console.log("Client userId:", client.userId)
+          // Enhanced debugging for workout fetching
+          console.log("🔍 [ClientDetailPage] === DEBUGGING CLIENT WORKOUT FETCH ===")
+          console.log("🔍 [ClientDetailPage] Client data:", JSON.stringify(client, null, 2))
+          console.log("🔍 [ClientDetailPage] Client ID:", clientId)
+          console.log("🔍 [ClientDetailPage] Trainer ID:", trainerId)
+          console.log("🔍 [ClientDetailPage] Client userId:", client.userId)
 
           // Try multiple approaches to find workouts
           try {
             // Approach 1: Direct user workouts collection
             if (client.userId) {
-              console.log("🔍 Approach 1: Fetching from users/{userId}/workouts")
-              console.log("Path: users/" + client.userId + "/workouts")
+              console.log("🔍 [ClientDetailPage] 🔍 Approach 1: Fetching from users/{userId}/workouts")
+              console.log("🔍 [ClientDetailPage] Path: users/" + client.userId + "/workouts")
 
               const { workouts: userWorkouts, error: userWorkoutsError } = await getUserWorkouts(client.userId)
-              console.log("User workouts result:", {
+              console.log("🔍 [ClientDetailPage] User workouts result:", {
                 count: userWorkouts?.length || 0,
                 workouts: userWorkouts,
                 error: userWorkoutsError,
               })
 
               if (!userWorkoutsError && userWorkouts && userWorkouts.length > 0) {
-                console.log("✅ Found workouts in user collection!")
+                console.log("🔍 [ClientDetailPage] ✅ Found workouts in user collection!")
                 const groupedWorkouts = groupWorkoutsByWeek(userWorkouts)
                 if (isMounted) {
                   setWorkouts(groupedWorkouts)
@@ -107,58 +159,23 @@ export default function ClientDetailPage() {
             }
 
             // Approach 2: Trainer's client workouts collection
-            console.log("🔍 Approach 2: Fetching from users/{trainerId}/clients/{clientId}/workouts")
-            console.log("Path: users/" + trainerId + "/clients/" + clientId + "/workouts")
+            console.log(
+              "🔍 [ClientDetailPage] 🔍 Approach 2: Fetching from users/{trainerId}/clients/{clientId}/workouts",
+            )
+            console.log("🔍 [ClientDetailPage] Path: users/" + trainerId + "/clients/" + clientId + "/workouts")
 
             const workoutData = await getClientWorkouts(trainerId, clientId)
-            console.log("Client workouts result:", {
+            console.log("🔍 [ClientDetailPage] Client workouts result:", {
               count: workoutData?.length || 0,
               workouts: workoutData,
             })
-
-            // Approach 3: Try alternative paths that might exist
-            console.log("🔍 Approach 3: Checking if client has alternative workout paths")
-
-            // Let's also try to fetch directly from Firebase to see what collections exist
-            if (typeof window !== "undefined" && window.firebase) {
-              try {
-                const db = window.firebase.firestore()
-
-                // Check what subcollections exist under this client
-                console.log("🔍 Checking subcollections under client document...")
-
-                // Try to list all documents in potential workout collections
-                const potentialPaths = [
-                  `users/${trainerId}/clients/${clientId}/workouts`,
-                  `users/${client.userId}/workouts`,
-                  `clients/${clientId}/workouts`,
-                  `workouts/${clientId}`,
-                  `trainers/${trainerId}/clients/${clientId}/workouts`,
-                ]
-
-                for (const path of potentialPaths) {
-                  try {
-                    console.log(`🔍 Checking path: ${path}`)
-                    const snapshot = await db.collection(path).limit(1).get()
-                    console.log(`Path ${path}: ${snapshot.size} documents found`)
-                    if (snapshot.size > 0) {
-                      console.log("Sample document:", snapshot.docs[0].data())
-                    }
-                  } catch (pathError) {
-                    console.log(`Path ${path}: Error -`, pathError.message)
-                  }
-                }
-              } catch (firebaseError) {
-                console.log("Firebase direct access error:", firebaseError)
-              }
-            }
 
             const groupedWorkouts = groupWorkoutsByWeek(workoutData || [])
             if (isMounted) {
               setWorkouts(groupedWorkouts)
             }
           } catch (workoutError) {
-            console.error("❌ Error fetching workouts:", workoutError)
+            console.error("🔍 [ClientDetailPage] ❌ Error fetching workouts:", workoutError)
             if (isMounted) {
               setWorkouts([])
             }
@@ -166,7 +183,7 @@ export default function ClientDetailPage() {
         }
       } catch (err) {
         if (isMounted) {
-          console.error("Error in fetchClientData:", err)
+          console.error("🔍 [ClientDetailPage] ❌ Error in fetchClientData:", err)
           handleError(err)
         }
       } finally {
@@ -182,7 +199,7 @@ export default function ClientDetailPage() {
     return () => {
       isMounted = false
     }
-  }, [clientId]) // Only depend on clientId, remove handleError dependency
+  }, [clientId]) // Only depend on clientId
 
   // Sync edited notes with client data
   useEffect(() => {
@@ -259,8 +276,8 @@ export default function ClientDetailPage() {
         status: workout.status,
         notes: workout.notes || "",
         personalRecords: workout.personalRecords || [],
-        completedAt: workout.completedAt, // Add this line
-        startedAt: workout.startedAt, // Add this for sorting
+        completedAt: workout.completedAt,
+        startedAt: workout.startedAt,
       }
 
       weeks[weekKey].sessions.push(formattedWorkout)
@@ -371,16 +388,16 @@ export default function ClientDetailPage() {
   const toggleWorkoutExpand = (weekIndex: number, workoutIndex: number) => {
     setWorkouts((prevWorkouts) => {
       return prevWorkouts.map((week: any, wIdx: number) => {
-        if (wIdx !== weekIndex) return week;
+        if (wIdx !== weekIndex) return week
         return {
           ...week,
           sessions: week.sessions.map((workout: any, sIdx: number) => {
-            if (sIdx !== workoutIndex) return workout;
-            return { ...workout, expanded: !workout.expanded };
+            if (sIdx !== workoutIndex) return workout
+            return { ...workout, expanded: !workout.expanded }
           }),
-        };
-      });
-    });
+        }
+      })
+    })
   }
 
   const handleEditNotesClick = () => {
@@ -407,10 +424,11 @@ export default function ClientDetailPage() {
         return null
       }
 
-      let trainerId = getCookie("trainerUID") || getCookie("user_id") || getCookie("trainer_id")
+      let trainerId = getCookie("user_id") || getCookie("trainerUID") || getCookie("trainer_id")
 
       if (!trainerId && typeof window !== "undefined") {
-        trainerId = localStorage.getItem("trainerUID") || localStorage.getItem("user_id")
+        trainerId =
+          localStorage.getItem("user_id") || localStorage.getItem("trainerUID") || localStorage.getItem("trainer_id")
       }
 
       if (!trainerId) {
@@ -465,12 +483,20 @@ export default function ClientDetailPage() {
         <div className="bg-red-50 border border-red-200 rounded-md p-6 text-center max-w-md">
           <h2 className="text-xl font-semibold text-red-800 mb-2">Error Loading Client</h2>
           <p className="text-red-600 mb-4">{error.message}</p>
-          <button
-            onClick={() => router.back()}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            Go Back
-          </button>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => router.back()}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-[#D2FF28] text-black rounded-md hover:bg-[#D2FF28]/90"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -483,20 +509,23 @@ export default function ClientDetailPage() {
         <div className="w-full p-6 flex flex-col">
           <div className="flex">
             <div className="pr-6">
-              <div className="w-24 h-24 rounded-full flex items-center justify-center overflow-hidden" style={{ background: clientData.avatarUrl ? undefined : '#D2FF28' }}>
+              <div
+                className="w-24 h-24 rounded-full flex items-center justify-center overflow-hidden"
+                style={{ background: clientData.avatarUrl ? undefined : "#D2FF28" }}
+              >
                 {clientData.avatarUrl ? (
                   <img
-                    src={clientData.avatarUrl}
+                    src={clientData.avatarUrl || "/placeholder.svg"}
                     alt={clientData.name || "Client"}
                     className="w-24 h-24 object-cover"
                   />
                 ) : (
                   <span className="text-black text-4xl font-bold select-none">
                     {(() => {
-                      if (!clientData.name) return "?";
-                      const words = clientData.name.trim().split(/\s+/);
-                      if (words.length === 1) return words[0][0].toUpperCase();
-                      return (words[0][0] + words[1][0]).toUpperCase();
+                      if (!clientData.name) return "?"
+                      const words = clientData.name.trim().split(/\s+/)
+                      if (words.length === 1) return words[0][0].toUpperCase()
+                      return (words[0][0] + words[1][0]).toUpperCase()
                     })()}
                   </span>
                 )}
