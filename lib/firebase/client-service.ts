@@ -5,6 +5,7 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  addDoc,
   query,
   where,
   onSnapshot,
@@ -153,6 +154,80 @@ export function mapClientData(id: string, data: any): Client | null {
     phone: data.phone || "",
     _lastUpdated: Date.now(),
   } as Client
+}
+
+// Create a new client
+export async function createClient(trainerId: string, clientData: Partial<Client>): Promise<string | null> {
+  try {
+    const clientsRef = collection(db, "users", trainerId, "clients")
+    const docRef = await addDoc(clientsRef, {
+      ...clientData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+    return docRef.id
+  } catch (error) {
+    console.error("[createClient] Error:", error)
+    return null
+  }
+}
+
+// Delete a client
+export async function deleteClient(trainerId: string, clientId: string): Promise<boolean> {
+  try {
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    await deleteDoc(clientRef)
+    return true
+  } catch (error) {
+    console.error("[deleteClient] Error:", error)
+    return false
+  }
+}
+
+// Link pending clients with users
+export async function linkPendingClientsWithUsers(trainerId: string): Promise<void> {
+  try {
+    console.log("[linkPendingClientsWithUsers] Starting linking process for trainer:", trainerId)
+
+    // Get all clients for this trainer
+    const clientsRef = collection(db, "users", trainerId, "clients")
+    const clientsSnapshot = await getDocs(clientsRef)
+
+    for (const clientDoc of clientsSnapshot.docs) {
+      const clientData = clientDoc.data()
+
+      // Skip if client already has a userId
+      if (clientData.userId) continue
+
+      // Try to find a user with matching email
+      if (clientData.email) {
+        const usersRef = collection(db, "users")
+        const userQuery = query(usersRef, where("email", "==", clientData.email))
+        const userSnapshot = await getDocs(userQuery)
+
+        if (!userSnapshot.empty) {
+          const userDoc = userSnapshot.docs[0]
+
+          // Link the client to the user
+          await updateDoc(clientDoc.ref, {
+            userId: userDoc.id,
+            status: "Active",
+            updatedAt: serverTimestamp(),
+          })
+
+          // Add trainer to user's trainers list
+          await updateDoc(userDoc.ref, {
+            trainers: arrayUnion(trainerId),
+            updatedAt: serverTimestamp(),
+          })
+
+          console.log(`[linkPendingClientsWithUsers] Linked client ${clientDoc.id} to user ${userDoc.id}`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[linkPendingClientsWithUsers] Error:", error)
+  }
 }
 
 // Get a single client by trainer ID and client ID with enhanced error handling

@@ -1,62 +1,33 @@
-// Client-side auth utilities - no server imports allowed
+import { getCookie } from "cookies-next"
 
-export async function getTrainerIdFromCookies(): Promise<string | null> {
+export interface AuthState {
+  isAuthenticated: boolean
+  userId: string | null
+  error: string | null
+}
+
+export function getAuthState(): AuthState {
   try {
-    // Check for user_id cookie first (current system)
-    const userIdCookie = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("user_id="))
-      ?.split("=")[1]
+    const userId = getCookie("user_id")
 
-    if (userIdCookie) {
-      return userIdCookie
-    }
-
-    // Fallback to trainer_id cookie for backward compatibility
-    const trainerIdCookie = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("trainer_id="))
-      ?.split("=")[1]
-
-    if (trainerIdCookie) {
-      return trainerIdCookie
-    }
-
-    // Check localStorage as fallback
-    if (typeof window !== "undefined") {
-      const storedUserId = localStorage.getItem("user_id") || localStorage.getItem("trainer_id")
-      if (storedUserId) {
-        return storedUserId
+    if (!userId) {
+      return {
+        isAuthenticated: false,
+        userId: null,
+        error: "No authentication found",
       }
     }
 
-    return null
-  } catch (error) {
-    console.error("Error getting trainer ID from cookies:", error)
-    return null
-  }
-}
-
-export async function isAuthenticated(): Promise<boolean> {
-  try {
-    const trainerId = await getTrainerIdFromCookies()
-    return !!trainerId
-  } catch (error) {
-    console.error("Error checking authentication:", error)
-    return false
-  }
-}
-
-export async function getCurrentUser() {
-  try {
-    const response = await fetch("/api/auth/me")
-    if (response.ok) {
-      const data = await response.json()
-      return data.user
+    return {
+      isAuthenticated: true,
+      userId: userId as string,
+      error: null,
     }
-    return null
   } catch (error) {
-    console.error("Error getting current user:", error)
-    return null
+    return {
+      isAuthenticated: false,
+      userId: null,
+      error: "Authentication check failed",
+    }
   }
 }
