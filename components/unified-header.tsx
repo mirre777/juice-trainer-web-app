@@ -36,9 +36,8 @@ export function UnifiedHeader({ userName = "User", userInitials = "U" }: Unified
   const navigationItems = [
     { name: "Overview", href: "/overview" },
     { name: "Clients", href: "/clients" },
-    { name: "Calendar", href: "/calendar" },
     { name: "Programs", href: "/programs" },
-    { name: "Marketplace", href: "/marketplace" },
+    { name: "Import Programs", href: "/import-programs" },
   ]
 
   const isActive = (href: string) => {
