@@ -1,12 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 
-// Force dynamic rendering
 export const dynamic = "force-dynamic"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log("[API:me] 🔄 Starting user data retrieval")
 
@@ -15,53 +14,43 @@ export async function GET(request: NextRequest) {
 
     if (!userIdCookie?.value) {
       console.log("[API:me] ❌ No user_id cookie found")
-      return NextResponse.json({ error: "No authentication found" }, { status: 401 })
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
     const userId = userIdCookie.value
-    console.log("[API:me] ✅ Found user_id cookie:", userId)
+    console.log(`[API:me] 🔍 Looking up user: ${userId}`)
 
-    try {
-      console.log("[API:me] 🔄 Fetching user data from Firestore...")
+    const userRef = doc(db, "users", userId)
+    const userDoc = await getDoc(userRef)
 
-      const userDocRef = doc(db, "users", userId)
-      const userDoc = await getDoc(userDocRef)
-
-      if (!userDoc.exists()) {
-        console.log("[API:me] ❌ No user document found for ID:", userId)
-        return NextResponse.json({ error: "User not found" }, { status: 404 })
-      }
-
-      const userData = userDoc.data()
-      console.log("[API:me] ✅ Successfully retrieved user data")
-      console.log("[API:me] 👤 User role:", userData.role || "Not set")
-
-      return NextResponse.json({
-        uid: userData.uid || userId,
-        email: userData.email || "",
-        role: userData.role || "user",
-        name: userData.name || userData.displayName || "",
-        profilePicture: userData.profilePicture || "",
-        isApproved: userData.isApproved || false,
-        subscriptionStatus: userData.subscriptionStatus || "",
-        universalInviteCode: userData.universalInviteCode || "",
-      })
-    } catch (firestoreError) {
-      console.error("[API:me] ❌ Firestore error:", firestoreError)
-      return NextResponse.json(
-        {
-          error: "Database error",
-          details: firestoreError instanceof Error ? firestoreError.message : "Unknown error",
-        },
-        { status: 500 },
-      )
+    if (!userDoc.exists()) {
+      console.log(`[API:me] ❌ User document not found for ID: ${userId}`)
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
-  } catch (error) {
-    console.error("[API:me] ❌ Unexpected error:", error)
+
+    const userData = userDoc.data()
+    console.log(`[API:me] ✅ User found: ${userData.email}`)
+
+    const user = {
+      id: userDoc.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      user_type: userData.user_type,
+      status: userData.status,
+      hasFirebaseAuth: userData.hasFirebaseAuth,
+      createdAt: userData.createdAt?.toDate?.()?.toISOString(),
+      updatedAt: userData.updatedAt?.toDate?.()?.toISOString(),
+    }
+
+    return NextResponse.json({ user })
+  } catch (error: any) {
+    console.log("[API:me] ❌ Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown error",
+        message: error.message,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )
