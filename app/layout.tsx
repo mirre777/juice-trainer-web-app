@@ -1,19 +1,28 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Sen, Inter } from "next/font/google"
 import "./globals.css"
-import { AuthProvider } from "@/context/AuthContext"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
-import { FeedbackProvider } from "@/components/feedback/feedback-provider"
-import { FloatingFeedbackButton } from "@/components/feedback/floating-feedback-button"
+import { ClientLayout } from "./ClientLayout"
 
-const inter = Inter({ subsets: ["latin"] })
+// Initialize the Sen font
+const sen = Sen({
+  subsets: ["latin"],
+  weight: ["400", "700", "800"],
+  variable: "--font-sen",
+  display: "swap",
+})
+
+// Initialize the Inter font
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
-  title: "Juice - Personal Training Platform",
-  description: "Streamline your personal training business with Juice",
-    generator: 'v0.dev'
+  title: "Juice Trainer - Personal Training Platform",
+  description: "Professional personal training platform for trainers and clients",
+  generator: "Next.js",
 }
 
 export default function RootLayout({
@@ -22,17 +31,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${sen.variable} ${inter.variable}`}>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-          <AuthProvider>
-            <FeedbackProvider>
-              {children}
-              <FloatingFeedbackButton />
-              <Toaster />
-            </FeedbackProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )

@@ -1,11 +1,10 @@
-import type { Metadata } from "next"
-import ClientPage from "./ClientPage"
-
-export const metadata: Metadata = {
-  title: "Clients | Juice",
-  description: "Manage your coaching clients",
-}
+import { ClientsPageLayout } from "@/components/clients-page-layout"
+import { PageLayout } from "@/components/shared/page-layout"
 
 export default function ClientsPage() {
-  return <ClientPage />
+  return (
+    <PageLayout>
+      <ClientsPageLayout />
+    </PageLayout>
+  )
 }

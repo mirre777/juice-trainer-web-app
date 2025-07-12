@@ -3,6 +3,9 @@ import { cookies } from "next/headers"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 
+// Force dynamic rendering
+export const dynamic = "force-dynamic"
+
 export async function GET(request: NextRequest) {
   try {
     console.log("[API:me] 🔄 Starting user data retrieval")

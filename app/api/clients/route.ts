@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { fetchClients } from "@/lib/firebase/client-service"
 
+// Force dynamic rendering
+export const dynamic = "force-dynamic"
+
 export async function GET(request: NextRequest) {
   console.log("[API /api/clients] === REQUEST RECEIVED ===")
 
