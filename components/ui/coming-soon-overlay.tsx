@@ -1,29 +1,16 @@
 "use client"
 
-import type React from "react"
-
-import { Card, CardContent } from "@/components/ui/card"
-
 interface ComingSoonOverlayProps {
-  children?: React.ReactNode
-  show?: boolean
+  className?: string
 }
 
-export function ComingSoonOverlay({ children, show = true }: ComingSoonOverlayProps) {
-  if (!show) {
-    return <>{children}</>
-  }
-
+export function ComingSoonOverlay({ className = "" }: ComingSoonOverlayProps) {
   return (
-    <div className="relative">
-      {children && <div className="opacity-20 pointer-events-none">{children}</div>}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Card className="w-96">
-          <CardContent className="p-8 text-center">
-            <h2 className="text-2xl font-semibold mb-4">Coming Soon</h2>
-            <p className="text-gray-600">This feature is currently under development and will be available soon.</p>
-          </CardContent>
-        </Card>
+    <div
+      className={`absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg ${className}`}
+    >
+      <div className="text-center p-4">
+        <div className="bg-gray-100 text-gray-700 px-4 py-2 rounded-full text-sm font-medium">Coming Soon</div>
       </div>
     </div>
   )

@@ -6,6 +6,12 @@ export function middleware(request: NextRequest) {
 
   console.log(`[Middleware] 🔍 Processing path: ${path}`)
 
+  // Redirect calendar routes to overview (since we removed calendar)
+  if (path.startsWith("/calendar")) {
+    console.log(`[Middleware] 📅 Redirecting calendar to overview`)
+    return NextResponse.redirect(new URL("/overview", request.url))
+  }
+
   // Skip middleware for static files, API routes, and public paths
   if (
     path.startsWith("/_next") ||
