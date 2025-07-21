@@ -1,59 +1,94 @@
 "use client"
 
-import type React from "react"
+import { useState, useEffect } from "react"
 import { ClientCard } from "./client-card"
-import { EmptyState } from "@/components/shared/empty-state"
-
-interface Client {
-  id: string
-  name: string
-  email: string
-  status: "active" | "pending" | "inactive"
-  sessionsCompleted: number
-  totalSessions: number
-  lastSession?: Date
-  avatar?: string
-}
+import { ClientsFilterBar } from "./clients-filter-bar"
+import type { Client } from "@/types/client"
 
 interface ClientListProps {
   clients: Client[]
-  loading?: boolean
-  onClientSelect?: (client: Client) => void
+  onClientUpdated?: () => void
 }
 
-export const ClientList: React.FC<ClientListProps> = ({ clients, loading = false, onClientSelect }) => {
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="animate-pulse">
-            <div className="bg-gray-200 rounded-lg h-48"></div>
-          </div>
-        ))}
-      </div>
-    )
+export function ClientList({ clients, onClientUpdated }: ClientListProps) {
+  const [filteredClients, setFilteredClients] = useState<Client[]>(clients)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [sortBy, setSortBy] = useState<string>("name")
+
+  useEffect(() => {
+    let filtered = [...clients]
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (client) =>
+          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.email.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    }
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((client) => client.status.toLowerCase() === statusFilter.toLowerCase())
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "name":
+          return a.name.localeCompare(b.name)
+        case "status":
+          return a.status.localeCompare(b.status)
+        case "recent":
+          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt || 0)
+          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt || 0)
+          return dateB.getTime() - dateA.getTime()
+        default:
+          return 0
+      }
+    })
+
+    setFilteredClients(filtered)
+  }, [clients, searchTerm, statusFilter, sortBy])
+
+  const handleSearch = (term: string) => {
+    setSearchTerm(term)
   }
 
-  if (clients.length === 0) {
-    return (
-      <EmptyState
-        title="No clients found"
-        description="Start by adding your first client to begin tracking their progress."
-        actionLabel="Add Client"
-        onAction={() => {
-          /* Handle add client */
-        }}
-      />
-    )
+  const handleStatusFilter = (status: string) => {
+    setStatusFilter(status)
+  }
+
+  const handleSort = (sort: string) => {
+    setSortBy(sort)
+  }
+
+  if (!clients || clients.length === 0) {
+    return null
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {clients.map((client) => (
-        <ClientCard key={client.id} client={client} onClick={() => onClientSelect?.(client)} />
-      ))}
+    <div className="space-y-6">
+      <ClientsFilterBar
+        onSearch={handleSearch}
+        onStatusFilter={handleStatusFilter}
+        onSort={handleSort}
+        totalClients={clients.length}
+        filteredCount={filteredClients.length}
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredClients.map((client) => (
+          <ClientCard key={client.id} client={client} onClientUpdated={onClientUpdated} />
+        ))}
+      </div>
+
+      {filteredClients.length === 0 && clients.length > 0 && (
+        <div className="text-center py-8">
+          <p className="text-gray-500">No clients match your current filters</p>
+        </div>
+      )}
     </div>
   )
 }
-
-export default ClientList

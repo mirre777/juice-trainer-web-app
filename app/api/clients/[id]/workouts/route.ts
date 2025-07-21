@@ -45,8 +45,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     console.log("API: Found client document with userId:", userId)
 
     if (!userId) {
-      console.log("API: Client has no userId field")
-      return NextResponse.json({ message: "Client has not created an account yet", workouts: [] }, { status: 200 })
+      console.log("API: Client has no userId field - returning empty workouts")
+      return NextResponse.json(
+        {
+          message: "Client has not created an account yet",
+          workouts: [],
+          clientHasAccount: false,
+        },
+        { status: 200 },
+      )
     }
 
     // Fetch workouts using the existing service
@@ -57,10 +64,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     if (error) {
       console.error("API: Error fetching workouts:", error)
-      return NextResponse.json({ error: "Failed to fetch workouts" }, { status: 500 })
+      // Return empty array instead of error to prevent UI from breaking
+      return NextResponse.json(
+        {
+          workouts: [],
+          error: "Failed to fetch workouts",
+          clientHasAccount: true,
+        },
+        { status: 200 },
+      )
     }
 
-    return NextResponse.json({ workouts })
+    return NextResponse.json({
+      workouts: workouts || [],
+      clientHasAccount: true,
+    })
   } catch (error) {
     console.error("API: Unexpected error:", error)
     const appError = createError(
@@ -71,6 +89,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     )
     logError(appError)
 
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    // Return empty array instead of 500 error to prevent UI from breaking
+    return NextResponse.json(
+      {
+        workouts: [],
+        error: "Internal server error",
+        clientHasAccount: false,
+      },
+      { status: 200 },
+    )
   }
 }
