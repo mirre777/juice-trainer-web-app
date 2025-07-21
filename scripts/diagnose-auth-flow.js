@@ -43,10 +43,10 @@ async function diagnoseAuthFlow() {
     if (userDoc.exists()) {
       const userData = userDoc.data()
 
-      // This is what the old API was returning (nested under 'user')
-      const oldFormat = {
+      // This is what the current API is returning (nested under 'user')
+      const currentFormat = {
         user: {
-          uid: userDoc.id,
+          id: userDoc.id,
           email: userData.email || "",
           name: userData.name || userData.displayName || "",
           role: userData.role || "user",
@@ -54,8 +54,8 @@ async function diagnoseAuthFlow() {
         },
       }
 
-      // This is what the new API should return (flat structure)
-      const newFormat = {
+      // This is what we want the API to return (flat structure)
+      const fixedFormat = {
         uid: userDoc.id,
         email: userData.email || "",
         name: userData.name || userData.displayName || "",
@@ -63,13 +63,22 @@ async function diagnoseAuthFlow() {
         user_type: userData.user_type,
       }
 
-      console.log("Old API format (nested):", JSON.stringify(oldFormat, null, 2))
-      console.log("New API format (flat):", JSON.stringify(newFormat, null, 2))
+      console.log("Current API format (nested):", JSON.stringify(currentFormat, null, 2))
+      console.log("Fixed API format (flat):", JSON.stringify(fixedFormat, null, 2))
 
-      console.log("\nRole extraction test:")
-      console.log("oldFormat.role:", oldFormat.role)
-      console.log("oldFormat.user.role:", oldFormat.user.role)
-      console.log("newFormat.role:", newFormat.role)
+      console.log("\n3. Role extraction test:")
+      console.log("currentFormat.role:", currentFormat.role, "(should be undefined)")
+      console.log("currentFormat.user.role:", currentFormat.user.role, "(should be 'trainer')")
+      console.log("fixedFormat.role:", fixedFormat.role, "(should be 'trainer')")
+
+      console.log("\n4. Auth form logic test:")
+      const userRole = currentFormat.user?.role || currentFormat.role
+      console.log(`Extracted role: "${userRole}"`)
+      if (userRole === "trainer") {
+        console.log("✅ Would redirect to /overview")
+      } else {
+        console.log("❌ Would redirect to /mobile-app-success")
+      }
     }
   } catch (error) {
     console.error("❌ Error during diagnosis:", error)

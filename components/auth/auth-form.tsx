@@ -29,7 +29,6 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
   const [showInviteInfo, setShowInviteInfo] = useState(!!invitationCode)
 
   useEffect(() => {
-    // Update showInviteInfo if invitationCode changes
     setShowInviteInfo(!!invitationCode)
   }, [invitationCode])
 
@@ -70,19 +69,16 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
 
       console.log(`[AuthForm] ${mode} successful:`, data)
 
-      // Set cookies and local storage
       if (data.userId) {
         setCookie("user_id", data.userId)
         localStorage.setItem("user_id", data.userId)
 
-        // If we have an invitation code, store it in the user document
         if (invitationCode && mode === "signup") {
           console.log(`[AuthForm] Storing invitation code ${invitationCode} for user ${data.userId}`)
           await storeInvitationCode(data.userId, invitationCode)
         }
       }
 
-      // Set auth token cookie from the response (for login or auto-signed-in signup)
       if (data.token) {
         setCookie("auth_token", data.token)
         console.log("[AuthForm] Auth token set in cookies")
@@ -90,38 +86,30 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
         console.log("[AuthForm] No auth token received from server")
       }
 
-      // Handle different response scenarios
       if (mode === "signup") {
         if (invitationCode) {
-          // If coming from an invitation signup, redirect to the download page
           console.log(`[AuthForm] Redirecting to download page after signup with invitation`)
           window.location.href = "https://juice.fitness/download-juice-app"
         } else if (isTrainerSignup) {
-          // Trainer signup
           if (data.autoSignedIn) {
-            // Successfully auto-signed in, redirect to overview
             console.log(`[AuthForm] Trainer auto-signed in, redirecting to overview`)
             router.push("/overview")
           } else {
-            // Account created but auto-signin failed, redirect to login
             console.log(`[AuthForm] Trainer account created but auto-signin failed, redirecting to login`)
             router.push("/login?message=Account created successfully. Please log in.")
           }
         } else {
-          // Mobile app signup (no trainer role) - redirect to download
           console.log(`[AuthForm] Redirecting to download page after mobile app signup`)
           window.location.href = "https://juice.fitness/download-juice-app"
         }
       } else if (mode === "login") {
-        // Successful login - get user data to determine redirect
         console.log(`[AuthForm] Successful login, checking user role`)
 
         try {
-          // Add a small delay to ensure cookies are set
           await new Promise((resolve) => setTimeout(resolve, 100))
 
           const userResponse = await fetch("/api/auth/me", {
-            credentials: "include", // Ensure cookies are sent
+            credentials: "include",
           })
           const userData = await userResponse.json()
 
@@ -138,14 +126,18 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
 
           if (!userResponse.ok) {
             console.error("[AuthForm] Failed to get user data:", userData)
-            // Fallback to mobile app success for safety
             router.push("/mobile-app-success")
             return
           }
 
-          // Fix: Check for role in the correct location
+          // FIX: Handle both nested and flat response formats
           const userRole = userData.user?.role || userData.role
           console.log(`[AuthForm] 🎯 Extracted user role: "${userRole}" (type: ${typeof userRole})`)
+          console.log(`[AuthForm] 🔍 Role extraction details:`, {
+            "userData.user?.role": userData.user?.role,
+            "userData.role": userData.role,
+            "final userRole": userRole,
+          })
 
           if (userRole === "trainer") {
             console.log(`[AuthForm] ✅ User is trainer, redirecting to overview`)
@@ -156,7 +148,6 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
           }
         } catch (userError) {
           console.error("[AuthForm] Error fetching user data:", userError)
-          // Fallback to mobile app success for safety
           router.push("/mobile-app-success")
         }
       }
