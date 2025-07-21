@@ -12,7 +12,6 @@ import { ChevronLeft, ChevronRight, MessageSquare, Trophy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import Image from "next/image"
-import Link from "next/link"
 
 interface Exercise {
   name: string
@@ -55,7 +54,6 @@ interface SharedWorkoutCardv2Props {
   onClose?: (id: string) => void
   showActions?: boolean
   compact?: boolean
-  clientId?: string // Add clientId prop for exercise history route
 }
 
 export function SharedWorkoutCardv2({
@@ -64,7 +62,6 @@ export function SharedWorkoutCardv2({
   onClose,
   showActions = true,
   compact = false,
-  clientId,
 }: SharedWorkoutCardv2Props) {
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null)
   const [showAnimation, setShowAnimation] = useState(false)
@@ -481,14 +478,7 @@ export function SharedWorkoutCardv2({
           <div className="mb-8 p-4 border border-gray-100 rounded-lg">
             <div className="flex items-center mb-4">
               <h3 className="text-[18px] font-semibold">{currentExercise.name}</h3>
-              {clientId && (
-                <Link
-                  href={`/exercise-history/${clientId}/${currentExercise.name}`}
-                  className="ml-2 text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded hover:bg-lime-200"
-                >
-                  View history
-                </Link>
-              )}
+              <button className="ml-2 text-xs bg-lime-100 text-lime-700 px-2 py-1 rounded">View history</button>
             </div>
 
             <div className="flex flex-col md:flex-row gap-8">

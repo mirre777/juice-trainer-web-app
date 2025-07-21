@@ -8,7 +8,6 @@ import { getClient, updateClient } from "@/lib/firebase/client-service"
 import { getUserWorkouts, getClientWorkouts } from "@/lib/firebase/workout-service"
 import LoadingSpinner from "@/components/shared/loading-spinner"
 import { Button } from "@/components/ui/button"
-import { ClientWorkoutView } from "@/components/client-workout-view"
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -33,77 +32,50 @@ export default function ClientDetailPage() {
       if (!isMounted || hasStartedFetch) return
       hasStartedFetch = true
 
-      console.log(`[ClientDetailPage] 🚀 Starting fetchClientData for client: ${clientId}`)
       setIsLoading(true)
-
       try {
-        // Enhanced cookie reading with extensive logging
-        const getCookie = (name: string) => {
-          if (typeof document === "undefined") {
-            console.log(`[ClientDetailPage] ❌ Document undefined, cannot read cookies`)
-            return null
-          }
-
-          console.log(`[ClientDetailPage] 🍪 All cookies: ${document.cookie}`)
+        // Get trainer ID from cookie with improved cookie reading
+        const getCookie = (name) => {
+          if (typeof document === "undefined") return null
           const value = `; ${document.cookie}`
           const parts = value.split(`; ${name}=`)
-          if (parts.length === 2) {
-            const cookieValue = parts.pop()?.split(";").shift()
-            console.log(`[ClientDetailPage] ✅ Found cookie ${name}: ${cookieValue}`)
-            return cookieValue
-          }
-          console.log(`[ClientDetailPage] ❌ Cookie ${name} not found`)
+          if (parts.length === 2) return parts.pop()?.split(";").shift()
           return null
         }
 
         // Try multiple cookie names that might contain the trainer ID
-        let trainerId = getCookie("user_id") || getCookie("trainerUID") || getCookie("trainer_id")
-        console.log(`[ClientDetailPage] 🔍 Trainer ID from cookies: ${trainerId}`)
+        let trainerId = getCookie("trainerUID") || getCookie("user_id") || getCookie("trainer_id")
 
         // If still no trainer ID, try to get it from localStorage as fallback
         if (!trainerId && typeof window !== "undefined") {
-          const localStorageUserId = localStorage.getItem("user_id")
-          const localStorageTrainerId = localStorage.getItem("trainerUID") || localStorage.getItem("trainer_id")
-          trainerId = localStorageUserId || localStorageTrainerId
-          console.log(`[ClientDetailPage] 🔍 Trainer ID from localStorage: ${trainerId}`)
+          trainerId = localStorage.getItem("trainerUID") || localStorage.getItem("user_id")
         }
 
         // For demo purposes, use a fallback ID if in development or if URL contains 'demo'
         if (!trainerId) {
           if (process.env.NODE_ENV === "development" || window.location.href.includes("demo")) {
-            console.log(`[ClientDetailPage] 🧪 Using demo trainer ID`)
+            console.log("Using demo trainer ID")
             trainerId = "demoTrainerId123"
           } else {
-            console.error(`[ClientDetailPage] ❌ Trainer ID not found in cookies or localStorage`)
-            console.log(`[ClientDetailPage] 🍪 Available cookies: ${document.cookie}`)
-            console.log(`[ClientDetailPage] 💾 Available localStorage keys:`, Object.keys(localStorage))
-            throw new Error("No authentication found. Please log in.")
+            console.error("Trainer ID not found in cookies or localStorage. Available cookies:", document.cookie)
+            throw new Error("Trainer ID not found")
           }
         }
 
-        console.log(`[ClientDetailPage] ✅ Using trainer ID: ${trainerId}`)
+        console.log("Using trainer ID:", trainerId)
 
         // Fetch client data directly from Firebase
-        console.log(`[ClientDetailPage] 📡 Fetching client data...`)
         const client = await getClient(trainerId, clientId)
 
         if (!client) {
-          console.error(`[ClientDetailPage] ❌ Client not found`)
           throw new Error("Client not found")
         }
-
-        console.log(`[ClientDetailPage] ✅ Client data received:`, {
-          id: client.id,
-          name: client.name,
-          email: client.email,
-          userId: client.userId,
-        })
 
         if (isMounted) {
           set_clientData(client)
 
-          // Enhanced debugging for workout fetching
-          console.log("=== 🏋️ DEBUGGING CLIENT WORKOUT FETCH ===")
+          // Enhanced debugging
+          console.log("=== DEBUGGING CLIENT WORKOUT FETCH ===")
           console.log("Client data:", JSON.stringify(client, null, 2))
           console.log("Client ID:", clientId)
           console.log("Trainer ID:", trainerId)
@@ -143,6 +115,43 @@ export default function ClientDetailPage() {
               workouts: workoutData,
             })
 
+            // Approach 3: Try alternative paths that might exist
+            console.log("🔍 Approach 3: Checking if client has alternative workout paths")
+
+            // Let's also try to fetch directly from Firebase to see what collections exist
+            if (typeof window !== "undefined" && window.firebase) {
+              try {
+                const db = window.firebase.firestore()
+
+                // Check what subcollections exist under this client
+                console.log("🔍 Checking subcollections under client document...")
+
+                // Try to list all documents in potential workout collections
+                const potentialPaths = [
+                  `users/${trainerId}/clients/${clientId}/workouts`,
+                  `users/${client.userId}/workouts`,
+                  `clients/${clientId}/workouts`,
+                  `workouts/${clientId}`,
+                  `trainers/${trainerId}/clients/${clientId}/workouts`,
+                ]
+
+                for (const path of potentialPaths) {
+                  try {
+                    console.log(`🔍 Checking path: ${path}`)
+                    const snapshot = await db.collection(path).limit(1).get()
+                    console.log(`Path ${path}: ${snapshot.size} documents found`)
+                    if (snapshot.size > 0) {
+                      console.log("Sample document:", snapshot.docs[0].data())
+                    }
+                  } catch (pathError) {
+                    console.log(`Path ${path}: Error -`, pathError.message)
+                  }
+                }
+              } catch (firebaseError) {
+                console.log("Firebase direct access error:", firebaseError)
+              }
+            }
+
             const groupedWorkouts = groupWorkoutsByWeek(workoutData || [])
             if (isMounted) {
               setWorkouts(groupedWorkouts)
@@ -156,12 +165,11 @@ export default function ClientDetailPage() {
         }
       } catch (err) {
         if (isMounted) {
-          console.error(`[ClientDetailPage] ❌ Error in fetchClientData:`, err)
+          console.error("Error in fetchClientData:", err)
           handleError(err)
         }
       } finally {
         if (isMounted) {
-          console.log(`[ClientDetailPage] ✅ Finished loading`)
           setIsLoading(false)
         }
       }
@@ -193,13 +201,11 @@ export default function ClientDetailPage() {
       ]
     }
 
-    // Group by week logic here (Monday as start of week)
+    // Group by week logic here
     const weeks: { [key: string]: any } = {}
     const now = new Date()
     const currentWeekStart = new Date(now)
-    // Set to Monday
-    currentWeekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7))
-    currentWeekStart.setHours(0, 0, 0, 0)
+    currentWeekStart.setDate(now.getDate() - now.getDay()) // Get start of current week (Sunday)
 
     // Format for current week
     const currentWeekKey = `Week of ${currentWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
@@ -224,10 +230,8 @@ export default function ClientDetailPage() {
         workoutDate = new Date() // Fallback to current date
       }
 
-      // Set week start to Monday
       const weekStart = new Date(workoutDate)
-      weekStart.setDate(workoutDate.getDate() - ((workoutDate.getDay() + 6) % 7))
-      weekStart.setHours(0, 0, 0, 0)
+      weekStart.setDate(workoutDate.getDate() - workoutDate.getDay()) // Get start of week (Sunday)
       const weekKey = `Week of ${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
 
       if (!weeks[weekKey]) {
@@ -251,19 +255,9 @@ export default function ClientDetailPage() {
         notes: workout.notes || "",
         personalRecords: workout.personalRecords || [],
         completedAt: workout.completedAt, // Add this line
-        startedAt: workout.startedAt, // Add this for sorting
       }
 
       weeks[weekKey].sessions.push(formattedWorkout)
-    })
-
-    // Sort sessions within each week by startedAt (most recent first)
-    Object.values(weeks).forEach((week: any) => {
-      week.sessions.sort((a: any, b: any) => {
-        const dateA = a.startedAt && a.startedAt.seconds ? new Date(a.startedAt.seconds * 1000) : new Date(a.date)
-        const dateB = b.startedAt && b.startedAt.seconds ? new Date(b.startedAt.seconds * 1000) : new Date(b.date)
-        return dateB.getTime() - dateA.getTime()
-      })
     })
 
     // Sort weeks by date (most recent first)
@@ -361,16 +355,10 @@ export default function ClientDetailPage() {
 
   const toggleWorkoutExpand = (weekIndex: number, workoutIndex: number) => {
     setWorkouts((prevWorkouts) => {
-      return prevWorkouts.map((week: any, wIdx: number) => {
-        if (wIdx !== weekIndex) return week
-        return {
-          ...week,
-          sessions: week.sessions.map((workout: any, sIdx: number) => {
-            if (sIdx !== workoutIndex) return workout
-            return { ...workout, expanded: !workout.expanded }
-          }),
-        }
-      })
+      const newWorkouts = [...prevWorkouts]
+      const workout = newWorkouts[weekIndex].sessions[workoutIndex]
+      workout.expanded = !workout.expanded
+      return newWorkouts
     })
   }
 
@@ -390,7 +378,7 @@ export default function ClientDetailPage() {
 
     try {
       // Get trainer ID (same logic as in fetchClientData)
-      const getCookie = (name: string) => {
+      const getCookie = (name) => {
         if (typeof document === "undefined") return null
         const value = `; ${document.cookie}`
         const parts = value.split(`; ${name}=`)
@@ -398,11 +386,10 @@ export default function ClientDetailPage() {
         return null
       }
 
-      let trainerId = getCookie("user_id") || getCookie("trainerUID") || getCookie("trainer_id")
+      let trainerId = getCookie("trainerUID") || getCookie("user_id") || getCookie("trainer_id")
 
       if (!trainerId && typeof window !== "undefined") {
-        trainerId =
-          localStorage.getItem("user_id") || localStorage.getItem("trainerUID") || localStorage.getItem("trainer_id")
+        trainerId = localStorage.getItem("trainerUID") || localStorage.getItem("user_id")
       }
 
       if (!trainerId) {
@@ -424,7 +411,7 @@ export default function ClientDetailPage() {
       if (result.success) {
         console.log("✅ Notes saved successfully!")
         // Update local state
-        set_clientData((prev: any) => ({
+        set_clientData((prev) => ({
           ...prev,
           notes: editedNotes,
         }))
@@ -457,20 +444,12 @@ export default function ClientDetailPage() {
         <div className="bg-red-50 border border-red-200 rounded-md p-6 text-center max-w-md">
           <h2 className="text-xl font-semibold text-red-800 mb-2">Error Loading Client</h2>
           <p className="text-red-600 mb-4">{error.message}</p>
-          <div className="space-y-2">
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 mr-2"
-            >
-              Retry
-            </button>
-            <button
-              onClick={() => router.back()}
-              className="px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              Go Back
-            </button>
-          </div>
+          <button
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     )
@@ -483,26 +462,18 @@ export default function ClientDetailPage() {
         <div className="w-full p-6 flex flex-col">
           <div className="flex">
             <div className="pr-6">
-              <div
-                className="w-24 h-24 rounded-full flex items-center justify-center overflow-hidden"
-                style={{ background: clientData.avatarUrl ? undefined : "#D2FF28" }}
-              >
-                {clientData.avatarUrl ? (
-                  <img
-                    src={clientData.avatarUrl || "/placeholder.svg"}
-                    alt={clientData.name || "Client"}
-                    className="w-24 h-24 object-cover"
-                  />
-                ) : (
-                  <span className="text-black text-4xl font-bold select-none">
-                    {(() => {
-                      if (!clientData.name) return "?"
-                      const words = clientData.name.trim().split(/\s+/)
-                      if (words.length === 1) return words[0][0].toUpperCase()
-                      return (words[0][0] + words[1][0]).toUpperCase()
-                    })()}
-                  </span>
-                )}
+              <div className="w-24 h-24 bg-gray-200 rounded-full overflow-hidden">
+                <img
+                  src={
+                    clientData.avatarUrl ||
+                    "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/f40cd549493308d07082565b9e3c7aac83a59e0d-9jeksWlxLU0OCSOBLxNuwlrKxabUcv.png" ||
+                    "/placeholder.svg" ||
+                    "/placeholder.svg" ||
+                    "/placeholder.svg"
+                  }
+                  alt={clientData.name || "Client"}
+                  className="w-24 h-24 object-cover"
+                />
               </div>
             </div>
             <div className="flex flex-col">
@@ -653,7 +624,10 @@ export default function ClientDetailPage() {
                         <Calendar className="w-4 h-4 text-gray-500" />
                       </div>
                       <div className="text-gray-500 text-base font-normal font-secondary leading-normal">
-                        {weekData.week}
+                        {weekData.week}{" "}
+                        {weekData.sessions.some((session: any) => !session.completedAt) && (
+                          <span className="text-lime-600 font-medium">(Happening Now)</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -705,34 +679,48 @@ export default function ClientDetailPage() {
 
                       {workout.expanded && (
                         <div className="px-4 py-4 border-t border-gray-200">
-                          <ClientWorkoutView
-                            client={{
-                              id: clientData.id,
-                              name: clientData.name,
-                              image: clientData.avatarUrl,
-                              userId: clientData.userId,
-                              programWeek: clientData.programWeek,
-                              programTotal: clientData.programTotal,
-                              daysCompleted: clientData.daysCompleted,
-                              daysTotal: clientData.daysTotal,
-                              date: workout.date,
-                            }}
-                            workout={{
-                              id: workout.id,
-                              name: workout.name,
-                              focus: workout.focus,
-                              clientNote: workout.notes,
-                              date: workout.date,
-                              completedAt: workout.completedAt,
-                              userId: clientData.userId,
-                              clientId: clientData.id,
-                              createdAt: workout.createdAt,
-                              startedAt: workout.startedAt,
-                            }}
-                            exercises={workout.exercises}
-                            personalRecords={workout.personalRecords}
-                            showInteractionButtons={false}
-                          />
+                          {/* Workout Notes */}
+                          {workout.notes && (
+                            <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                              <p className="text-sm font-medium text-gray-700 mb-1">Notes:</p>
+                              <p className="text-sm text-gray-600">{workout.notes}</p>
+                            </div>
+                          )}
+
+                          {/* Exercises */}
+                          {workout.exercises && workout.exercises.length > 0 ? (
+                            <div className="space-y-6">
+                              {workout.exercises.map((exercise: any, exerciseIndex: number) => (
+                                <div key={exerciseIndex}>
+                                  <div className="text-gray-900 font-medium font-sans mb-2">
+                                    {exercise.name || "Unnamed Exercise"}
+                                  </div>
+
+                                  {exercise.sets && exercise.sets.length > 0 && (
+                                    <div className="space-y-1">
+                                      {exercise.sets.map((set: any, setIndex: number) => (
+                                        <div key={setIndex} className="flex items-start">
+                                          <div className="w-14 text-gray-700 font-medium">Set {setIndex + 1}:</div>
+                                          <div className="w-24 text-gray-700">
+                                            {set.weight ? `${set.weight} kg` : "N/A"} × {set.reps || "N/A"}
+                                          </div>
+                                          {set.type && set.type.toLowerCase() === "warmup" && (
+                                            <div className="text-gray-500 ml-2">Warm-up</div>
+                                          )}
+                                          {set.progress && (
+                                            <div className="text-green-500 ml-2">+{set.progress} from last session</div>
+                                          )}
+                                          {set.isPR && <div className="text-amber-500 ml-2">🏆 PR</div>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-center py-2">No exercises recorded</p>
+                          )}
                         </div>
                       )}
                     </div>

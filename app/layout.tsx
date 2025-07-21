@@ -1,8 +1,9 @@
 import type React from "react"
-import type { Metadata } from "next"
 import { Sen, Inter } from "next/font/google"
+import ClientLayout from "./ClientLayout"
+import { DemoBanner } from "@/components/demo-banner"
+import { ToastProvider } from "@/components/ui/toast-context"
 import "./globals.css"
-import { ClientLayout } from "./ClientLayout"
 
 // Initialize the Sen font
 const sen = Sen({
@@ -19,22 +20,19 @@ const inter = Inter({
   display: "swap",
 })
 
-export const metadata: Metadata = {
-  title: "Juice Trainer - Personal Training Platform",
-  description: "Professional personal training platform for trainers and clients",
-  generator: "Next.js",
-}
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sen.variable} ${inter.variable}`}>
-      <body className={inter.className}>
-        <ClientLayout>{children}</ClientLayout>
+      <body>
+        <ToastProvider>
+          <DemoBanner />
+          <ClientLayout>{children}</ClientLayout>
+        </ToastProvider>
       </body>
     </html>
   )
 }
+
+export const metadata = {
+      generator: 'v0.dev'
+    };

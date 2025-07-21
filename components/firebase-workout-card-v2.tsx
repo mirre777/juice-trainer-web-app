@@ -10,7 +10,6 @@ import Image from "next/image"
 import type { FirebaseWorkout } from "@/lib/firebase/workout-service"
 import { PersonalRecordsDisplay } from "@/components/shared/personal-records-display"
 import { EmojiReaction } from "@/components/shared/emoji-reaction"
-import Link from "next/link"
 import { WeeklyTracker } from "@/components/shared/weekly-tracker"
 
 interface FirebaseWorkoutCardProps {
@@ -19,7 +18,6 @@ interface FirebaseWorkoutCardProps {
   onClose?: (id: string) => void
   showActions?: boolean
   compact?: boolean
-  clientId?: string
 }
 
 export function FirebaseWorkoutCardV2({
@@ -28,7 +26,6 @@ export function FirebaseWorkoutCardV2({
   onClose,
   showActions = true,
   compact = false,
-  clientId,
 }: FirebaseWorkoutCardProps) {
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null)
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null)
@@ -44,8 +41,7 @@ export function FirebaseWorkoutCardV2({
 
   // Track if a set has a personal record
   const hasPersonalRecord = (index: number): boolean => {
-    if (!workout.personalRecords || workout.personalRecords.length === 0) return false
-    return workout.personalRecords.some((record) => record.isPR && record.exercise === currentExercise?.name)
+    return index === 0 // For demo, assume first set is a PR
   }
 
   // Chart data points for exercise progress chart
@@ -85,7 +81,8 @@ export function FirebaseWorkoutCardV2({
 
   const handleEmojiSelect = (emoji: string) => {
     setSelectedEmoji(emoji)
-    setTimeout(() => setSelectedEmoji(null), 2000)
+    // Here you would typically send this to your backend
+    console.log(`Selected emoji ${emoji} for workout ${workout.id}`)
   }
 
   const handleExerciseSelect = (id: string) => {
@@ -290,14 +287,9 @@ export function FirebaseWorkoutCardV2({
           <div className="mb-8 p-4 border border-gray-100 rounded-lg">
             <div className="flex items-center mb-4">
               <h3 className="text-[18px] font-semibold">{currentExercise.name || "N/A"}</h3>
-              {clientId && currentExercise.id && (
-                <Link
-                  href={`/exercise-history/${clientId}/${currentExercise.id}`}
-                  className="ml-2 text-xs text-black border-b-2 border-[#D2FF28] px-1 py-0.5 hover:bg-gray-50"
-                >
-                  View history
-                </Link>
-              )}
+              <button className="ml-2 text-xs text-black border-b-2 border-[#D2FF28] px-1 py-0.5 hover:bg-gray-50">
+                View history
+              </button>
             </div>
 
             <div className="flex flex-col md:flex-row gap-8">

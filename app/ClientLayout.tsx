@@ -1,51 +1,43 @@
 "use client"
 
-import type React from "react"
-import { useEffect, useState } from "react"
-import { usePathname } from "next/navigation"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/sonner"
 import { UnifiedHeader } from "@/components/unified-header"
-import { FeedbackProvider } from "@/components/feedback/feedback-provider"
-import { FloatingFeedbackButton } from "@/components/feedback/floating-feedback-button"
-import { DemoBanner } from "@/components/demo-banner"
-import { ToastProvider } from "@/components/toast-provider"
+import { usePathname } from "next/navigation"
+import type React from "react"
 
-export function ClientLayout({ children }: { children: React.ReactNode }) {
+interface ClientLayoutProps {
+  children: React.ReactNode
+}
+
+export default function ClientLayout({ children }: ClientLayoutProps) {
   const pathname = usePathname()
-  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Define paths where the header should NOT be shown
+  const noHeaderPaths = [
+    "/login",
+    "/signup",
+    "/set-password",
+    "/invite-app",
+    "/mobile-app-success",
+    "/payment-success",
+    "/pricing", // Pricing page might have its own header or no header
+  ]
 
-  // Don't render anything until mounted to avoid hydration issues
-  if (!mounted) {
-    return null
-  }
+  // Check if the current path starts with any of the noHeaderPaths
+  const shouldHideHeader = noHeaderPaths.some((path) => pathname?.startsWith(path))
 
-  // Check if we should show the header
-  const shouldShowHeader =
-    !pathname?.startsWith("/shared/") &&
-    !pathname?.startsWith("/demo/client-workout") &&
-    pathname !== "/login" &&
-    pathname !== "/signup" &&
-    pathname !== "/pricing" &&
-    !pathname?.startsWith("/invite/")
+  // Special handling for shared workout pages
+  const isSharedWorkoutPage = pathname?.startsWith("/shared/") || pathname?.startsWith("/share/")
+
+  // If it's a shared workout page, and it's not the root landing page, hide the header
+  // The root landing page (`/`) handles shared workouts internally and has its own layout.
+  const hideHeaderForSharedWorkout =
+    isSharedWorkoutPage && pathname !== "/" && pathname !== "/login" && pathname !== "/signup"
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-      <ToastProvider>
-        <FeedbackProvider>
-          <div className="min-h-screen bg-background">
-            <DemoBanner />
-            {shouldShowHeader && <UnifiedHeader />}
-            <main className={shouldShowHeader ? "pt-16" : ""}>{children}</main>
-            <FloatingFeedbackButton />
-          </div>
-          <Toaster />
-        </FeedbackProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <>
+      {/* Render UnifiedHeader only if not on a path where it should be hidden */}
+      {!shouldHideHeader && !hideHeaderForSharedWorkout && <UnifiedHeader />}
+      <main>{children}</main>
+    </>
   )
 }

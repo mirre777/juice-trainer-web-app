@@ -1,17 +1,5 @@
 import { db } from "./firebase"
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-  updateDoc,
-  addDoc,
-  serverTimestamp,
-  type Timestamp,
-} from "firebase/firestore"
-import { getAuth, onAuthStateChanged, type User } from "firebase/auth"
+import { collection, query, where, getDocs, doc, getDoc, type Timestamp } from "firebase/firestore"
 
 export interface UserProfile {
   uid?: string
@@ -26,7 +14,6 @@ export interface UserProfile {
   isApproved?: boolean
   subscriptionStatus?: string
   stripeCustomerId?: string
-  universalInviteCode?: string
 }
 
 export async function getUserProfile(email: string): Promise<UserProfile | null> {
@@ -94,7 +81,6 @@ export async function getUserProfile(email: string): Promise<UserProfile | null>
       isApproved: userData.isApproved,
       subscriptionStatus: userData.subscriptionStatus,
       stripeCustomerId: userData.stripeCustomerId,
-      universalInviteCode: userData.universalInviteCode,
     }
 
     console.log("[getUserProfile] ✅ Processed user profile:", {
@@ -148,7 +134,6 @@ export async function getUserById(uid: string): Promise<UserProfile | null> {
       isApproved: userData.isApproved,
       subscriptionStatus: userData.subscriptionStatus,
       stripeCustomerId: userData.stripeCustomerId,
-      universalInviteCode: userData.universalInviteCode,
     }
 
     console.log("[getUserById] ✅ User profile fetched:", {
@@ -172,168 +157,5 @@ export async function getUserByEmail(email: string): Promise<any> {
   return {
     id: profile.uid,
     ...profile,
-  }
-}
-
-// Get current user from Firebase Auth
-export async function getCurrentUser(): Promise<User | null> {
-  return new Promise((resolve) => {
-    const auth = getAuth()
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe()
-      resolve(user)
-    })
-  })
-}
-
-// Get current user data from Firestore
-export async function getCurrentUserData(): Promise<UserProfile | null> {
-  try {
-    const user = await getCurrentUser()
-    if (!user) return null
-
-    return await getUserById(user.uid)
-  } catch (error) {
-    console.error("[getCurrentUserData] Error:", error)
-    return null
-  }
-}
-
-// Store invitation code for a user
-export async function storeInvitationCode(userId: string, inviteCode: string): Promise<boolean> {
-  try {
-    const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
-      invitationCode: inviteCode,
-      updatedAt: serverTimestamp(),
-    })
-    return true
-  } catch (error) {
-    console.error("[storeInvitationCode] Error:", error)
-    return false
-  }
-}
-
-// Create a new user
-export async function createUser(userData: Partial<UserProfile>): Promise<string | null> {
-  try {
-    const usersRef = collection(db, "users")
-    const docRef = await addDoc(usersRef, {
-      ...userData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
-    return docRef.id
-  } catch (error) {
-    console.error("[createUser] Error:", error)
-    return null
-  }
-}
-
-// Update user data
-export async function updateUser(userId: string, updates: Partial<UserProfile>): Promise<boolean> {
-  try {
-    const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    })
-    return true
-  } catch (error) {
-    console.error("[updateUser] Error:", error)
-    return false
-  }
-}
-
-// Update universal invite code
-export async function updateUniversalInviteCode(userId: string, code: string): Promise<boolean> {
-  try {
-    const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
-      universalInviteCode: code,
-      updatedAt: serverTimestamp(),
-    })
-    return true
-  } catch (error) {
-    console.error("[updateUniversalInviteCode] Error:", error)
-    return false
-  }
-}
-
-// Approve a user
-export async function approveUser(userId: string): Promise<boolean> {
-  try {
-    const userRef = doc(db, "users", userId)
-    await updateDoc(userRef, {
-      isApproved: true,
-      updatedAt: serverTimestamp(),
-    })
-    return true
-  } catch (error) {
-    console.error("[approveUser] Error:", error)
-    return false
-  }
-}
-
-// Get pending users
-export async function getPendingUsers(): Promise<UserProfile[]> {
-  try {
-    const usersRef = collection(db, "users")
-    const q = query(usersRef, where("isApproved", "==", false))
-    const querySnapshot = await getDocs(q)
-
-    const users: UserProfile[] = []
-    querySnapshot.forEach((doc) => {
-      const userData = doc.data()
-      users.push({
-        uid: doc.id,
-        email: userData.email,
-        name: userData.name || "",
-        role: userData.role || "user",
-        user_type: userData.user_type,
-        hasFirebaseAuth: userData.hasFirebaseAuth,
-        profilePicture: userData.profilePicture,
-        createdAt: userData.createdAt,
-        updatedAt: userData.updatedAt,
-        isApproved: userData.isApproved,
-        subscriptionStatus: userData.subscriptionStatus,
-        stripeCustomerId: userData.stripeCustomerId,
-        universalInviteCode: userData.universalInviteCode,
-      })
-    })
-
-    return users
-  } catch (error) {
-    console.error("[getPendingUsers] Error:", error)
-    return []
-  }
-}
-
-// Signup with universal code
-export async function signupWithUniversalCode(
-  email: string,
-  password: string,
-  name: string,
-  code: string,
-): Promise<{ success: boolean; userId?: string; error?: string }> {
-  try {
-    // Create user with universal code logic
-    const userData: Partial<UserProfile> = {
-      email,
-      name,
-      role: "user",
-      isApproved: false,
-      universalInviteCode: code,
-    }
-
-    const userId = await createUser(userData)
-    if (!userId) {
-      return { success: false, error: "Failed to create user" }
-    }
-
-    return { success: true, userId }
-  } catch (error) {
-    console.error("[signupWithUniversalCode] Error:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }

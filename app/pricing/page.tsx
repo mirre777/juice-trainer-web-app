@@ -1,14 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
 import { PricingCard } from "@/components/payment/pricing-card"
+import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
 import { getUserSubscriptionPlan } from "@/lib/firebase/subscription-service"
-import { Button } from "@/components/ui/button"
 
 export default function PricingPage() {
-  const router = useRouter()
   const [currentPlan, setCurrentPlan] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -37,18 +34,6 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="container mx-auto px-4 py-16">
-        {/* Back Button */}
-        <div className="mb-8">
-          <Button
-            variant="ghost"
-            onClick={() => router.back()}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-        </div>
-
         {/* Header */}
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Choose Your Plan</h1>
@@ -75,7 +60,7 @@ export default function PricingPage() {
               "Email support",
               "Mobile app access",
             ]}
-            buttonText={currentPlan === "trainer_basic" ? "Current Plan" : "Start Free"}
+            buttonText={currentPlan === "trainer_basic" ? "Current Plan" : "Start"}
             buttonVariant={currentPlan === "trainer_basic" ? "outline" : "default"}
             isPopular={false}
             isCurrent={currentPlan === "trainer_basic"}
@@ -84,49 +69,55 @@ export default function PricingPage() {
           />
 
           {/* Pro Plan */}
-          <PricingCard
-            title="Pro"
-            price="49"
-            period="month"
-            description="For growing coaching businesses"
-            features={[
-              "Unlimited clients",
-              "Advanced workout builder",
-              "Google Sheets integration",
-              "Progress analytics",
-              "Custom branding",
-              "Email & chat support",
-            ]}
-            buttonText={currentPlan === "trainer_pro" ? "Current Plan" : "Upgrade to Pro"}
-            buttonVariant="default"
-            isPopular={true}
-            isCurrent={currentPlan === "trainer_pro"}
-            planId="trainer_pro"
-            disabled={false}
-          />
+          <div className="relative">
+            <ComingSoonOverlay />
+            <PricingCard
+              title="Pro"
+              price="49"
+              period="month"
+              description="For growing coaching businesses"
+              features={[
+                "Unlimited clients",
+                "Advanced workout builder",
+                "Google Sheets integration",
+                "Progress analytics",
+                "Custom branding",
+                "Email & chat support",
+              ]}
+              buttonText="Pay us for Pro"
+              buttonVariant="default"
+              isPopular={true}
+              isCurrent={currentPlan === "trainer_pro"}
+              planId="trainer_pro"
+              disabled={true}
+            />
+          </div>
 
           {/* Elite Plan */}
-          <PricingCard
-            title="Elite"
-            price="99"
-            period="month"
-            description="For established coaching businesses"
-            features={[
-              "Everything in Pro",
-              "Priority support",
-              "Vacation mode",
-              "Advanced analytics",
-              "API access",
-              "White-label solution",
-              "Dedicated account manager",
-            ]}
-            buttonText={currentPlan === "trainer_elite" ? "Current Plan" : "Upgrade to Elite"}
-            buttonVariant="default"
-            isPopular={false}
-            isCurrent={currentPlan === "trainer_elite"}
-            planId="trainer_elite"
-            disabled={false}
-          />
+          <div className="relative">
+            <ComingSoonOverlay />
+            <PricingCard
+              title="Elite"
+              price="69"
+              period="month"
+              description="For established coaching businesses"
+              features={[
+                "Everything in Pro",
+                "Priority support",
+                "Vacation mode",
+                "Advanced analytics",
+                "API access",
+                "White-label solution",
+                "Dedicated account manager",
+              ]}
+              buttonText="Pay us for Elite"
+              buttonVariant="default"
+              isPopular={false}
+              isCurrent={currentPlan === "trainer_elite"}
+              planId="trainer_elite"
+              disabled={true}
+            />
+          </div>
         </div>
 
         {/* Additional Info */}

@@ -5,105 +5,80 @@ import { useRouter } from "next/navigation"
 import { Check } from "lucide-react"
 
 interface PricingCardProps {
-  title: string
-  price: string
-  period: string
+  name: string
+  price: number | string
+  currency?: string
   description: string
   features: string[]
-  buttonText: string
-  buttonVariant?: "default" | "outline"
-  isPopular?: boolean
-  isCurrent?: boolean
   planId: string
-  disabled?: boolean
+  comingSoon?: boolean
+  buttonText?: string
+  isCurrentPlan?: boolean
 }
 
-export function PricingCard({
-  title,
+function PricingCard({
+  name,
   price,
-  period,
+  currency = "€",
   description,
   features,
-  buttonText,
-  buttonVariant = "default",
-  isPopular = false,
-  isCurrent = false,
   planId,
-  disabled = false,
+  comingSoon = false,
+  buttonText = "Get Elite",
+  isCurrentPlan = false,
 }: PricingCardProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubscribe = async () => {
-    if (isCurrent || disabled) {
+  const handleSubscribe = () => {
+    if (isCurrentPlan) {
+      // Do nothing if this is the current plan
       return
     }
 
     setIsLoading(true)
+    // In a real app, you would check if the user is logged in first
+    // For demo purposes, we'll use a hardcoded user ID
+    const userId = "demo-user-123"
 
-    try {
-      if (planId === "trainer_basic") {
-        // Basic plan is free, just update the user's plan
-        const response = await fetch("/api/user/update-profile", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            subscriptionPlan: planId,
-          }),
-        })
-
-        if (response.ok) {
-          window.location.reload()
-        }
-      } else {
-        // For paid plans, redirect to checkout
-        router.push(`/checkout?plan=${planId}&price=${price}&name=${encodeURIComponent(title)}`)
-      }
-    } catch (error) {
-      console.error("Error upgrading plan:", error)
-    } finally {
-      setIsLoading(false)
-    }
+    // Navigate to checkout page with plan details
+    router.push(`/checkout?plan=${planId}&price=${price}&name=${encodeURIComponent(name)}&userId=${userId}`)
   }
 
   return (
     <div
-      className={`rounded-lg border ${
-        isPopular ? "border-[#D2FF28] ring-2 ring-[#D2FF28]" : "border-gray-200"
-      } ${isCurrent ? "border-[#D2FF28]" : ""} bg-white p-6 shadow-sm flex flex-col h-full relative`}
+      className={`rounded-lg border ${isCurrentPlan ? "border-[#D2FF28]" : "border-gray-200"} bg-white p-6 shadow-sm flex flex-col h-full`}
     >
-      {isPopular && (
-        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-          <span className="bg-[#D2FF28] text-black text-xs font-medium px-3 py-1 rounded-full">MOST POPULAR</span>
-        </div>
-      )}
-
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-black">{title}</h3>
-        {isCurrent && (
+        <h3 className="text-xl font-bold text-black">{name}</h3>
+        {isCurrentPlan && (
           <span className="bg-[#D2FF28] text-black text-xs font-medium px-3 py-1 rounded-full">CURRENT PLAN</span>
+        )}
+        {comingSoon && (
+          <span className="bg-gray-200 text-black text-xs font-medium px-3 py-1 rounded-full">COMING SOON</span>
         )}
       </div>
 
       <div className="flex items-baseline mb-4">
-        {price === "0" ? (
+        {price === "Free" ? (
           <span className="text-4xl font-bold text-black">Free</span>
         ) : (
           <>
-            <span className="text-4xl font-bold text-black">${price}</span>
-            <span className="ml-1 text-sm text-gray-600">/{period}</span>
+            <span className="text-4xl font-bold text-black">
+              {currency}
+              {price}
+            </span>
+            <span className="ml-1 text-sm text-darkgray">/month</span>
           </>
         )}
       </div>
 
-      <p className="text-sm text-gray-600 mb-8">{description}</p>
+      <p className="text-sm text-darkgray mb-8">{description}</p>
 
       <ul className="space-y-4 mb-8 flex-grow">
         {features.map((feature) => (
           <li key={feature} className="flex items-start">
-            <Check className="h-5 w-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
+            <Check className="h-5 w-5 text-gray-400 mr-3 flex-shrink-0 mt-0.5" />
             <span className="text-sm text-black">{feature}</span>
           </li>
         ))}
@@ -111,15 +86,11 @@ export function PricingCard({
 
       <button
         onClick={handleSubscribe}
-        disabled={isLoading || isCurrent}
+        disabled={isLoading || isCurrentPlan}
         className={`w-full py-3 px-4 rounded-md font-medium transition-colors text-sm mt-auto ${
-          isCurrent
+          isCurrentPlan
             ? "text-black bg-gray-100 cursor-default"
-            : buttonVariant === "outline"
-              ? "text-black border border-gray-300 bg-white hover:bg-gray-50"
-              : isPopular
-                ? "text-black bg-[#D2FF28] hover:bg-[#D2FF28]/90"
-                : "text-white bg-black hover:bg-gray-800"
+            : "text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
         } disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {isLoading ? (
@@ -134,3 +105,6 @@ export function PricingCard({
     </div>
   )
 }
+
+export { PricingCard }
+export default PricingCard
