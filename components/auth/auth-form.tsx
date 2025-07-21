@@ -125,7 +125,16 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
           })
           const userData = await userResponse.json()
 
-          console.log(`[AuthForm] User data response:`, userData)
+          console.log(`[AuthForm] 🔍 DETAILED User data response:`, {
+            fullResponse: userData,
+            responseKeys: Object.keys(userData),
+            hasUser: !!userData.user,
+            userKeys: userData.user ? Object.keys(userData.user) : "no user property",
+            directRole: userData.role,
+            nestedRole: userData.user?.role,
+            responseStatus: userResponse.status,
+            responseOk: userResponse.ok,
+          })
 
           if (!userResponse.ok) {
             console.error("[AuthForm] Failed to get user data:", userData)
@@ -134,11 +143,15 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
             return
           }
 
-          if (userData.role === "trainer") {
-            console.log(`[AuthForm] User is trainer, redirecting to overview`)
+          // Fix: Check for role in the correct location
+          const userRole = userData.user?.role || userData.role
+          console.log(`[AuthForm] 🎯 Extracted user role: "${userRole}" (type: ${typeof userRole})`)
+
+          if (userRole === "trainer") {
+            console.log(`[AuthForm] ✅ User is trainer, redirecting to overview`)
             router.push("/overview")
           } else {
-            console.log(`[AuthForm] User is not trainer (role: ${userData.role}), redirecting to mobile app success`)
+            console.log(`[AuthForm] ❌ User is not trainer (role: ${userRole}), redirecting to mobile app success`)
             router.push("/mobile-app-success")
           }
         } catch (userError) {

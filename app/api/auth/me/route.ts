@@ -29,28 +29,42 @@ export async function GET() {
     }
 
     const userData = userDoc.data()
-    console.log(`[API:me] ✅ User found: ${userData.email}`)
-
-    const user = {
-      id: userDoc.id,
+    console.log(`[API:me] 📊 Raw Firestore data:`, {
       email: userData.email,
-      name: userData.name,
       role: userData.role,
       user_type: userData.user_type,
-      status: userData.status,
-      hasFirebaseAuth: userData.hasFirebaseAuth,
-      createdAt: userData.createdAt?.toDate?.()?.toISOString(),
-      updatedAt: userData.updatedAt?.toDate?.()?.toISOString(),
+      roleType: typeof userData.role,
+      hasRole: !!userData.role,
+      allKeys: Object.keys(userData),
+    })
+
+    const user = {
+      uid: userDoc.id,
+      email: userData.email || "",
+      name: userData.name || userData.displayName || "",
+      role: userData.role || "user",
+      user_type: userData.user_type,
+      profilePicture: userData.profilePicture || "",
+      isApproved: userData.isApproved || false,
+      subscriptionStatus: userData.subscriptionStatus || "",
+      universalInviteCode: userData.universalInviteCode || "",
     }
 
-    return NextResponse.json({ user })
+    console.log(`[API:me] ✅ Processed user data:`, {
+      uid: user.uid,
+      email: user.email,
+      role: user.role,
+      roleType: typeof user.role,
+    })
+
+    // Return user data at the top level (not nested under 'user')
+    return NextResponse.json(user)
   } catch (error: any) {
-    console.log("[API:me] ❌ Unexpected error:", error)
+    console.error("[API:me] ❌ Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
-        message: error.message,
-        timestamp: new Date().toISOString(),
+        details: error.message,
       },
       { status: 500 },
     )
