@@ -1,4 +1,21 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install --no-frozen-lockfile"
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "https://www.juice.fitness/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "CDN-Cache-Control",
+          "value": "max-age=3600"
+        }
+      ]
+    }
+  ]
 }
