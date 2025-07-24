@@ -89,11 +89,11 @@ export function FeedbackModal({ isOpen, onClose, userId, currentPage }: Feedback
   const getSentimentEmoji = (type: Sentiment) => {
     switch (type) {
       case "sad":
-        return <Image src="/sad-strawberry.png" alt="Sad" width={64} height={64} className="w-16 h-16" />
+        return <Image src="/images/sad-strawberry.png" alt="Sad" width={64} height={64} className="w-16 h-16" />
       case "neutral":
-        return <Image src="/arnold-lemon-neutral.png" alt="Neutral" width={64} height={64} className="w-16 h-16" />
+        return <Image src="/images/arnold-lemon-neutral.png" alt="Neutral" width={64} height={64} className="w-16 h-16" />
       case "happy":
-        return <Image src="/arnold-apple-happy.png" alt="Happy" width={64} height={64} className="w-16 h-16" />
+        return <Image src="/images/arnold-apple-happy.png" alt="Happy" width={64} height={64} className="w-16 h-16" />
     }
   }
 

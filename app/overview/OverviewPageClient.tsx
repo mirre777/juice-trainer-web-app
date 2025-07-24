@@ -342,7 +342,7 @@ const OverviewPageClient: React.FC = () => {
                         <p className="text-2xl font-bold">{revenue.activeClients}</p>
                         {revenue.activeClients === 0 && (
                           <Image
-                            src="/sleeping-mascot.png"
+                            src="/images/sleeping-mascot.png"
                             alt="No clients yet"
                             width={50}
                             height={50}

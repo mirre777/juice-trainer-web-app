@@ -1,4 +1,4 @@
-"use client";
+
 
 import type React from "react"
 import { Sen, Inter } from "next/font/google"
