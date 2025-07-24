@@ -765,7 +765,7 @@ export default function ImportProgramsClient() {
                     <span>Click "Share" → "Anyone with the link can view".</span>
                   </div>
                   <img
-                    src="/google-sheets-share-dialog.png"
+                    src="/images/google-sheets-share-dialog.png"
                     alt="Google Sheets Share Dialog"
                     className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
                   />

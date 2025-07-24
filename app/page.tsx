@@ -96,7 +96,7 @@ export default function LandingPage() {
             client={{
               id: sharedWorkout?.id || "client-1",
               name: sharedWorkout?.clientName || "Michael Thompson",
-              image: "/happy-apple.png",
+              image: "/images/happy-apple.png",
               date: sharedWorkout?.date || "April 25, 2025",
               programWeek: "3",
               programTotal: "8",

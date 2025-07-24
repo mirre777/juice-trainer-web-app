@@ -20,6 +20,7 @@ export function middleware(request: NextRequest) {
     path === "/mobile-app-success" ||
     path === "/payment-success" ||
     path === "/invite-app" ||
+    path.startsWith("/images/") ||
     path.startsWith("/invite/") ||
     path.startsWith("/shared/") ||
     isSharedWorkoutPath || // Add this condition for direct userId/workoutId URLs
