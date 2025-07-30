@@ -42,104 +42,48 @@ try {
 
 ### **Signup Flow (`/api/auth/signup`)**
 
-#### **A. Trainer Signup (Web Platform)**
+#### **A. Invitation Signup**
 \`\`\`javascript
-// User signs up at /signup with isTrainerSignup: true
-POST /api/auth/signup {
-  email, name, password, 
-  isTrainerSignup: true,
-  inviteCode: undefined
-}
-→ Creates user with role: "trainer" and Firebase Auth
-→ Sets hasFirebaseAuth: true
-→ Frontend redirects to /overview (trainer dashboard)
-\`\`\`
-
-#### **B. Mobile App User Signup**
-\`\`\`javascript
-// User signs up at /signup-juice-app with isTrainerSignup: false
-POST /api/auth/signup {
-  email, name, password,
-  isTrainerSignup: false, 
-  inviteCode: undefined
-}
-→ Creates user with NO role and Firebase Auth
-→ Sets hasFirebaseAuth: true
+// User signs up with invitation code
+signupWithUniversalCode({
+  email, name, password, universalInviteCode
+})
+→ Creates user with Firebase Auth
+→ Sets status: "pending_approval" 
+→ Adds to trainer's pendingUsers list
 → Frontend redirects to download page
 \`\`\`
 
-#### **C. Invitation Signup**
+#### **B. Regular Trainer Signup**
 \`\`\`javascript
-// User signs up with invitation code from trainer
-POST /api/auth/signup {
-  email, name, password,
-  inviteCode: "ABC123",
-  isTrainerSignup: false
-}
-→ Creates FULLY FUNCTIONAL user account with Firebase Auth
-→ Sets status: "pending_approval" (for trainer relationship only)
-→ Adds to trainer's pendingUsers list for connection approval
-→ User can immediately use mobile app
+// Standard trainer registration
+createUser({
+  email, name, password, role: "trainer"
+})
+→ Creates user with Firebase Auth
 → Frontend redirects to download page
 \`\`\`
 
 ## 🎯 **User States & Transitions**
 
 ### **User States**
-1. **Trainer User**: `role: "trainer"` → Full platform access at /overview
-2. **Mobile App User**: `role: undefined` → Limited access, redirected to mobile success
-3. **User with Pending Trainer Connection**: `status: "pending_approval"` → User account is active, but trainer-client relationship awaits approval
-4. **Legacy User**: `hasFirebaseAuth: false/undefined` → Auto-migration on login
+1. **Modern User**: `hasFirebaseAuth: true` → Direct login
+2. **Legacy User**: `hasFirebaseAuth: false/undefined` → Auto-migration
+3. **Pending User**: `status: "pending_approval"` → Awaiting trainer approval
+4. **Approved User**: `status: "approved"` → Full platform access
 
 ### **State Transitions**
 \`\`\`
-Web Signup (isTrainerSignup: true) → Trainer User
-Mobile Signup (isTrainerSignup: false) → Mobile App User  
-Invite Signup (with code) → Active User → (Trainer Connection Approval) → Client-Trainer Relationship
-Legacy User → (Login) → Modern User (role preserved)
+Legacy User → (Login) → Modern User
+Pending User → (Trainer Approval) → Approved User
+New Signup → (With Invite) → Pending User
+New Signup → (Trainer) → Modern User
 \`\`\`
 
 ## 🔀 **Response Types & Redirects**
 
-### **Signup Responses**
+### **Login Responses**
 \`\`\`javascript
-// Successful trainer signup
-{
-  success: true,
-  userId: "user-id",
-  pendingApproval: false
-}
-→ Frontend redirects to /overview
-
-// Successful mobile app signup  
-{
-  success: true,
-  userId: "user-id", 
-  pendingApproval: false
-}
-→ Frontend redirects to https://juice.fitness/download-juice-app
-
-// Successful invitation signup
-{
-  success: true,
-  userId: "user-id",
-  pendingApproval: true,
-  message: "Account created successfully. Waiting for trainer approval."
-}
-→ Frontend redirects to https://juice.fitness/download-juice-app
-\`\`\`
-
-### **Login Responses & Redirects**
-\`\`\`javascript
-// After successful login, frontend calls /api/auth/me to check role:
-
-// Trainer user
-{ role: "trainer", ... } → Redirect to /overview
-
-// Non-trainer user  
-{ role: undefined, ... } → Redirect to /mobile-app-success
-\`\`\`
-
 // Successful modern user login
 {
   success: true,
@@ -177,63 +121,6 @@ Legacy User → (Login) → Modern User (role preserved)
 - **Invitation signup** → `https://juice.fitness/download-juice-app`
 - **Regular signup** → `https://juice.fitness/download-juice-app`
 - **Authentication failure** → Stay on login page with error
-
-## 🎯 **Role Assignment Strategy**
-
-### **How Roles Are Determined**
-The system assigns roles based on the signup method:
-
-#### **Trainer Role Assignment**
-- **Trigger**: `isTrainerSignup: true` in signup request
-- **Source**: User visits `/signup` (trainer signup page)
-- **Result**: `role: "trainer"` assigned in database
-- **Access**: Full platform access to all trainer features
-
-#### **No Role Assignment (Mobile Users)**
-- **Trigger**: `isTrainerSignup: false` or invitation signup
-- **Sources**: 
-  - User visits `/signup-juice-app` (mobile app signup)
-  - User signs up via invitation link
-- **Result**: `role: undefined` in database
-- **Access**: Redirected to mobile app download/success pages
-
-#### **Role Detection Logic**
-\`\`\`javascript
-// In /api/auth/signup route
-const role = isTrainerSignup ? "trainer" : undefined
-
-await createUser({
-  email, name, password,
-  role: role, // "trainer" or undefined
-  provider: "email"
-})
-\`\`\`
-
-### **Frontend Route Determination**
-\`\`\`javascript
-// In AuthForm component after signup/login
-if (userData.role === "trainer") {
-  router.push("/overview")  // Trainer dashboard
-} else {
-  router.push("/mobile-app-success")  // Mobile app instructions
-}
-\`\`\`
-
-## 🔗 **Trainer-Client Connection Flow**
-
-### **Invitation Process**
-1. **User Signs Up**: Creates complete, functional account via invitation
-2. **Trainer Notification**: User appears in trainer's "pending users" list
-3. **Trainer Decision**: Trainer can approve and either:
-   - **Match to Existing Client**: Link user to pre-created client profile
-   - **Create New Client**: Generate new client profile for this user
-4. **Connection Established**: User-trainer relationship is active
-
-### **Key Points**
-- **User account is immediately functional** - can login and use mobile app
-- **No user approval needed** - only trainer-client relationship needs approval
-- **Trainer flexibility** - can organize clients as needed before connecting
-- **Seamless UX** - user doesn't wait for approval to access their account
 
 ## 🛡️ **Security Features**
 
@@ -303,24 +190,17 @@ if (userData.role === "trainer") {
 {
   email: string,
   name: string,
-  role: "trainer" | undefined, // Only trainers get explicit role
-  hasFirebaseAuth: boolean,
-  firebaseUid: string,
+  role: "admin" | "coach" | "client",
+  hasFirebaseAuth: boolean, // Indicates if linked to Firebase Auth
+  firebaseUid: string, // Firebase Auth UID (when linked)
   status: "pending_approval" | "approved" | "active",
-  
-  // Trainer-specific fields
-  clients: string[], // Array of client IDs (trainers only)
-  pendingUsers: string[], // Users awaiting approval (trainers only)
-  
-  // Client-specific fields  
+  clients: string[], // Array of client IDs (coaches only)
   trainers: string[], // Array of trainer IDs (clients only)
-  inviteCode: string, // Invitation code used during signup
-  
-  // Timestamps
+  inviteCode: string, // Invitation code (if signed up via invite)
   createdAt: timestamp,
   updatedAt: timestamp,
-  linkedAt: timestamp,
-  migratedAt: timestamp
+  linkedAt: timestamp // When accounts were linked
+  migratedAt: timestamp // When legacy account was migrated
 }
 \`\`\`
 
@@ -408,28 +288,3 @@ console.log(`[API:login] 📈 Migrated legacy user: ${email}`)
 - **Account recovery** options
 - **Advanced rate limiting** with IP-based rules
 - **Audit dashboard** for account management
-
-## 🚪 **Signup Entry Points**
-
-### **1. Trainer Signup** 
-- **URL**: `/signup`
-- **Purpose**: Web platform trainer registration
-- **Form**: Sets `isTrainerSignup: true`
-- **Result**: Full trainer account with dashboard access
-
-### **2. Mobile App Signup**
-- **URL**: `/signup-juice-app` 
-- **Purpose**: Mobile app user registration
-- **Form**: Sets `isTrainerSignup: false`
-- **Result**: Mobile user account, redirected to download
-
-### **3. Invitation Signup**
-- **URL**: `/signup-juice-app?code=ABC123&tn=TrainerName`
-- **Purpose**: Client signup via trainer invitation
-- **Form**: Includes invitation code, sets `isTrainerSignup: false`
-- **Result**: Pending approval account, trainer notified
-
-### **4. Legacy Migration**
-- **Trigger**: Existing user login with `hasFirebaseAuth: false`
-- **Process**: Automatic account upgrade during login
-- **Result**: Modern account with preserved role

@@ -36,9 +36,6 @@ Trainer's Clients Subcollection
     ├── name, email, etc.
     ├── inviteCode: "a1b2c3d4"
     ├── status: "Pending" → "Accepted Invitation" → "Active"
-    ├── isTemporary: true → false (after account creation)
-    ├── inviteSentAt: timestamp
-    ├── inviteAcceptedAt: timestamp (when accepted)
     └── userId: null → "firebase-user-id" (after account creation)
 \`\`\`
 
@@ -198,7 +195,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       name: formData.name,
       email: formData.email,
       password: formData.password,
-      inviteCode: invitationCode, // The inviteCode is now correctly passed and stored in the user document during signup
     });
     
     if (result.success) {
@@ -321,11 +317,8 @@ export async function findClientByUserId(trainerId: string, userId: string) {
 2. **User Association**: Store the user ID in the client document after account creation
 3. **Status Tracking**: Use the status field to track the client's journey:
    - "Pending" → Initial state when invitation is sent
-   - "Accepted Invitation" → Client has accepted but hasn't created an account (or account is pending trainer approval)
-   - "Active" → Client has created an account and is fully onboarded (trainer has approved connection)
-   - "On Hold" → Client's status is temporarily paused by the trainer
-   - "Inactive" → Client is no longer actively training
-   - "Deleted" → Client has been soft-deleted by the trainer
+   - "Accepted Invitation" → Client has accepted but hasn't created an account
+   - "Active" → Client has created an account and is fully onboarded
 4. **Secure Invitation Codes**: Invitation codes should be unique and hard to guess
 5. **Expiration**: Invitations should expire after a certain period
 6. **Validation**: Always validate invitation codes before accepting them

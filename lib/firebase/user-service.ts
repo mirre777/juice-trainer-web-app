@@ -70,8 +70,8 @@ export async function getUserByEmail(email: string): Promise<User | null> {
     const userDoc = querySnapshot.docs[0]
     const userData = userDoc.data() as User
     return {
-      id: userDoc.id,
       ...userData,
+      id: userDoc.id,
     }
   } catch (error) {
     console.error("Error getting user by email:", error)
@@ -126,8 +126,8 @@ export async function getUserById(userId: string): Promise<User | null> {
 
     const userData = userSnap.data() as User
     return {
-      id: userId,
       ...userData,
+      id: userId,
     }
   } catch (error) {
     console.error("Error getting user by ID:", error)
@@ -151,14 +151,14 @@ export async function signupWithUniversalCode(
 ): Promise<{ success: boolean; message: string; userId?: string }> {
   try {
     const usersRef = collection(db, "users")
-    const q = query(usersRef, where("universalInviteCode", "==", universalCode))
-    const querySnapshot = await getDocs(q)
+    const trainerQuery = query(usersRef, where("universalInviteCode", "==", universalCode))
+    const trainerResult = await getDocs(trainerQuery)
 
-    if (querySnapshot.empty) {
+    if (trainerResult.empty) {
       return { success: false, message: "Invalid invitation code" }
     }
 
-    const trainerDoc = querySnapshot.docs[0]
+    const trainerDoc = trainerResult.docs[0]
     const trainerId = trainerDoc.id
 
     const newUser = await createUser({

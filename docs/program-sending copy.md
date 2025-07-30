@@ -42,6 +42,11 @@ interface MobileProgram {
     week: number
     order: number
   }>
+  imageUrl?: string;
+  startDate?: string;
+  endDate?: string;
+  completed?: boolean;
+  trainerId?: string;
 }
 \`\`\`
 
@@ -67,6 +72,7 @@ interface MobileRoutine {
       notes?: string
     }>
   }>
+  order?: number;
 }
 \`\`\`
 
@@ -82,6 +88,19 @@ interface MobileExercise {
   createdAt: Firestore.Timestamp
   updatedAt: Firestore.Timestamp
   deletedAt: null
+  exerciseType?: string;
+  videoUrl?: string;
+  equipment?: string;
+  level?: string;
+  category?: string;
+  description?: string;
+  defaultSets?: Array<{
+    id: string
+    type: string
+    weight: string
+    reps: string
+    notes?: string
+  }>;
 }
 \`\`\`
 
@@ -99,7 +118,26 @@ The `ProgramConversionService` handles the complete conversion and sending proce
 Main entry point for sending programs to clients.
 
 \`\`\`typescript
-async sendProgramToClient(clientId: string, programData: any, customMessage?: string): Promise<any>
+async sendProgramToClient(clientId: string, programData: any, customMessage?: string): Promise<any> {
+  try {
+    // 1. Resolve client's user ID from trainer's client document
+    const clientDoc = await this.getClientDocument(clientId);
+    const clientUserId = clientDoc.userId;
+
+    // 2. Validate client has linked mobile app account
+    await this.validateClientAccount(clientDoc);
+
+    // 3. Call `convertAndSendProgram()` to perform conversion
+    const programId = await this.convertAndSendProgram(programData, clientUserId);
+
+    // 4. Return success confirmation with program ID
+    return { success: true, programId, clientUserId, message: "Program sent successfully" };
+
+  } catch (error: any) {
+    console.error("Error sending program to client:", error);
+    throw error; // Re-throw the error for the API to handle
+  }
+}
 \`\`\`
 
 **Process:**
@@ -112,7 +150,31 @@ async sendProgramToClient(clientId: string, programData: any, customMessage?: st
 Converts web app program format to mobile app format.
 
 \`\`\`typescript
-async convertAndSendProgram(programData: any, clientUserId: string): Promise<string>
+async convertAndSendProgram(programData: any, clientUserId: string): Promise<string> {
+  try {
+    // 1. Create batch write operation for performance
+    const batch = writeBatch(this.db);
+
+    // 2. Generate a unique program ID
+    const programId = this.generateId();
+
+    // 3. Handle both periodized and non-periodized programs
+    if (programData.is_periodized) {
+      await this.handlePeriodizedProgram(programData, clientUserId, programId, batch);
+    } else {
+      await this.handleNonPeriodizedProgram(programData, clientUserId, programId, batch);
+    }
+
+    // 4. Commit entire batch atomically
+    await batch.commit();
+
+    return programId;
+
+  } catch (error: any) {
+    console.error("Error converting and sending program:", error);
+    throw error; // Re-throw the error for the calling function to handle
+  }
+}
 \`\`\`
 
 **Process:**
@@ -126,7 +188,29 @@ async convertAndSendProgram(programData: any, clientUserId: string): Promise<str
 Ensures exercises exist in client's exercise collection.
 
 \`\`\`typescript
-private async ensureExerciseExists(userId: string, exerciseName: string): Promise<string>
+private async ensureExerciseExists(userId: string, exerciseName: string): Promise<string> {
+  try {
+    // 1. Check global exercises collection first
+    let exerciseDoc = await this.findExerciseInCollection("exercises", exerciseName);
+
+    // 2. Check user's custom exercises collection
+    if (!exerciseDoc) {
+      exerciseDoc = await this.findExerciseInCollection(\`users/\${userId}/exercises\`, exerciseName);
+    }
+
+    // 3. Create new exercise if not found
+    if (!exerciseDoc) {
+      exerciseDoc = await this.createExercise(userId, exerciseName);
+    }
+
+    // 4. Return exercise ID for routine creation
+    return exerciseDoc.id;
+
+  } catch (error: any) {
+    console.error("Error ensuring exercise exists:", error);
+    throw error; // Re-throw the error for the calling function to handle
+  }
+}
 \`\`\`
 
 **Process:**
@@ -279,7 +363,21 @@ private removeUndefinedValues(obj: any): any {
   }
   
   // Continue with normal processing for other objects
-  // ...
+  if (Array.isArray(obj)) {
+    return obj.map(item => this.removeUndefinedValues(item));
+  }
+
+  if (typeof obj === 'object' && obj !== null) {
+    return Object.keys(obj).reduce((acc: any, key: string) => {
+      const value = obj[key];
+      if (value !== undefined) {
+        acc[key] = this.removeUndefinedValues(value);
+      }
+      return acc;
+    }, {});
+  }
+
+  return obj;
 }
 \`\`\`
 

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { signupWithUniversalCode, createUser } from "@/lib/firebase/user-service"
-import { signIn } from "@/lib/auth/auth-service"
+import { signUp } from "@/lib/auth/auth-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,23 +25,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let result
+    // Create authenticaition user in firebase
+    const signUpResult = await signUp(email, password)
+    if (!signUpResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: signUpResult.error,
+        },
+        { status: 400 },
+      )
+    }
 
-    if (inviteCode) {
+    let result
+    if (inviteCode && !isTrainerSignup) {
       console.log(`[Signup] 🎫 Signing up with invite code: ${inviteCode} (no role assigned)`)
-      result = await signupWithUniversalCode({
+      result = await signupWithUniversalCode(
         email,
         name,
-        password,
-        universalInviteCode: inviteCode,
-      })
+        inviteCode,
+      )
 
       if (!result.success) {
-        console.log(`[Signup] ❌ Failed to signup with invite code:`, result.error)
+        console.log(`[Signup] ❌ Failed to signup with invite code:`, result.message)
         return NextResponse.json(
           {
             success: false,
-            error: result.error?.message || "Failed to create account with invite code",
+            error: result.message || "Failed to create account with invite code",
           },
           { status: 400 },
         )
@@ -52,13 +62,16 @@ export async function POST(request: NextRequest) {
         success: true,
         userId: result.userId,
         pendingApproval: true,
+        autoSignedIn: false,
+        role: "client",
+        subscriptionPlan: "client_basic",
         message: "Account created successfully. Waiting for trainer approval.",
       })
     } else {
       console.log(`[Signup] 👤 Regular signup - isTrainerSignup: ${isTrainerSignup}`)
 
       // Only assign trainer role if this is explicitly a trainer signup
-      const role = isTrainerSignup ? "trainer" : undefined
+      const role = isTrainerSignup ? "trainer" : "client"
 
       console.log(
         `[Signup] Creating user with role: ${role || "none"}${role === "trainer" ? " and trainer_basic plan" : ""}`,
@@ -67,63 +80,18 @@ export async function POST(request: NextRequest) {
       result = await createUser({
         email,
         name,
-        password,
         role: role, // undefined for regular users, "trainer" for trainers
-        provider: "email",
       })
-
-      if (!result.success) {
-        console.log(`[Signup] ❌ Failed to create account:`, result.error)
-        return NextResponse.json(
-          {
-            success: false,
-            error: result.error?.message || "Failed to create account",
-          },
-          { status: 400 },
-        )
-      }
 
       console.log(`[Signup] ✅ Successfully created account with role: ${role || "none"} and trainer_basic plan`)
 
-      // For trainer signups, automatically sign them in
-      if (isTrainerSignup) {
-        console.log(`[Signup] 🔐 Auto-signing in trainer after successful signup`)
-
-        const signInResult = await signIn(email, password)
-
-        if (signInResult.success) {
-          console.log(`[Signup] ✅ Auto-signin successful for trainer`)
-          return NextResponse.json({
-            success: true,
-            userId: result.userId,
-            pendingApproval: false,
-            autoSignedIn: true,
-            role: "trainer",
-            subscriptionPlan: role === "trainer" ? "trainer_basic" : undefined,
-            message: "Account created and signed in successfully!",
-          })
-        } else {
-          console.log(`[Signup] ⚠️ Auto-signin failed, but account was created:`, signInResult.error)
-          return NextResponse.json({
-            success: true,
-            userId: result.userId,
-            pendingApproval: false,
-            autoSignedIn: false,
-            role: "trainer",
-            subscriptionPlan: role === "trainer" ? "trainer_basic" : undefined,
-            message: "Account created successfully. Please log in.",
-          })
-        }
-      }
-
-      // For regular users (mobile app), don't auto-sign in
       return NextResponse.json({
         success: true,
-        userId: result.userId,
+        userId: result.id,
         pendingApproval: false,
-        autoSignedIn: false,
-        role: role || "user",
-        subscriptionPlan: role === "trainer" ? "trainer_basic" : undefined,
+        autoSignedIn: isTrainerSignup,
+        role,
+        subscriptionPlan: role === "trainer" ? "trainer_basic" : "client_basic",
       })
     }
   } catch (error) {

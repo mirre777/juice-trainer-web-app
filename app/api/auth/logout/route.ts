@@ -8,7 +8,7 @@ import { auth } from "@/lib/firebase/firebase"
 export async function GET() {
   try {
     // Clear all cookies
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const allCookies = cookieStore.getAll()
 
     for (const cookie of allCookies) {

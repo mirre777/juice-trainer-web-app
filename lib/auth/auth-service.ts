@@ -1,7 +1,7 @@
 // Authentication service for handling login, signup, and session management
 
 import { db } from "@/lib/firebase/firebase"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc } from "firebase/firestore"
 import {
   getAuth,
   signInWithEmailAndPassword,
@@ -22,7 +22,8 @@ export async function signIn(email: string, password: string) {
     const user = userCredential.user
     const token = await user.getIdToken()
 
-    cookies().set("auth_token", token, {
+    const cookieStore = await cookies()
+    cookieStore.set("auth_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -37,28 +38,21 @@ export async function signIn(email: string, password: string) {
 }
 
 // Sign up with email and password
-export async function signUp(email: string, password: string, userData: any) {
+export async function signUp(email: string, password: string) {
   try {
-    if (!email || !password || !userData) {
+    if (!email || !password) {
       return { success: false, error: "Email, password, and user data are required" }
     }
 
     const auth = getAuth()
+    console.log("Creating user with email:", email, "and password:", password)
     const userCredential = await createUserWithEmailAndPassword(auth, email, password)
     const user = userCredential.user
 
-    // Create user document in Firestore
-    await setDoc(doc(db, "users", user.uid), {
-      email: user.email,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      createdAt: new Date(),
-      ...userData,
-    })
-
     const token = await user.getIdToken()
 
-    cookies().set("auth_token", token, {
+    const cookieStore = await cookies()
+    cookieStore.set("auth_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 24 * 7, // 1 week
@@ -78,7 +72,8 @@ export async function signOut() {
     const auth = getAuth()
     await firebaseSignOut(auth)
 
-    cookies().delete("auth_token")
+    const cookieStore = await cookies()
+    cookieStore.delete("auth_token")
 
     return { success: true }
   } catch (error: any) {
