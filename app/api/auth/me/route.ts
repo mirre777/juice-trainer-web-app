@@ -8,7 +8,7 @@ export async function GET() {
   try {
     console.log("🚀 Starting /api/auth/me request")
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const userId = cookieStore.get("user_id")?.value
     console.log("🆔 User ID from cookie:", userId)
 

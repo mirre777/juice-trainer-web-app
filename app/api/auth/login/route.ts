@@ -63,13 +63,7 @@ export async function POST(request: Request) {
           console.log(`[API:login] Processing invitation code: ${invitationCode}`)
 
           try {
-            const storeResult = await storeInvitationCode(user.id, invitationCode)
-
-            if (storeResult.success) {
-              console.log(`[API:login] Successfully stored invitation code`)
-            } else {
-              console.error(`[API:login] Failed to store invitation code:`, storeResult.error)
-            }
+            await storeInvitationCode(user.id, invitationCode)
 
             try {
               const { processLoginInvitation } = await import("@/lib/firebase/client-service")
@@ -175,14 +169,7 @@ export async function POST(request: Request) {
         const updateResult = await updateUser(user.id, {
           hasFirebaseAuth: true,
           firebaseUid: existingFirebaseUser.uid,
-          linkedAt: new Date(),
-          linkedDuring: "login",
         })
-
-        if (!updateResult.success) {
-          console.error("[API:login] Failed to update user document:", updateResult.error)
-          return NextResponse.json({ error: "Failed to link accounts. Please try again." }, { status: 500 })
-        }
 
         const token = await existingFirebaseUser.getIdToken()
 

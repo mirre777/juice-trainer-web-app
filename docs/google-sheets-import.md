@@ -16,7 +16,7 @@ The Google Sheets import system enables trainers to:
 ### Core Functionality
 - **URL-based Import**: Trainers paste Google Sheets URLs to import programs
 - **Real-time Status Updates**: Live updates on import processing status
-- **AI &#43; Human Review**: Combines AI processing with human quality assurance
+- **AI + Human Review**: Combines AI processing with human quality assurance
 - **Import History**: Track all previous imports with searchable history
 - **Status Notifications**: Visual notifications when imports are ready for review
 
@@ -61,21 +61,69 @@ The Google Sheets import system enables trainers to:
   sheetsUrl: "https://docs.google.com/spreadsheets/d/...",
   spreadsheetId: "extracted-spreadsheet-id",
   status: "ready_for_conversion" | "processing" | "conversion_complete" | "completed" | "failed",
-  programName?: "Optional program name",
-  description?: "Optional description",
-  errorMessage?: "Error details if failed"
+  name: "Program name from input", // Now properly saved
+  description: "Optional description",
+  programName: "Extracted from sheet", // Legacy field
+  errorMessage: "Error details if failed"
 }
 \`\`\`
 
 ## API Routes
 
 ### Import Creation
-**Endpoint**: Handled client-side via Firestore SDK
-**Method**: `addDoc()` to `sheets_imports` collection
+**Method**: Client-side via Firestore SDK
+**Implementation**: `addDoc()` to `sheets_imports` collection
+
+\`\`\`typescript
+// Import creation in ImportProgramsClient.tsx
+const docRef = await addDoc(collection(db, "sheets_imports"), {
+  createdAt: serverTimestamp(),
+  sheetsUrl: googleSheetsLink,
+  spreadsheetId: extractSpreadsheetId(googleSheetsLink),
+  status: "ready_for_conversion",
+  updatedAt: serverTimestamp(),
+  userId: userId,
+  name: programNameInput.trim(), // Program name is now saved
+})
+\`\`\`
 
 ### Import Status Monitoring
 **Method**: Real-time Firestore listener via `onSnapshot()`
 **Query**: `where("userId", "==", userId)` ordered by `createdAt desc`
+
+\`\`\`typescript
+// Real-time listener in ImportProgramsClient.tsx
+useEffect(() => {
+  if (!userId) return
+
+  const q = query(
+    collection(db, "sheets_imports"), 
+    where("userId", "==", userId), 
+    orderBy("createdAt", "desc")
+  )
+
+  const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const importsData: SheetsImport[] = []
+    const newlyCompleted: SheetsImport[] = []
+
+    querySnapshot.forEach((doc) => {
+      const importData = { id: doc.id, ...doc.data() } as SheetsImport
+      importsData.push(importData)
+
+      // Detect newly completed imports for notifications
+      if (importData.status === "conversion_complete" && 
+          !dismissedNotifications.has(importData.id)) {
+        newlyCompleted.push(importData)
+      }
+    })
+
+    setImports(importsData)
+    setCompletedImports(newlyCompleted)
+  })
+
+  return () => unsubscribe()
+}, [userId, dismissedNotifications])
+\`\`\`
 
 ### Google Sheets Data Processing
 **Endpoint**: `/api/programs/import-sheet`
@@ -83,7 +131,7 @@ The Google Sheets import system enables trainers to:
 **Parameters**: `?sheetId=spreadsheet-id`
 
 \`\`\`typescript
-// Response format
+// Response format from API
 {
   program_title: string,
   program_notes: string,
@@ -101,10 +149,35 @@ The Google Sheets import system enables trainers to:
 
 **Key Features:**
 - Google Sheets URL input and validation
+- Program name input (now properly implemented)
 - Real-time import status monitoring
 - Success notifications for completed imports
 - Import history with search functionality
 - Processing modal with progress indication
+
+**State Management:**
+\`\`\`typescript
+interface ImportState {
+  // Authentication
+  userId: string | null
+  isCheckingAuth: boolean
+
+  // Import form
+  googleSheetsLink: string
+  programNameInput: string // New: Program name input
+  isProcessing: boolean
+  isModalOpen: boolean
+
+  // Import history
+  imports: SheetsImport[]
+  isLoadingImports: boolean
+  searchTerm: string
+
+  // Notifications
+  completedImports: SheetsImport[]
+  dismissedNotifications: Set<string>
+}
+\`\`\`
 
 ### `GoogleSheetsImport`
 **Location**: `components/programs/google-sheets-import.tsx`
@@ -124,7 +197,7 @@ The Google Sheets import system enables trainers to:
 - Saved links selection
 - Import progress tracking
 
-## Authentication &#43; Permissions
+## Authentication + Permissions
 
 ### Google Sheets Access
 - Requires Google OAuth authentication
@@ -150,30 +223,45 @@ The Google Sheets import system enables trainers to:
 - Error messages stored in Firestore for debugging
 - Support team can access error logs for troubleshooting
 
+### Client-side Validation
+\`\`\`typescript
+// URL validation in ImportProgramsClient.tsx
+const isValidGoogleSheetsUrl = (url: string): boolean => {
+  return url.includes("docs.google.com/spreadsheets") && 
+         extractSpreadsheetId(url) !== null
+}
+
+// Spreadsheet ID extraction
+const extractSpreadsheetId = (url: string): string | null => {
+  const regex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/
+  const match = url.match(regex)
+  return match ? match[1] : null
+}
+\`\`\`
+
 ## Real-time Updates
 
 ### Status Change Notifications
 The system uses Firestore real-time listeners to provide instant updates:
 
 \`\`\`typescript
-// Real-time listener setup
-const q = query(
-  collection(db, "sheets_imports"), 
-  where("userId", "==", userId), 
-  orderBy("createdAt", "desc")
-)
+// Notification system in ImportProgramsClient.tsx
+const dismissNotification = (importId: string) => {
+  setDismissedNotifications(prev => new Set([...prev, importId]))
+  setCompletedImports(prev => prev.filter(imp => imp.id !== importId))
+}
 
-const unsubscribe = onSnapshot(q, (querySnapshot) => {
-  // Process status changes
-  // Show notifications for completed imports
-  // Update UI with latest status
-})
+// Filter newly completed imports
+const newlyCompleted = imports.filter(imp => 
+  imp.status === "conversion_complete" && 
+  !dismissedNotifications.has(imp.id)
+)
 \`\`\`
 
 ### Notification System
 - Green success banner appears when status changes to `conversion_complete`
-- Notifications include spreadsheet ID for identification
-- Dismissible notifications with local storage persistence
+- Notifications include program name and spreadsheet ID for identification
+- Dismissible notifications with persistent state management
 - Multiple notifications supported for concurrent imports
 
 ## Google Sheets Format Requirements
@@ -205,6 +293,20 @@ const unsubscribe = onSnapshot(q, (querySnapshot) => {
 - Import history pagination for large datasets
 - Debounced search functionality
 
+\`\`\`typescript
+// Debounced search implementation
+const debouncedSearchTerm = useDebounce(searchTerm, 300)
+
+const filteredImports = useMemo(() => 
+  imports.filter(importItem =>
+    importItem.name?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+    importItem.programName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+    importItem.description?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+    importItem.spreadsheetId.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  ), [imports, debouncedSearchTerm]
+)
+\`\`\`
+
 ### Scalability
 - Firestore automatically scales with user growth
 - Google Sheets API has rate limits (handled with retry logic)
@@ -219,13 +321,32 @@ const unsubscribe = onSnapshot(q, (querySnapshot) => {
 - No sensitive data stored in client-side state
 - Firestore security rules prevent cross-user access
 
+### Firestore Security Rules
+\`\`\`javascript
+// Security rules for sheets_imports collection
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sheets_imports/{importId} {
+      // Users can only access their own imports
+      allow read, write: if request.auth != null && 
+                           request.auth.uid == resource.data.userId;
+      
+      // Allow creation if user is authenticated
+      allow create: if request.auth != null && 
+                      request.auth.uid == request.resource.data.userId;
+    }
+  }
+}
+\`\`\`
+
 ### Privacy
 - Import history private to each trainer
 - Google Sheets access limited to read-only
 - No permanent storage of Google Sheets content
 - User can delete import history
 
-## Monitoring &#43; Analytics
+## Monitoring + Analytics
 
 ### Import Metrics
 - Track import success/failure rates
@@ -259,3 +380,17 @@ const unsubscribe = onSnapshot(q, (querySnapshot) => {
 3. **Background Sync**: Sync imports across devices
 4. **Advanced Search**: Full-text search across import history
 5. **Export Options**: Export programs back to various formats
+
+## Troubleshooting
+
+### Common Issues
+1. **"Sheet is private" error**: User needs to share sheet with "Anyone with link can view"
+2. **Import stuck in processing**: Contact support for manual review
+3. **Invalid URL format**: Ensure URL is from Google Sheets, not Google Drive
+4. **Missing program name**: Program name input is now required for better organization
+
+### Support Resources
+- In-app help documentation
+- Video tutorials for sheet formatting
+- Support ticket system for complex issues
+- Community forum for best practices
