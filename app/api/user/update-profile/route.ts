@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     const { firstName, lastName, email, phone, universalInviteCode } = body
 
     // Get user ID from cookie
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const userId = cookieStore.get("user_id")?.value
 
     if (!userId) {
@@ -23,17 +23,14 @@ export async function POST(request: NextRequest) {
     if (phone !== undefined) profileUpdates.phone = phone
 
     if (Object.keys(profileUpdates).length > 0) {
-      const profileResult = await updateUser(userId, profileUpdates)
-      if (!profileResult.success) {
-        return NextResponse.json({ error: profileResult.error }, { status: 500 })
-      }
+      await updateUser(userId, profileUpdates)
     }
 
     // Update invite code if provided
     if (universalInviteCode !== undefined) {
       const codeResult = await updateUniversalInviteCode(userId, universalInviteCode)
       if (!codeResult.success) {
-        return NextResponse.json({ error: codeResult.error }, { status: 400 })
+        return NextResponse.json({ error: codeResult.message }, { status: 400 })
       }
     }
 

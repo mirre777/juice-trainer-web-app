@@ -20,7 +20,7 @@ const TOKEN_SCOPE_COOKIE = "google_token_scope"
 // Store tokens securely in cookies
 export async function storeTokens(tokenData: TokenData): Promise<void> {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     // Set secure HTTP-only cookies with encryption
     cookieStore.set({
@@ -73,7 +73,7 @@ export async function storeTokens(tokenData: TokenData): Promise<void> {
 // Get tokens from cookies
 export async function getTokens(): Promise<TokenData | null> {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     const accessTokenCookie = cookieStore.get(ACCESS_TOKEN_COOKIE)
     const refreshTokenCookie = cookieStore.get(REFRESH_TOKEN_COOKIE)
@@ -98,9 +98,9 @@ export async function getTokens(): Promise<TokenData | null> {
 }
 
 // Clear tokens from cookies
-export function clearTokens(): void {
+export async function clearTokens(): Promise<void> {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     cookieStore.delete(ACCESS_TOKEN_COOKIE)
     cookieStore.delete(REFRESH_TOKEN_COOKIE)

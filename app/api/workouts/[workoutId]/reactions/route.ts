@@ -77,7 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: { workout
     console.log(`🎯 API: Validated request data:`, { emoji, userId, workoutId })
 
     // Get trainer info from cookies/auth
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     console.log(
       `🎯 API: All cookies:`,
       cookieStore.getAll().map((c) => c.name),

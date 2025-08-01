@@ -70,7 +70,7 @@ import { useToast } from '@/hooks/use-toast';
 
 function MyComponent() {
   const { toast } = useToast();
-  
+
   const handleSuccess = () => {
     toast.success({ title: 'Success', description: 'Operation completed successfully' });
   };
@@ -87,11 +87,11 @@ import { useGoogleAuth } from '@/hooks/use-google-auth';
 
 function MyComponent() {
   const { isAuthenticated, login, logout } = useGoogleAuth();
-  
+
   if (!isAuthenticated) {
     return <button onClick={login}>Login</button>;
   }
-  
+
   return <button onClick={logout}>Logout</button>;
 }
 \`\`\`
@@ -108,14 +108,14 @@ function FormComponent() {
     name: '',
     email: '',
   });
-  
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
   };
-  
+
   // Form submission logic
 }
 \`\`\`
@@ -125,13 +125,13 @@ function FormComponent() {
 \`\`\`tsx
 function ExpandableComponent() {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   return (
     <div>
       <button onClick={() => setIsExpanded(!isExpanded)}>
         {isExpanded ? 'Collapse' : 'Expand'}
       </button>
-      
+
       {isExpanded && <div>Expanded content</div>}
     </div>
   );
@@ -145,7 +145,7 @@ function DataComponent() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -159,13 +159,13 @@ function DataComponent() {
         setLoading(false);
       }
     }
-    
+
     fetchData();
   }, []);
-  
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
-  
+
   return <div>{/* Render data */}</div>;
 }
 \`\`\`
@@ -178,18 +178,18 @@ For real-time updates, we use Firestore's `onSnapshot` listeners:
 function RealtimeComponent() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     // Set up real-time listener
     const unsubscribe = subscribeToData((newData) => {
       setData(newData);
       setLoading(false);
     });
-    
+
     // Clean up listener on unmount
     return () => unsubscribe();
   }, []);
-  
+
   // Render component with real-time data
 }
 \`\`\`
@@ -200,7 +200,7 @@ The subscription functions are defined in service files:
 // lib/firebase/client-service.ts
 export function subscribeToClients(trainerId: string, callback: (clients: Client[]) => void) {
   const clientsCollectionRef = collection(db, "users", trainerId, "clients");
-  
+
   // Set up the real-time listener
   const unsubscribe = onSnapshot(clientsCollectionRef, (snapshot) => {
     const clients = snapshot.docs.map(doc => mapClientData(doc.id, doc.data()));
@@ -208,7 +208,7 @@ export function subscribeToClients(trainerId: string, callback: (clients: Client
   }, (error) => {
     console.error("Error subscribing to clients:", error);
   });
-  
+
   // Return the unsubscribe function
   return unsubscribe;
 }
@@ -226,7 +226,7 @@ Next.js Server Components fetch data on the server and pass it to client compone
 // app/page.tsx (Server Component)
 async function Page() {
   const data = await fetchDataOnServer();
-  
+
   return <ClientComponent initialData={data} />;
 }
 \`\`\`
@@ -294,8 +294,8 @@ Used for authentication tokens and session management.
 \`\`\`tsx
 // lib/auth/token-service.ts
 export async function storeTokens(tokenData: TokenData): Promise<void> {
-  const cookieStore = cookies();
-  
+  const cookieStore = await cookies();
+
   cookieStore.set({
     name: 'accessToken',
     value: await encrypt(tokenData.access_token),
@@ -339,7 +339,7 @@ Components accept an `isDemo` prop to determine whether to use mock data.
 function MyComponent({ isDemo = false }) {
   // Use mock data if in demo mode, otherwise fetch real data
   const data = isDemo ? mockData : useRealDataFromFirebase();
-  
+
   return (
     <div>
       {/* Render the same UI regardless of data source */}
@@ -373,7 +373,7 @@ import { mockClients } from '@/lib/demo-data';
 
 function ClientsList({ isDemo = false }) {
   const clients = isDemo ? mockClients : useRealClientsFromFirebase();
-  
+
   return (
     <div>
       {clients.map(client => (
