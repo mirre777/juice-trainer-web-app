@@ -3,6 +3,7 @@ export const runtime = "nodejs"
 
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { db } from "@/lib/firebase/firebase"
 
 export async function GET() {
   try {
@@ -19,7 +20,6 @@ export async function GET() {
 
     try {
       // Import Firestore directly instead of through db wrapper
-      const { db } = await import("@/lib/firebase/firebase")
       console.log("📊 Firestore imported successfully")
 
       if (!db) {

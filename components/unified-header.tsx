@@ -77,7 +77,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
     return "" // Only return empty if no cached value exists
   })
 
-  const dropdownRef = useRef<HTMLDivElement>(null)
   const taskListRef = useRef<HTMLDivElement>(null)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
 
@@ -204,7 +203,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
     () => [
       { name: "Overview", path: "/overview" },
       { name: "Clients", path: "/clients" },
-      { name: "Calendar", path: "/calendar" },
       { name: "Programs", path: "/import-programs" },
       // { name: "Finance", path: "/finance" }, // Hidden but still accessible via URL
       { name: "Marketplace", path: "https://www.juice.fitness/marketplace" },
@@ -214,7 +212,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
 
   // Memoize current index
   const currentIndex = useMemo(
-    () => navItems.findIndex((item) => !item.external && isActive(item.path)),
+    () => navItems.findIndex((item) => isActive(item.path)),
     [navItems, isActive],
   )
 
@@ -563,14 +561,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
               >
                 <User className="w-5 h-5 mr-3" />
                 Clients
-              </Link>
-              <Link
-                href={`${pathPrefix}/calendar`}
-                className={`flex items-center px-4 py-3 rounded-md text-sm ${isActive("/calendar") ? "bg-lime-300 font-medium" : "text-gray-600 hover:bg-gray-50"}`}
-                onClick={() => setShowMobileMenu(false)}
-              >
-                <Calendar className="w-5 h-5 mr-3" />
-                Calendar
               </Link>
               <Link
                 href={`${pathPrefix}/import-programs`}

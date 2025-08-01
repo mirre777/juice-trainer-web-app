@@ -10,7 +10,7 @@ interface ImportData {
   name?: string
   program: any
   status: string
-  created_at: any
+  created_at: string
   trainer_id?: string
 }
 
@@ -27,7 +27,7 @@ async function getImportData(id: string): Promise<ImportData | null> {
     console.log(`[getImportData] Fetching import data for ID: ${id}`)
 
     // Get trainer ID from cookies
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const userId = cookieStore.get("user_id")?.value
     const userIdAlt = cookieStore.get("userId")?.value
     const trainerId = userId || userIdAlt
@@ -69,6 +69,10 @@ async function getImportData(id: string): Promise<ImportData | null> {
       trainer_id: importData.trainer_id,
     })
 
+    // Convert Firestore Timestamp to ISO string for serialization
+    const created_at = importData.created_at || importData.createdAt || new Date()
+    const created_at_string = created_at.toDate ? created_at.toDate().toISOString() : created_at.toISOString()
+
     return {
       id: importData.id || id,
       name:
@@ -79,7 +83,7 @@ async function getImportData(id: string): Promise<ImportData | null> {
         "Untitled Program",
       program: importData.program || null,
       status: importData.status || "pending",
-      created_at: importData.created_at || importData.createdAt || new Date(),
+      created_at: created_at_string,
       trainer_id: importData.trainer_id || importData.userId || trainerId,
     }
   } catch (error) {
@@ -90,7 +94,7 @@ async function getImportData(id: string): Promise<ImportData | null> {
 
 async function getClients(): Promise<Client[]> {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const userId = cookieStore.get("user_id")?.value
     const userIdAlt = cookieStore.get("userId")?.value
     const trainerId = userId || userIdAlt
@@ -123,9 +127,9 @@ async function getClients(): Promise<Client[]> {
 export default async function ReviewProgramPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const { id } = params
+  const { id } = await params
 
   if (!id) {
     notFound()

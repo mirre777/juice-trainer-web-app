@@ -21,7 +21,6 @@ This is a **Next.js 14** fitness coaching platform built with:
 ├── components/            # React components organized by domain
 │   ├── auth/             # Authentication components
 │   ├── clients/          # Client management
-│   ├── calendar/         # Calendar integration
 │   ├── programs/         # Workout programs
 │   ├── shared/           # Reusable components
 │   └── ui/               # shadcn/ui components
@@ -103,14 +102,13 @@ This is a **Next.js 14** fitness coaching platform built with:
 ## 📊 **Current State & Capabilities**
 
 ### **Implemented Features**
-✅ Complete authentication system with migration  
-✅ Client management with invitation flow  
-✅ Real-time data synchronization  
-✅ Demo mode for exploration  
-✅ Responsive design with mobile support  
-✅ Error handling and user feedback  
-✅ Google integrations (Calendar, Sheets)  
-✅ Payment processing (Stripe)  
+✅ Complete authentication system with migration
+✅ Client management with invitation flow
+✅ Real-time data synchronization
+✅ Demo mode for exploration
+✅ Responsive design with mobile support
+✅ Error handling and user feedback
+✅ Payment processing (Stripe)
 
 ### **Architecture Strengths**
 - **Scalable data model** with subcollections
@@ -135,7 +133,6 @@ This is a **Next.js 14** fitness coaching platform built with:
 - **Authentication**: Firebase Auth, Google OAuth
 - **Storage**: Firebase Storage
 - **Payment Processing**: Stripe
-- **Integrations**: Google Calendar, Google Sheets
 
 ## 📋 **Environment Variables**
 
@@ -197,7 +194,7 @@ To implement demo functionality in a component:
 function MyComponent({ isDemo = false }) {
   // Use mock data if in demo mode, otherwise fetch real data
   const data = isDemo ? mockData : useRealDataFromFirebase();
-  
+
   return (
     <div>
       {/* Render the same UI regardless of data source */}

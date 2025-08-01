@@ -5,9 +5,9 @@ import { cookies } from "next/headers"
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const clientId = params.id
-
+    const cookieStore = await cookies()
     // Get trainer ID from header or cookie
-    const trainerId = request.headers.get("trainer-id") || cookies().get("userId")?.value || ""
+    const trainerId = request.headers.get("trainer-id") || cookieStore.get("userId")?.value || ""
 
     console.log("API Route - Trainer ID:", trainerId)
     console.log("API Route - Client ID:", clientId)
