@@ -33,7 +33,7 @@ export class UnifiedAuthService {
     try {
       console.log("🔍 [UnifiedAuth] Getting current user...")
 
-      const cookieStore = cookies()
+      const cookieStore = await cookies()
       const userId = cookieStore.get("user_id")?.value
 
       if (!userId) {
@@ -252,7 +252,7 @@ export class UnifiedAuthService {
   /**
    * Set authentication cookies
    */
-  private static setAuthCookies(token: string, userId: string): void {
+  private static async setAuthCookies(token: string, userId: string): Promise<void> {
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -260,24 +260,24 @@ export class UnifiedAuthService {
       maxAge: 60 * 60 * 24 * 7, // 1 week
       path: "/",
     }
-
-    cookies().set("auth_token", token, cookieOptions)
-    cookies().set("user_id", userId, { ...cookieOptions, httpOnly: false })
+    const cookieStore = await cookies()
+    cookieStore.set("auth_token", token, cookieOptions)
+    cookieStore.set("user_id", userId, { ...cookieOptions, httpOnly: false })
   }
 
   /**
    * Clear authentication cookies
    */
-  private static clearAuthCookies(): void {
+  private static async clearAuthCookies(): Promise<void> {
     const cookieOptions = {
       path: "/",
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: 0,
     }
-
-    cookies().set("auth_token", "", cookieOptions)
-    cookies().set("user_id", "", { ...cookieOptions, httpOnly: false })
+    const cookieStore = await cookies()
+    cookieStore.set("auth_token", "", cookieOptions)
+    cookieStore.set("user_id", "", { ...cookieOptions, httpOnly: false })
   }
 
   /**

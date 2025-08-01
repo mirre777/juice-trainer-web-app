@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase/firebase"
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
+    const id = params.id
     const docRef = doc(db, "sheets_imports", id)
     const docSnap = await getDoc(docRef)
 

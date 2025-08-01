@@ -24,18 +24,38 @@ export async function GET() {
     }
 
     // Return success response with cleared cookies
-    return new NextResponse(JSON.stringify({ success: true }), {
+    const response = new NextResponse(JSON.stringify({ success: true }), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
-        // Set cookie to expire in the past to ensure it's deleted
-        "Set-Cookie": [
-          `token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `user_id=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-          `refresh_token=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`,
-        ],
       },
     })
+    response.cookies.set("token", "", {
+      name: "token",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 0,
+    })
+    response.cookies.set("user_id", "", {
+      name: "user_id",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 0,
+    })
+    response.cookies.set("refresh_token", "", {
+      name: "refresh_token",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 0,
+    })
+
+    return response
   } catch (error) {
     console.error("Error during logout:", error)
     return new NextResponse(JSON.stringify({ error: "Failed to logout" }), {
