@@ -1,7 +1,6 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { AppError, ErrorType } from "@/lib/utils/error-handler"
 
 export function usePathDetection() {
   const pathname = usePathname()
@@ -10,10 +9,7 @@ export function usePathDetection() {
   let pathPrefix = ""
 
   if (!pathname) {
-    throw new AppError({
-      message: "Path not available",
-      errorType: ErrorType.NAVIGATION_ERROR,
-    })
+    throw new Error("Path not available")
   }
 
   isDemoMode = pathname.startsWith("/demo")

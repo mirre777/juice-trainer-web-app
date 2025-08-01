@@ -214,15 +214,7 @@ export async function POST(request: Request) {
             const updateResult = await updateUser(user.id, {
               hasFirebaseAuth: true,
               firebaseUid: firebaseUser.uid,
-              migratedAt: new Date(),
             })
-
-            if (!updateResult.success) {
-              return NextResponse.json(
-                { error: "Failed to complete account setup. Please try again." },
-                { status: 500 },
-              )
-            }
 
             const token = await firebaseUser.getIdToken()
 

@@ -53,7 +53,7 @@ export const generateToken = async (payload: TokenPayload): Promise<string> => {
 export async function storeTokens(tokenData: TokenData): Promise<void> {
   return tryCatch(
     async () => {
-      const cookieStore = cookies()
+      const cookieStore = await cookies()
 
       // Set secure HTTP-only cookies with encryption
       cookieStore.set({
@@ -131,7 +131,7 @@ export async function storeTokens(tokenData: TokenData): Promise<void> {
 export async function getTokens(): Promise<TokenData | null> {
   return tryCatch(
     async () => {
-      const cookieStore = cookies()
+      const cookieStore = await cookies()
 
       const accessTokenCookie = cookieStore.get(ACCESS_TOKEN_COOKIE)
       const refreshTokenCookie = cookieStore.get(REFRESH_TOKEN_COOKIE)
@@ -167,8 +167,8 @@ export async function getTokens(): Promise<TokenData | null> {
 // Clear tokens from cookies
 export function clearTokens(): void {
   return tryCatch(
-    () => {
-      const cookieStore = cookies()
+    async () => {
+      const cookieStore = await cookies()
 
       cookieStore.delete(ACCESS_TOKEN_COOKIE)
       cookieStore.delete(REFRESH_TOKEN_COOKIE)
@@ -204,7 +204,7 @@ export function isTokenExpired(tokenData: TokenData): boolean {
 // Get token from server (for server components)
 export async function getTokenFromServer(): Promise<OAuth2Client | null> {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const encryptedToken = cookieStore.get(GOOGLE_TOKEN_COOKIE)?.value
 
     if (!encryptedToken) {

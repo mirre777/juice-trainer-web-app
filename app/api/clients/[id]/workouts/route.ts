@@ -5,7 +5,7 @@ import { getUserWorkouts } from "@/lib/firebase/workout-service"
 import { ErrorType, createError, logError } from "@/lib/utils/error-handler"
 import { cookies } from "next/headers"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
+export async function GET(_: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
   try {
     const clientId = params.id
 
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     console.log("API: Fetching workouts for client ID:", clientId)
 
     // Get trainer ID from cookie
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const userIdCookie = cookieStore.get("user_id")
     const trainerId = userIdCookie?.value
 
