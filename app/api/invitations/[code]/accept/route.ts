@@ -2,8 +2,8 @@ import { db } from "@/lib/firebase/firebase"
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { NextResponse } from "next/server"
 
-export async function POST(req: Request, { params }: { params: { code: string } }) {
-  const { code } = params
+export async function POST(req: Request, { params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params
 
   console.log(`[Accept Invitation] 🎯 Processing acceptance for code: ${code}`)
 

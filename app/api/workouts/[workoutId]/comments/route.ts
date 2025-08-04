@@ -37,7 +37,7 @@ function validateTrainerId(trainerId: unknown): string {
 }
 
 // Update POST function with same error handling pattern as reactions
-export async function POST(request: NextRequest, { params }: { params: { workoutId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ workoutId: string }> }) {
   try {
     // Validate Firebase imports
     if (!doc || typeof doc !== "function") {
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: { workout
       throw new Error("Firebase database not initialized")
     }
 
-    const workoutId = validateWorkoutId(params.workoutId)
+    const { workoutId } = await params
     console.log(`🎯 API: Received comment request for workout ${workoutId}`)
 
     let body
@@ -159,9 +159,9 @@ export async function POST(request: NextRequest, { params }: { params: { workout
 }
 
 // GET endpoint to fetch comments for a workout
-export async function GET(request: NextRequest, { params }: { params: { workoutId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ workoutId: string }> }) {
   try {
-    const { workoutId } = params
+    const { workoutId } = await params
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId")
 

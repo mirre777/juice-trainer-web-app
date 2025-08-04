@@ -2,9 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getDoc, doc, collection } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 
-export async function GET(request: NextRequest, { params }: { params: { code: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   try {
-    const code = params.code
+    const { code } = await params
 
     if (!code) {
       return NextResponse.json({ error: "Invitation code is required" }, { status: 400 })

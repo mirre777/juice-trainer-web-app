@@ -7,7 +7,6 @@ import { Users, Plus } from "lucide-react"
 import { useClientDataHybrid } from "@/lib/hooks/use-client-data-hybrid"
 import { ClientsList } from "@/components/clients/clients-list"
 import { ClientsFilterBar } from "@/components/clients/clients-filter-bar"
-import { AuthDebug } from "@/components/debug/auth-debug"
 import { AddClientModal } from "@/components/clients/add-client-modal"
 import { useToast } from "@/hooks/use-toast"
 
