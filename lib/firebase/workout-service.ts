@@ -273,7 +273,7 @@ export async function createWorkout(
     // Ensure required fields
     if (!workoutData.name) {
       const error = createError(
-        ErrorType.API_VALIDATION_FAILED,
+        ErrorType.VALIDATION_FAILED,
         null,
         { function: "createWorkout" },
         "Workout name is required",
@@ -448,11 +448,11 @@ export async function getLatestClientWorkout(trainerId: string, clientId: string
       return null
     }
 
-    const doc = workoutsSnapshot.docs[0]
-    const data = doc.data()
+    const docSnapshot = workoutsSnapshot.docs[0]
+    const data = docSnapshot.data()
 
     return {
-      id: doc.id,
+      id: docSnapshot.id,
       name: data.name || "Unnamed Workout",
       description: data.description || "",
       date: data.date || null,
@@ -507,7 +507,7 @@ export async function getUserWorkouts(userId: string): Promise<{ workouts: Fireb
       console.log("[workout-service] Attempting to fetch workouts without ordering")
       querySnapshot = await getDocs(workoutsRef)
       console.log(`[workout-service] Successfully fetched workouts without ordering: ${querySnapshot.docs.length}`)
-    } catch (err) {
+    } catch (err: any) {
       console.error("[workout-service] Error fetching workouts without ordering:", err)
       console.error("Error details:", {
         message: err.message,
@@ -523,7 +523,7 @@ export async function getUserWorkouts(userId: string): Promise<{ workouts: Fireb
         console.log(
           `[workout-service] Successfully fetched workouts with createdAt ordering: ${querySnapshot.docs.length}`,
         )
-      } catch (orderErr) {
+      } catch (orderErr: any) {
         console.error("[workout-service] Error fetching workouts with createdAt ordering:", orderErr)
         console.error("Error details:", {
           message: orderErr.message,
@@ -565,10 +565,7 @@ export async function getUserWorkouts(userId: string): Promise<{ workouts: Fireb
           focus: data.name || "N/A", // Use the workout name as the focus
           date:
             data.startedAt && data.startedAt.seconds
-              ? formatFirestoreDate({
-                  seconds: data.startedAt.seconds,
-                  nanoseconds: data.startedAt.nanoseconds,
-                })
+              ? formatFirestoreDate(data.startedAt.toDate().toISOString())
               : formatFirestoreDate(data.startedAt),
           progress: {
             completed: data.status === "completed" ? 1 : 0,
@@ -584,7 +581,7 @@ export async function getUserWorkouts(userId: string): Promise<{ workouts: Fireb
             if (exercise.sets && exercise.sets.length > 0) {
               // Find the set with the highest weight
               const maxWeightSet = exercise.sets.reduce(
-                (prev, current) => (current.weight > prev.weight ? current : prev),
+                (prev: WorkoutSet, current: WorkoutSet) => (current.weight > prev.weight ? current : prev),
                 exercise.sets[0],
               )
 
@@ -668,7 +665,7 @@ export async function getUserWorkoutById(
 
     if (!userId) {
       const error = createError(
-        ErrorType.DB_FIELD_MISSING,
+        ErrorType.DB_DOCUMENT_NOT_FOUND,
         null,
         { function: "getUserWorkoutById", trainerId, clientId },
         "Client document does not contain userId",
@@ -724,7 +721,7 @@ export async function getUserWorkoutById(
         if (exercise.sets && exercise.sets.length > 0) {
           // Find the set with the highest weight
           const maxWeightSet = exercise.sets.reduce(
-            (prev, current) => (current.weight > prev.weight ? current : prev),
+            (prev: WorkoutSet, current: WorkoutSet) => (current.weight > prev.weight ? current : prev),
             exercise.sets[0],
           )
 
@@ -778,7 +775,7 @@ export async function getLatestWorkoutForUser(
     }
 
     // Step 1: Look up the client document to get the userId
-    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    const clientRef = doc(db, `users/${trainerId}/clients/${clientId}`)
     const clientDoc = await getDoc(clientRef)
 
     if (!clientDoc.exists()) {
@@ -792,12 +789,12 @@ export async function getLatestWorkoutForUser(
       return { workout: null, error }
     }
 
-    const clientData = clientDoc.data()
+    const clientData = clientDoc.data() as { userId: string; name: string }
     const userId = clientData.userId
 
     if (!userId) {
       const error = createError(
-        ErrorType.DB_FIELD_MISSING,
+        ErrorType.DB_DOCUMENT_NOT_FOUND,
         null,
         { function: "getLatestWorkoutForUser", trainerId, clientId },
         "Client document does not contain userId",
@@ -821,13 +818,13 @@ export async function getLatestWorkoutForUser(
       return { workout: null, error: null }
     }
 
-    const doc = workoutsSnapshot.docs[0]
-    const data = doc.data()
+    const docSnapshot = workoutsSnapshot.docs[0]
+    const data = docSnapshot.data()
     console.log("[workout-service] Raw latest workout data:", data)
 
     // Format the workout data
     const workout: FirebaseWorkout = {
-      id: doc.id,
+      id: docSnapshot.id,
       name: data.name || "N/A",
       notes: data.notes || "",
       startedAt: data.startedAt || "N/A",
@@ -856,7 +853,7 @@ export async function getLatestWorkoutForUser(
         if (exercise.sets && exercise.sets.length > 0) {
           // Find the set with the highest weight
           const maxWeightSet = exercise.sets.reduce(
-            (prev, current) => (current.weight > prev.weight ? current : prev),
+            (prev: WorkoutSet, current: WorkoutSet) => (current.weight > prev.weight ? current : prev),
             exercise.sets[0],
           )
 

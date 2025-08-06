@@ -27,7 +27,7 @@ interface Exercise {
   sets?: ExerciseSet[]
 }
 
-interface PersonalRecord {
+export interface PersonalRecord {
   exercise: string
   weight: string
   reps: string

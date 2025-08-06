@@ -13,7 +13,6 @@ export function middleware(request: NextRequest) {
     /^[A-Za-z0-9_-]+$/.test(pathSegments[1])
 
   const isPublicPath =
-    path === "/" ||
     path === "/login" ||
     path === "/signup" ||
     path === "/signup-juice-app" ||
@@ -46,6 +45,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(`${request.nextUrl.origin}/invite/${inviteCode}`)
   }
 
+  // Handle root path specifically
+  if (path === "/") {
+    if (token && token.trim() !== "") {
+      console.log(`[Middleware] Redirecting from root to overview - authenticated user`)
+      return NextResponse.redirect(new URL("/overview", request.url))
+    } else {
+      console.log(`[Middleware] Redirecting from root to login - unauthenticated user`)
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
+  }
+
   // If the path is not public and there's no valid token, redirect to login
   if (!isPublicPath && (!token || token.trim() === "")) {
     console.log(`[Middleware] Redirecting to login - private path without valid token`)
@@ -62,15 +72,6 @@ export function middleware(request: NextRequest) {
     }
 
     console.log(`[Middleware] Redirecting to overview - auth page with valid token`)
-    return NextResponse.redirect(new URL("/overview", request.url))
-  }
-
-  // Add a new condition to redirect from root path to overview when authenticated
-  // This should be added right after the login/signup redirect block
-
-  // If the path is root (/) and there's a valid token, redirect to overview
-  if (path === "/" && token && token.trim() !== "") {
-    console.log(`[Middleware] Redirecting from root to overview - authenticated user`)
     return NextResponse.redirect(new URL("/overview", request.url))
   }
 
