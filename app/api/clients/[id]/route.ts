@@ -2,9 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/firebase/client-service"
 import { cookies } from "next/headers"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const clientId = params.id
+    const { id: clientId } = await params
     const cookieStore = await cookies()
     // Get trainer ID from header or cookie
     const trainerId = request.headers.get("trainer-id") || cookieStore.get("userId")?.value || ""

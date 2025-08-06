@@ -5,9 +5,9 @@ import { getUserWorkouts } from "@/lib/firebase/workout-service"
 import { ErrorType, createError, logError } from "@/lib/utils/error-handler"
 import { cookies } from "next/headers"
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   try {
-    const clientId = params.id
+    const { id: clientId } = await params
 
     if (!clientId) {
       console.error("API: Missing client ID")

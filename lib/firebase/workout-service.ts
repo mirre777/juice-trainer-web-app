@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { PersonalRecord } from "@/components/client-workout-view"
 
 // Interface for workout data
 export interface Workout {
@@ -37,6 +38,7 @@ export interface WorkoutSet {
   reps: string
   type: string
   weight: number
+  isPersonalRecord?: boolean
 }
 
 export interface WorkoutExercise {
@@ -71,13 +73,7 @@ export interface FirebaseWorkout {
     completed: number
     total: number
   }
-  personalRecords?: {
-    exercise: string
-    weight: string
-    reps: string | number
-    date: string
-    isPR?: boolean
-  }[]
+  personalRecords?: PersonalRecord[]
 }
 
 // Helper function to format Firestore timestamp strings

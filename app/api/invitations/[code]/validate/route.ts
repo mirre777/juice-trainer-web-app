@@ -2,9 +2,9 @@ import { db } from "@/lib/firebase/firebase"
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { NextResponse } from "next/server"
 
-export async function GET(req: Request, { params }: { params: { code: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ code: string }> }) {
   try {
-    const code = params.code
+    const { code } = await params
     console.log(`[Validate Invitation] 🔍 Validating code: ${code}`)
 
     if (!code) {

@@ -13,7 +13,7 @@ interface ExerciseSet {
   number: number
   weight: string
   reps: string
-  isPR?: boolean
+  isPersonalRecord?: boolean
   notes?: string
 }
 
@@ -32,7 +32,7 @@ interface PersonalRecord {
   weight: string
   reps: string
   date: string
-  isPR?: boolean
+  isPersonalRecord?: boolean
 }
 
 interface WorkoutReaction {
