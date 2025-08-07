@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase/firebase"
 import { doc, getDoc } from "firebase/firestore"
-import { getUserWorkouts } from "@/lib/firebase/workout-service"
+import { getLastWorkout } from "@/lib/firebase/workout-service"
 import { ErrorType, createError, logError } from "@/lib/utils/error-handler"
 import { cookies } from "next/headers"
 
@@ -51,7 +51,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 
     // Fetch workouts using the existing service
     console.log("API: Fetching workouts for userId:", userId)
-    const { workouts, error } = await getUserWorkouts(userId)
+    const { workouts, error } = await getLastWorkout(userId)
 
     console.log("API: Fetched workouts:", workouts ? workouts.length : 0, "Error:", error)
 

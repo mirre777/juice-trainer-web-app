@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { Mail, Phone, Edit, FileText, Calendar, Dumbbell, Trophy } from "lucide-react"
 import { useErrorHandler } from "@/hooks/use-error-handler"
 import { getClient, updateClient } from "@/lib/firebase/client-service"
-import { getUserWorkouts, getClientWorkouts } from "@/lib/firebase/workout-service"
+import { getLastWorkout, getClientWorkouts } from "@/lib/firebase/workout-service"
 import LoadingSpinner from "@/components/shared/loading-spinner"
 import { Button } from "@/components/ui/button"
 import { ClientWorkoutView } from "@/components/client-workout-view"
@@ -89,7 +89,7 @@ export default function ClientDetailPage() {
               console.log("🔍 Approach 1: Fetching from users/{userId}/workouts")
               console.log("Path: users/" + client.userId + "/workouts")
 
-              const { workouts: userWorkouts, error: userWorkoutsError } = await getUserWorkouts(client.userId)
+              const { workouts: userWorkouts, error: userWorkoutsError } = await getLastWorkout(client.userId)
               console.log("User workouts result:", {
                 count: userWorkouts?.length || 0,
                 workouts: userWorkouts,

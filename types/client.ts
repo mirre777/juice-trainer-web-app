@@ -2,7 +2,7 @@ export interface Client {
   id: string
   name: string
   initials: string
-  status: "Pending" | "Active" | "Inactive" | "Deleted"
+  status: ClientStatus
   progress: number
   sessions: {
     completed: number
@@ -26,4 +26,11 @@ export interface Client {
   inviteCode: string
   userId: string
   _lastUpdated?: number
+}
+
+export enum ClientStatus {
+  Pending = "Pending",
+  Active = "Active",
+  Inactive = "Inactive",
+  Deleted = "Deleted",
 }

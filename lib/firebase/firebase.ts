@@ -15,11 +15,6 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-console.log("Firebase Config Object:", {
-  ...firebaseConfig,
-  apiKey: firebaseConfig.apiKey ? "SET" : "MISSING",
-})
-
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
 const db = getFirestore(app)

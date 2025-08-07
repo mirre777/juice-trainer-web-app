@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  addDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -14,6 +13,7 @@ import {
 import { db } from "@/lib/firebase/firebase"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 import { PersonalRecord } from "@/components/client-workout-view"
+import { Client } from "@/types/client"
 
 // Interface for workout data
 export interface Workout {
@@ -252,80 +252,6 @@ export async function getWorkout(trainerId: string, clientId: string, workoutId:
   }
 }
 
-// Create a new workout for a client
-export async function createWorkout(
-  trainerId: string,
-  clientId: string,
-  workoutData: Partial<Workout>,
-): Promise<{ success: boolean; workoutId?: string; error?: any }> {
-  try {
-    if (!trainerId || !clientId) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "createWorkout" },
-        "Trainer ID and client ID are required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    // Ensure required fields
-    if (!workoutData.name) {
-      const error = createError(
-        ErrorType.VALIDATION_FAILED,
-        null,
-        { function: "createWorkout" },
-        "Workout name is required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
-    // Create the workout document data
-    const workoutDocData = {
-      ...workoutData,
-      clientId: clientId,
-      trainerId: trainerId,
-      status: workoutData.status || "assigned",
-      completion: workoutData.completion || 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }
-
-    // Create a new workout document
-    const workoutsCollectionRef = collection(db, "users", trainerId, "clients", clientId, "workouts")
-    const [newWorkoutRef, error] = await tryCatch(
-      () => addDoc(workoutsCollectionRef, workoutDocData),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "createWorkout", trainerId, clientId },
-    )
-
-    if (error || !newWorkoutRef) {
-      return { success: false, error }
-    }
-
-    // Update the document with its own ID
-    await updateDoc(newWorkoutRef, {
-      id: newWorkoutRef.id,
-    })
-
-    return {
-      success: true,
-      workoutId: newWorkoutRef.id,
-    }
-  } catch (error) {
-    const appError = createError(
-      ErrorType.UNKNOWN_ERROR,
-      error,
-      { function: "createWorkout", trainerId, clientId },
-      "Unexpected error creating workout",
-    )
-    logError(appError)
-    return { success: false, error: appError }
-  }
-}
-
 // Update a workout
 export async function updateWorkout(
   trainerId: string,
@@ -334,17 +260,6 @@ export async function updateWorkout(
   updates: Partial<Workout>,
 ): Promise<{ success: boolean; error?: any }> {
   try {
-    if (!trainerId || !clientId || !workoutId) {
-      const error = createError(
-        ErrorType.API_MISSING_PARAMS,
-        null,
-        { function: "updateWorkout" },
-        "Trainer ID, client ID, and workout ID are required",
-      )
-      logError(error)
-      return { success: false, error }
-    }
-
     // Remove fields that shouldn't be directly updated
     const { id, createdAt, ...validUpdates } = updates as any
 
@@ -477,8 +392,6 @@ export async function getLatestClientWorkout(trainerId: string, clientId: string
     return null
   }
 }
-
-// Get all workouts for a specific user by first looking up the client document to get the userId
 export async function getUserWorkouts(userId: string): Promise<{ workouts: FirebaseWorkout[]; error: any }> {
   try {
     console.log(`[workout-service] getUserWorkouts called with userId: ${userId}`)
@@ -505,33 +418,12 @@ export async function getUserWorkouts(userId: string): Promise<{ workouts: Fireb
     try {
       // First attempt: Try with simple query without ordering
       console.log("[workout-service] Attempting to fetch workouts without ordering")
-      querySnapshot = await getDocs(workoutsRef)
-      console.log(`[workout-service] Successfully fetched workouts without ordering: ${querySnapshot.docs.length}`)
+      const orderedQuery = query(workoutsRef, orderBy("createdAt", "desc"), limit(10))
+      querySnapshot = await getDocs(orderedQuery)
+      console.log(`[workout-service] Successfully fetched workouts with createdAt ordering: ${querySnapshot.docs.length}`)
     } catch (err: any) {
-      console.error("[workout-service] Error fetching workouts without ordering:", err)
-      console.error("Error details:", {
-        message: err.message,
-        code: err.code,
-        stack: err.stack,
-      })
-
-      try {
-        // Second attempt: Try with ordering by createdAt if it exists
-        console.log("[workout-service] Attempting to fetch workouts with createdAt ordering")
-        const orderedQuery = query(workoutsRef, orderBy("createdAt", "desc"), limit(20))
-        querySnapshot = await getDocs(orderedQuery)
-        console.log(
-          `[workout-service] Successfully fetched workouts with createdAt ordering: ${querySnapshot.docs.length}`,
-        )
-      } catch (orderErr: any) {
-        console.error("[workout-service] Error fetching workouts with createdAt ordering:", orderErr)
-        console.error("Error details:", {
-          message: orderErr.message,
-          code: orderErr.code,
-          stack: orderErr.stack,
-        })
-        queryError = orderErr
-      }
+        console.error("[workout-service] Error fetching workouts with createdAt ordering:", err)
+        queryError = err
     }
 
     if (queryError || !querySnapshot) {
@@ -571,35 +463,6 @@ export async function getUserWorkouts(userId: string): Promise<{ workouts: Fireb
             completed: data.status === "completed" ? 1 : 0,
             total: 1,
           },
-        }
-
-        // Add personal records if any exercise has a significant weight
-        if (data.exercises && data.exercises.length > 0) {
-          const personalRecords = []
-
-          for (const exercise of data.exercises) {
-            if (exercise.sets && exercise.sets.length > 0) {
-              // Find the set with the highest weight
-              const maxWeightSet = exercise.sets.reduce(
-                (prev: WorkoutSet, current: WorkoutSet) => (current.weight > prev.weight ? current : prev),
-                exercise.sets[0],
-              )
-
-              if (maxWeightSet && maxWeightSet.weight > 0) {
-                personalRecords.push({
-                  exercise: exercise.name,
-                  weight: `${maxWeightSet.weight} kg`,
-                  reps: maxWeightSet.reps,
-                  date: formatFirestoreDate(data.completedAt || data.startedAt),
-                  isPR: true, // For demo purposes, we'll mark all as PRs
-                })
-              }
-            }
-          }
-
-          if (personalRecords.length > 0) {
-            workout.personalRecords = personalRecords
-          }
         }
 
         workouts.push(workout)
@@ -758,12 +621,12 @@ export async function getUserWorkoutById(
 // Get the latest workout for a user by first looking up the client document to get the userId
 export async function getLatestWorkoutForUser(
   trainerId: string,
-  clientId: string,
-): Promise<{ workout: FirebaseWorkout | null; error: any }> {
+  client: Client,
+): Promise<{ workout?: FirebaseWorkout | null; error: any }> {
   try {
-    console.log(`[workout-service] getLatestWorkoutForUser called with trainerId: ${trainerId}, clientId: ${clientId}`)
+    console.log(`[workout-service] getLatestWorkoutForUser called with trainerId: ${trainerId}, clientId: ${client.id}, userId: ${client.userId}`)
 
-    if (!trainerId || !clientId) {
+    if (!trainerId || !client.id) {
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
@@ -774,48 +637,17 @@ export async function getLatestWorkoutForUser(
       return { workout: null, error }
     }
 
-    // Step 1: Look up the client document to get the userId
-    const clientRef = doc(db, `users/${trainerId}/clients/${clientId}`)
-    const clientDoc = await getDoc(clientRef)
-
-    if (!clientDoc.exists()) {
-      const error = createError(
-        ErrorType.DB_DOCUMENT_NOT_FOUND,
-        null,
-        { function: "getLatestWorkoutForUser", trainerId, clientId },
-        "Client document not found",
-      )
-      logError(error)
-      return { workout: null, error }
-    }
-
-    const clientData = clientDoc.data() as { userId: string; name: string }
-    const userId = clientData.userId
-
-    if (!userId) {
-      const error = createError(
-        ErrorType.DB_DOCUMENT_NOT_FOUND,
-        null,
-        { function: "getLatestWorkoutForUser", trainerId, clientId },
-        "Client document does not contain userId",
-      )
-      logError(error)
-      return { workout: null, error }
-    }
-
-    console.log(`[workout-service] Found userId: ${userId} for client: ${clientId}`)
-
-    // Step 2: Use the userId to fetch the latest workout from users/{userId}/workouts/
-    const workoutsRef = collection(db, `users/${userId}/workouts`)
-    console.log(`[workout-service] Fetching latest workout from path: users/${userId}/workouts`)
+    // Step 1: Use the userId to fetch the latest workout from users/{userId}/workouts/
+    const workoutsRef = collection(db, `users/${client.userId}/workouts`)
+    console.log(`[workout-service] Fetching latest workout from path: users/${client.userId}/workouts`)
 
     // Query for the latest workout by createdAt
     const q = query(workoutsRef, orderBy("createdAt", "desc"), limit(1))
     const workoutsSnapshot = await getDocs(q)
 
     if (workoutsSnapshot.empty) {
-      console.log(`[workout-service] No workouts found for user: ${userId}`)
-      return { workout: null, error: null }
+      console.log(`[workout-service] No workouts found for user: ${client.userId}`)
+      return { error: null }
     }
 
     const docSnapshot = workoutsSnapshot.docs[0]
@@ -837,7 +669,7 @@ export async function getLatestWorkoutForUser(
       // Derived fields for UI
       day: "N/A",
       focus: data.name || "N/A",
-      clientName: clientData.name || "Client",
+      clientName: client.name || "Client",
       date: formatFirestoreDate(data.startedAt),
       progress: {
         completed: data.status === "completed" ? 1 : 0,
@@ -845,37 +677,9 @@ export async function getLatestWorkoutForUser(
       },
     }
 
-    // Add personal records if any exercise has a significant weight
-    if (data.exercises && data.exercises.length > 0) {
-      const personalRecords = []
-
-      for (const exercise of data.exercises) {
-        if (exercise.sets && exercise.sets.length > 0) {
-          // Find the set with the highest weight
-          const maxWeightSet = exercise.sets.reduce(
-            (prev: WorkoutSet, current: WorkoutSet) => (current.weight > prev.weight ? current : prev),
-            exercise.sets[0],
-          )
-
-          if (maxWeightSet && maxWeightSet.weight > 0) {
-            personalRecords.push({
-              exercise: exercise.name,
-              weight: `${maxWeightSet.weight} kg`,
-              reps: maxWeightSet.reps,
-              date: formatFirestoreDate(data.completedAt || data.startedAt),
-              isPR: true, // For demo purposes, we'll mark all as PRs
-            })
-          }
-        }
-      }
-
-      if (personalRecords.length > 0) {
-        workout.personalRecords = personalRecords
-      }
-    }
-
     return { workout, error: null }
   } catch (error) {
+    console.error("[workout-service] Error fetching latest workout for user:", error)
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,

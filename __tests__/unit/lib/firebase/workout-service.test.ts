@@ -1,8 +1,7 @@
 import {
-  getUserWorkouts,
+  getLatestClientWorkout,
   getUserWorkoutById,
   getLatestWorkoutForUser,
-  createWorkout,
   updateWorkout,
   deleteWorkout,
 } from "@/lib/firebase/workout-service"
@@ -110,7 +109,7 @@ describe("Workout Service", () => {
       mockCollection.mockReturnValue({} as any)
       mockGetDocs.mockResolvedValue(mockSnapshot as any)
 
-      const result = await getUserWorkouts("user-123")
+      const result = await getLastWorkout("user-123")
 
       expect(result.workouts).toHaveLength(1)
       expect(result.workouts[0].id).toBe("workout-1")
@@ -120,7 +119,7 @@ describe("Workout Service", () => {
     })
 
     it("handles empty userId", async () => {
-      const result = await getUserWorkouts("")
+      const result = await getLastWorkout("")
 
       expect(result.workouts).toHaveLength(0)
       expect(result.error).toBeDefined()
@@ -130,7 +129,7 @@ describe("Workout Service", () => {
       mockCollection.mockReturnValue({} as any)
       mockGetDocs.mockRejectedValue(new Error("Firebase error"))
 
-      const result = await getUserWorkouts("user-123")
+      const result = await getLastWorkout("user-123")
 
       expect(result.workouts).toHaveLength(0)
       expect(result.error).toBeDefined()
@@ -161,7 +160,7 @@ describe("Workout Service", () => {
       mockCollection.mockReturnValue({} as any)
       mockGetDocs.mockResolvedValue(mockSnapshot as any)
 
-      const result = await getUserWorkouts("user-123")
+      const result = await getLatestClientWorkout("user-123")
 
       expect(result.workouts[0].focus).toBe("Test Workout")
       expect(result.workouts[0].personalRecords).toBeDefined()

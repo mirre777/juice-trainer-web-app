@@ -13,6 +13,7 @@ import {
   arrayUnion,
   orderBy,
   Timestamp,
+  getCountFromServer,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import type { Client } from "@/types/client"
@@ -186,22 +187,26 @@ export function mapClientData(id: string, data: any): Client | null {
   } as Client
 }
 
-export async function fetchClients(trainerUid: string): Promise<Client[]> {
+export async function getTotalClients(trainerId: string): Promise<number> {
   try {
-    if (!trainerUid) {
-      return []
+    if (!trainerId) {
+      return 0
     }
 
-    const trainerRef = doc(db, "users", trainerUid)
-    const trainerDoc = await getDoc(trainerRef)
+    const clientsCollectionRef = collection(db, "users", trainerId, "clients")
+    const simpleQuery = await getCountFromServer(clientsCollectionRef)
 
-    if (!trainerDoc.exists()) {
-      return []
-    }
+    return simpleQuery.data().count
+  } catch (error) {
+    console.error(`[getTotalClients] Error:`, error)
+    return 0
+  }
+}
 
-    const clientsCollectionRef = collection(db, "users", trainerUid, "clients")
-    const simpleQuery = query(clientsCollectionRef)
-    const simpleSnapshot = await getDocs(simpleQuery)
+export async function fetchClients(trainerId: string): Promise<Client[]> {
+  try {
+    const clientsCollectionRef = collection(db, `users/${trainerId}/clients`)
+    const simpleSnapshot = await getDocs(clientsCollectionRef)
 
     if (simpleSnapshot.size === 0) {
       return []
