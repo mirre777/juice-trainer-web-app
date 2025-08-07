@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react"
-import { getUserWorkouts, getUserWorkoutById, getLatestWorkoutForUser } from "@/lib/firebase/workout-service"
+import { getLastWorkout, getUserWorkoutById, getLatestWorkoutForUser } from "@/lib/firebase/workout-service"
 import { ClientWorkoutView } from "@/components/client-workout-view"
 import "@testing-library/jest-dom"
 import jest from "jest"
@@ -27,7 +27,7 @@ jest.mock("firebase/firestore", () => ({
 // Mock the workout service
 jest.mock("@/lib/firebase/workout-service")
 
-const mockGetUserWorkouts = getUserWorkouts as jest.MockedFunction<typeof getUserWorkouts>
+const mockGetUserWorkouts = getLastWorkout as jest.MockedFunction<typeof getLastWorkout>
 const mockGetUserWorkoutById = getUserWorkoutById as jest.MockedFunction<typeof getUserWorkoutById>
 const mockGetLatestWorkoutForUser = getLatestWorkoutForUser as jest.MockedFunction<typeof getLatestWorkoutForUser>
 
@@ -63,7 +63,7 @@ describe("Workout Data Fetching Integration", () => {
         error: null,
       })
 
-      const result = await getUserWorkouts("user-123")
+      const result = await getLastWorkout("user-123")
 
       expect(result.workouts).toHaveLength(1)
       expect(result.workouts[0].name).toBe("Upper Body Strength")
@@ -78,7 +78,7 @@ describe("Workout Data Fetching Integration", () => {
         error: null,
       })
 
-      const result = await getUserWorkouts("user-123")
+      const result = await getLastWorkout("user-123")
 
       expect(result.workouts).toHaveLength(0)
       expect(result.error).toBeNull()
@@ -92,7 +92,7 @@ describe("Workout Data Fetching Integration", () => {
         error: mockError,
       })
 
-      const result = await getUserWorkouts("user-123")
+      const result = await getLastWorkout("user-123")
 
       expect(result.workouts).toHaveLength(0)
       expect(result.error).toBe(mockError)
@@ -104,7 +104,7 @@ describe("Workout Data Fetching Integration", () => {
         error: expect.any(Object),
       })
 
-      const result = await getUserWorkouts("")
+      const result = await getLastWorkout("")
 
       expect(result.workouts).toHaveLength(0)
       expect(result.error).toBeDefined()

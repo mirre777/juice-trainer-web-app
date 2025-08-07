@@ -1,6 +1,6 @@
 import { getSharedWorkout } from "@/lib/firebase/shared-workout-service"
 import { getUserData } from "@/lib/firebase/user-data-service"
-import { getUserWorkouts } from "@/lib/firebase/workout-service"
+import { getLastWorkout } from "@/lib/firebase/workout-service"
 import { ClientWorkoutView } from "@/components/client-workout-view"
 import { notFound } from "next/navigation"
 
@@ -59,7 +59,7 @@ export default async function SharedWorkoutPage({ params }: SharedWorkoutPagePro
   const [workoutResult, userResult, userWorkoutsResult] = await Promise.all([
     getSharedWorkout(userId, workoutId),
     getUserData(userId),
-    getUserWorkouts(userId),
+    getLastWorkout(userId),
   ])
 
   const { workout, error: workoutError } = workoutResult
