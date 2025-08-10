@@ -203,9 +203,8 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
     () => [
       { name: "Overview", path: "/overview" },
       { name: "Clients", path: "/clients" },
-      { name: "Clients New", path: "/clients-new-design" },
+      // { name: "Clients New", path: "/clients-new-design" },
       { name: "Programs", path: "/import-programs" },
-      // { name: "Finance", path: "/finance" }, // Hidden but still accessible via URL
       { name: "Marketplace", path: "https://www.juice.fitness/marketplace" },
     ],
     [],
