@@ -3,21 +3,21 @@ export interface Client {
   name: string
   initials: string
   status: ClientStatus
-  progress: number
-  sessions: {
-    completed: number
-    total: number
-  }
-  completion: number
-  notes: string
-  bgColor: string
-  textColor: string
-  lastWorkout: {
+  notes?: string
+  lastWorkout?: {
     name: string
     date: string
     completion: number
   }
-  metrics: any[]
+  workoutDays: {
+    monday: boolean,
+    tuesday: boolean,
+    wednesday: boolean,
+    thursday: boolean,
+    friday: boolean,
+    saturday: boolean,
+    sunday: boolean,
+  }
   email: string
   phone: string // Added phone field
   goal: string

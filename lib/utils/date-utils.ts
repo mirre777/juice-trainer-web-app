@@ -2,6 +2,8 @@
  * Utility functions for date handling
  */
 
+import { Timestamp } from "firebase/firestore"
+
 // Get day of week (0 = Monday, 6 = Sunday)
 export function getDayOfWeek(date: Date | string | any): number | null {
   try {
@@ -183,4 +185,48 @@ export function extractDateFromText(text: string): Date | null {
     console.error("Error extracting date from text:", error)
     return null
   }
+}
+
+export function getCurrentWeek(): {
+  startDate: Date;
+  endDate: Date;
+} {
+  const today = new Date();
+  const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+  // Calculate days to subtract to get to Monday
+  // If today is Monday (1), we need to go back 0 days to get Monday
+  // If today is Tuesday (2), we need to go back 1 days to get Monday
+  // If today is Sunday (0), we need to go back 6 days to get Monday
+  const daysToMonday = currentDay === 0 ? 6 : currentDay - 1;
+
+  // Get Monday (start of week)
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - daysToMonday);
+  startDate.setHours(0, 0, 0, 0); // Set to beginning of day
+
+  // Get Sunday (end of week)
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 6);
+  endDate.setHours(23, 59, 59, 999); // Set to end of day
+
+  return {
+    startDate,
+    endDate
+  };
+}
+
+export function convertTimestampsToDates(data: any) {
+  const result = { ...data };
+  Object.keys(data).forEach((key) => {
+    if (data[key] instanceof Timestamp) {
+      try {
+        result[key] = data[key]?.toDate();
+      } catch (error) {
+        console.log("error converting to date", data.id, key, data[key]);
+        throw error;
+      }
+    }
+  });
+  return result;
 }

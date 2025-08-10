@@ -9,11 +9,13 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  where,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
 import { PersonalRecord } from "@/components/client-workout-view"
 import { Client } from "@/types/client"
+import { convertTimestampsToDates, getCurrentWeek } from "@/lib/utils/date-utils"
 
 // Interface for workout data
 export interface Workout {
@@ -52,7 +54,7 @@ export interface FirebaseWorkout {
   name: string
   notes?: string
   startedAt: string
-  completedAt?: string
+  completedAt: Date | null
   createdAt: string
   duration?: number
   status: string
@@ -336,62 +338,47 @@ export async function deleteWorkout(
   }
 }
 
-// Get the latest workout for a client
-export async function getLatestClientWorkout(trainerId: string, clientId: string): Promise<Workout | null> {
+// Get this weeks workouts for a client
+export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorkout[] | null> {
   try {
-    if (!trainerId || !clientId) {
+    if (!userId) {
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
-        { function: "getLatestClientWorkout" },
-        "Trainer ID and client ID are required",
+        { function: "getThisWeeksWorkouts" },
+        "user ID are required",
       )
       logError(error)
       return null
     }
 
-    const workoutsCollectionRef = collection(db, "users", trainerId, "clients", clientId, "workouts")
-    const q = query(workoutsCollectionRef, orderBy("date", "desc"), limit(1))
+    const { startDate, endDate } = getCurrentWeek();
+
+    const workoutsCollectionRef = collection(db, "users", userId, "workouts")
+    const q = query(workoutsCollectionRef, orderBy("createdAt", "desc"), where("createdAt", ">=", startDate), where("createdAt", "<=", endDate))
 
     const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      function: "getLatestClientWorkout",
-      trainerId,
-      clientId,
+      function: "getThisWeeksWorkouts",
+      userId,
     })
 
     if (error || !workoutsSnapshot || workoutsSnapshot.empty) {
-      return null
+      return []
     }
 
-    const docSnapshot = workoutsSnapshot.docs[0]
-    const data = docSnapshot.data()
-
-    return {
-      id: docSnapshot.id,
-      name: data.name || "Unnamed Workout",
-      description: data.description || "",
-      date: data.date || null,
-      exercises: data.exercises || [],
-      clientId: clientId,
-      trainerId: trainerId,
-      status: data.status || "assigned",
-      completion: data.completion || 0,
-      feedback: data.feedback || "",
-      rating: data.rating || 0,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-    }
+    return workoutsSnapshot.docs.map((docSnapshot) => convertTimestampsToDates(docSnapshot.data()) as unknown as FirebaseWorkout)
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "getLatestClientWorkout", trainerId, clientId },
-      "Unexpected error fetching latest client workout",
+      { function: "getThisWeekWorkouts", userId },
+      "Unexpected error fetching this week's workouts",
     )
     logError(appError)
     return null
   }
 }
+
 export async function getUserWorkouts(userId: string): Promise<{ workouts: FirebaseWorkout[]; error: any }> {
   try {
     console.log(`[workout-service] getUserWorkouts called with userId: ${userId}`)

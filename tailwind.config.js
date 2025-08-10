@@ -1,4 +1,29 @@
 /** @type {import('tailwindcss').Config} */
+
+const brandColors = {
+  // Primary brand color and variants
+  white: "#fff", // Pure white
+  ourWhite: "#F9FAFB", // Cool light gray
+  black: "#1C1C1C", // black
+  warmGrey: "#E4DADB", // Light pinkish gray
+  lightGrey: "#F3F4F6", // Light grey
+  midGrey: "#9C9695", // Mid grey
+  ourGrey: "#DEE6EB", // Light grey
+  darkGray: "#474A48", // Dark slate gray
+  salmonBlush: "#FC6C5E", // Bright coral red FF3B30
+  lightGreen: "#DCFCE7", // Light green profile
+  luminousLime: "#D2FF28", // Bright chartreuse
+  forestGreen: "#008000", // Forest green
+  sucessGreen: "#22C55E", // Success green
+  babyBlue: "#6495ED", // Soft cornflower blue
+  lightBlue: "#E8F1FF", // Light blue profile send feedbac
+  lightPurple: "#F3E8FF", // Light purple profile
+  lightOrange: "#FFE8D9", // Light orange profile
+  lightRed: "#FFD8D4", // Light red profile delete account
+  lightYellow: "#FEF9C3", // Light yellow profile
+  transparent: "#00000080",
+}
+
 module.exports = {
   darkMode: ["class"],
   content: [
@@ -39,9 +64,10 @@ module.exports = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        black: "#000000",
-        darkgray: "#555555",
-        lightgray: "#999999",
+        black: brandColors.black,
+        darkgray: brandColors.darkGray,
+        lightgray: brandColors.lightGrey,
+        juiceGreen: brandColors.luminousLime,
         primary: {
           DEFAULT: "#D2FF28",
           foreground: "#000000",
