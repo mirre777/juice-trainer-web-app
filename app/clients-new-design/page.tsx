@@ -5,14 +5,14 @@ import { ClientList } from "@/components/clients-new-design/client-list"
 import { ClientDetails } from "@/components/clients-new-design/client-details/client-details"
 import { ClientPageHeader } from "@/components/clients-new-design/client-page-header"
 import { clientsPageStyles } from "./styles"
-import type { Client } from "@/lib/mock-data/clients"
+import type { Client } from "@/types/client"
 
 
 export default function ClientsPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
 
-  const handleClientSelect = (client: any) => {
+  const handleClientSelect = (client: Client) => {
     setSelectedClient(client)
   }
 

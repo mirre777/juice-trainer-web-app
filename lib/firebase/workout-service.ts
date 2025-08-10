@@ -366,7 +366,8 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
       return []
     }
 
-    return workoutsSnapshot.docs.map((docSnapshot) => convertTimestampsToDates(docSnapshot.data()) as unknown as FirebaseWorkout)
+    return workoutsSnapshot.docs.filter((docSnapshot) => docSnapshot.data().completedAt)
+      .map((docSnapshot) => convertTimestampsToDates(docSnapshot.data()) as unknown as FirebaseWorkout)
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
