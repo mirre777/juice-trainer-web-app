@@ -12,7 +12,6 @@ import Image from "next/image"
 import { FirebaseWorkout, getLatestWorkoutForUser, getUserWorkouts} from "@/lib/firebase/workout-service"
 import { Timestamp } from "firebase/firestore"
 import { ClientStatus } from "@/types/client"
-import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
 
 // We'll fetch real data in production, but have fallbacks
 const defaultRevenue = {
@@ -197,8 +196,6 @@ const OverviewPageClient: React.FC = () => {
               id: client.id,
               name: client.name,
               initials: client.initials,
-              bgColor: client.bgColor,
-              textColor: client.textColor,
               userId: client.userId, // Add this line
             }
 

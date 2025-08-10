@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import { ClientWorkoutView } from "@/components/client-workout-view"
 import "@testing-library/jest-dom"
-import jest from "jest" // Import jest to declare the variable
+import { jest } from "@jest/globals" // Import jest to declare the variable
 
 // Mock the child components
 jest.mock("@/components/shared/personal-records-display", () => ({

@@ -1,3 +1,5 @@
+/// <reference types="jest" />
+
 import {
   getLatestClientWorkout,
   getUserWorkoutById,
@@ -17,7 +19,6 @@ import {
   orderBy,
   limit,
 } from "firebase/firestore"
-import jest from "jest"
 
 // Mock Firebase
 jest.mock("@/lib/firebase/firebase", () => ({
@@ -109,7 +110,7 @@ describe("Workout Service", () => {
       mockCollection.mockReturnValue({} as any)
       mockGetDocs.mockResolvedValue(mockSnapshot as any)
 
-      const result = await getLastWorkout("user-123")
+      const result = await getLatestClientWorkout("user-123", "client-123")
 
       expect(result.workouts).toHaveLength(1)
       expect(result.workouts[0].id).toBe("workout-1")

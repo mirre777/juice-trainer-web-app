@@ -1,9 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase/firebase"
-import { doc, getDoc } from "firebase/firestore"
-import { getLastWorkout } from "@/lib/firebase/workout-service"
+import { getLatestClientWorkout, getThisWeekWorkouts } from "@/lib/firebase/workout-service"
 import { ErrorType, createError, logError } from "@/lib/utils/error-handler"
-import { cookies } from "next/headers"
+import { getTrainerIdFromCookie } from "@/lib/utils/user"
+import { getClient } from "@/lib/firebase/client-service"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   try {
@@ -17,9 +16,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     console.log("API: Fetching workouts for client ID:", clientId)
 
     // Get trainer ID from cookie
-    const cookieStore = await cookies()
-    const userIdCookie = cookieStore.get("user_id")
-    const trainerId = userIdCookie?.value
+    const trainerId = await getTrainerIdFromCookie()
 
     console.log("API: User ID from cookie:", trainerId)
 
@@ -28,43 +25,29 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    // Get the client document to find the userId
-    const clientDocRef = doc(db, `users/${trainerId}/clients/${clientId}`)
-    console.log("API: Looking up client document at path:", `users/${trainerId}/clients/${clientId}`)
+    const client = await getClient(trainerId, clientId)
 
-    const clientDoc = await getDoc(clientDocRef)
-
-    if (!clientDoc.exists()) {
-      console.error("API: Client document not found")
+    if (!client) {
+      console.error("API: Client not found")
       return NextResponse.json({ error: "Client not found" }, { status: 404 })
     }
 
-    const clientData = clientDoc.data()
-    const userId = clientData.userId
-
-    console.log("API: Found client document with userId:", userId)
-
-    if (!userId) {
-      console.log("API: Client has no userId field")
-      return NextResponse.json({ message: "Client has not created an account yet", workouts: [] }, { status: 200 })
-    }
-
     // Fetch workouts using the existing service
-    console.log("API: Fetching workouts for userId:", userId)
-    const { workouts, error } = await getLastWorkout(userId)
+    if (client.userId) {
+      console.log("API: Fetching workouts for userId:", client.userId)
+      const workouts = await getThisWeekWorkouts(client.userId)
 
-    console.log("API: Fetched workouts:", workouts ? workouts.length : 0, "Error:", error)
+      console.log("API: Fetched workouts:", workouts ? workouts.length : 0)
 
-    if (error) {
-      console.error("API: Error fetching workouts:", error)
-      return NextResponse.json({ error: "Failed to fetch workouts" }, { status: 500 })
+      return NextResponse.json({ workouts })
+    } else {
+      console.error("API: Client has no userId")
+      return NextResponse.json({ workouts: [] })
     }
-
-    return NextResponse.json({ workouts })
   } catch (error) {
     console.error("API: Unexpected error:", error)
     const appError = createError(
-      ErrorType.API_ERROR,
+      ErrorType.API_SERVER_ERROR,
       error,
       { function: "GET /api/clients/[id]/workouts" },
       "Unexpected error fetching client workouts",

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import { getLastWorkout, getUserWorkoutById, getLatestWorkoutForUser } from "@/lib/firebase/workout-service"
 import { ClientWorkoutView } from "@/components/client-workout-view"
 import "@testing-library/jest-dom"
-import jest from "jest"
+import { jest } from "@jest/globals"
 
 // Mock Firebase
 jest.mock("@/lib/firebase/firebase", () => ({

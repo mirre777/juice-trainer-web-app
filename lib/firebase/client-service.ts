@@ -1,4 +1,4 @@
-import {
+  import {
   collection,
   doc,
   getDoc,
@@ -14,9 +14,11 @@ import {
   orderBy,
   Timestamp,
   getCountFromServer,
+  DocumentReference,
+  DocumentData,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import type { Client } from "@/types/client"
+import { Client, ClientStatus } from "@/types/client"
 import { getUserById } from "@/lib/firebase/user-service"
 
 function getInitials(name: string): string {
@@ -34,14 +36,14 @@ export function isValidClientData(data: any): boolean {
   return data && typeof data === "object" && typeof data.name === "string" && !data.name.includes("channel?VER=")
 }
 
-export async function getClient(clientId: string, trainerId: string): Promise<Client | null> {
+export async function getClient(trainerId: string, clientId: string): Promise<Client | null> {
   try {
     if (!clientId || !trainerId) {
       console.error("[getClient] Client ID and trainer ID are required")
       return null
     }
 
-    const clientRef = doc(db, "users", trainerId, "clients", clientId)
+    const clientRef = doc(db, `/users/${trainerId}/clients/${clientId}`)
     const clientDoc = await getDoc(clientRef)
 
     if (!clientDoc.exists()) {
@@ -49,6 +51,7 @@ export async function getClient(clientId: string, trainerId: string): Promise<Cl
     }
 
     const clientData = clientDoc.data()
+    console.log(clientData)
     const client = mapClientData(clientId, clientData)
 
     return client
@@ -74,14 +77,7 @@ export async function createClient(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       status: clientData.status || "Pending",
-      progress: clientData.progress || 0,
-      sessions: clientData.sessions || { completed: 0, total: 0 },
-      completion: clientData.completion || 0,
       notes: clientData.notes || "",
-      bgColor: clientData.bgColor || "#f3f4f6",
-      textColor: clientData.textColor || "#111827",
-      lastWorkout: clientData.lastWorkout || { name: "", date: "", completion: 0 },
-      metrics: clientData.metrics || [],
       email: clientData.email || "",
       goal: clientData.goal || "",
       program: clientData.program || "",
@@ -117,10 +113,6 @@ export async function mapClientDataWithUserInfo(id: string, data: any): Promise<
     sessions: data.sessions || { completed: 0, total: 0 },
     completion: data.completion || 0,
     notes: data.notes || "",
-    bgColor: data.bgColor || "#f3f4f6",
-    textColor: data.textColor || "#111827",
-    lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
-    metrics: data.metrics || [],
     email: userData?.email || data.email || "",
     goal: data.goal || "",
     program: data.program || "",
@@ -130,6 +122,7 @@ export async function mapClientDataWithUserInfo(id: string, data: any): Promise<
     phone: userData?.phone || data.phone || "",
     userStatus: userData?.status || "unknown",
     hasLinkedAccount: !!(data.userId && userData),
+    workoutDays: data.workoutDays || { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
     _lastUpdated: Date.now(),
   } as Client
 
@@ -183,6 +176,7 @@ export function mapClientData(id: string, data: any): Client | null {
     inviteCode: data.inviteCode || "",
     userId: data.userId || "",
     phone: data.phone || "",
+    workoutDays: data.workoutDays || { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
     _lastUpdated: Date.now(),
   } as Client
 }
@@ -344,19 +338,28 @@ export async function getClientsByTrainer(trainerId: string): Promise<{ clients:
 }
 
 export async function addClient(
+  trainerId: string,
   clientData: Partial<Client>,
 ): Promise<{ success: boolean; clientId?: string; error?: any }> {
   try {
-    if (!clientData.trainerId) {
+    if (!trainerId) {
       return { success: false, error: "Trainer ID is required" }
     }
 
-    const clientsRef = collection(db, "clients")
+    const clientsRef = collection(db, "users", trainerId, "clients")
     const newClient = {
       ...clientData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      status: clientData.status || "active",
+      status: clientData.status || ClientStatus.Pending,
+      notes: clientData.notes || "",
+      email: clientData.email || "",
+      goal: clientData.goal || "",
+      program: clientData.program || "",
+      phone: clientData.phone || "",
+      inviteCode: clientData.inviteCode || "",
+      userId: clientData.userId || "",
+      workoutDays: clientData.workoutDays || { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
     }
 
     const docRef = await addDoc(clientsRef, newClient)
@@ -437,8 +440,7 @@ export async function getTrainerName(trainerId: string): Promise<string> {
       return ""
     }
 
-    const name = userData.name || userData.firstName || ""
-    return name
+    return userData.name || ""
   } catch (error) {
     console.error("Error getting trainer name:", error)
     return ""
@@ -487,7 +489,7 @@ export async function processInvitation(
           clientData = clientsSnapshot.docs[0].data()
           trainerId = trainerDoc.id
           clientId = clientsSnapshot.docs[0].id
-          clientRef = doc(trainerClientsRef, clientId)
+          clientRef = doc(db, "users", trainerDoc.id, "clients", clientId)
           break
         }
       } catch (trainerError) {
@@ -499,7 +501,7 @@ export async function processInvitation(
       return { success: false, error: new Error("Invitation not found") }
     }
 
-    await updateDoc(clientRef, {
+    await updateDoc(clientRef as DocumentReference<DocumentData, DocumentData>, {
       userId: userId,
       isTemporary: false,
       status: "Active",
@@ -512,7 +514,7 @@ export async function processInvitation(
       updatedAt: serverTimestamp(),
     })
 
-    return { success: true, trainerId, clientId }
+    return { success: true, trainerId: trainerId || "", clientId: clientId || "" }
   } catch (error) {
     return {
       success: false,

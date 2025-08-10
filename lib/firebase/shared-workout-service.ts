@@ -95,7 +95,7 @@ export async function getSharedWorkout(
         if (exercise.sets && exercise.sets.length > 0) {
           // Find the set with the highest weight
           const maxWeightSet = exercise.sets.reduce(
-            (prev, current) => (current.weight > prev.weight ? current : prev),
+            (prev: any, current: any) => (current.weight > prev.weight ? current : prev),
             exercise.sets[0],
           )
 

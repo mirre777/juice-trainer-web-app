@@ -31,11 +31,11 @@ export function useCurrentUser() {
         component: "useCurrentUser",
         operation: "getCurrentUser",
         message: "Failed to get current user",
-        errorType: ErrorType.AUTH_ERROR,
+        errorType: ErrorType.UI_ERROR,
       })
 
       console.error("Error getting current user:", appError)
-      setError(appError)
+      setError(appError as unknown as Error)
     } finally {
       setLoading(false)
     }

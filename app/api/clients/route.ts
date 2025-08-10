@@ -1,23 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
 import { fetchClients } from "@/lib/firebase/client-service"
+import { getTrainerIdFromCookie } from "@/lib/utils/user"
 
 export async function GET(_: NextRequest) {
   console.log("[API /api/clients] === REQUEST RECEIVED ===")
 
   try {
     // Use the SAME authentication method as your existing working routes
-    const cookieStore = await cookies()
-    const userId = cookieStore.get("user_id")?.value
-    const userIdAlt = cookieStore.get("userId")?.value // Fallback for inconsistent naming
-    const trainerId = userId || userIdAlt
+    const trainerId = await getTrainerIdFromCookie()
 
-    console.log("🔍 [API /api/clients] Auth check:", {
-      userId,
-      userIdAlt,
-      trainerId,
-      hasCookies: !!cookieStore,
-    })
+    console.log("🔍 [API /api/clients] Auth check:", trainerId)
 
     if (!trainerId) {
       console.log("❌ [API /api/clients] No trainer ID found in cookies")

@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/firebase/client-service"
 import { cookies } from "next/headers"
+import { Client } from "@/types"
+import { getTrainerIdFromCookie } from "@/lib/utils/user"
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: clientId } = await params
-    const cookieStore = await cookies()
-    // Get trainer ID from header or cookie
-    const trainerId = request.headers.get("trainer-id") || cookieStore.get("userId")?.value || ""
+    const trainerId = await getTrainerIdFromCookie()
 
     console.log("API Route - Trainer ID:", trainerId)
     console.log("API Route - Client ID:", clientId)
