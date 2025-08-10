@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import type { Client } from "@/lib/mock-data/clients"
+import type { Client } from "@/types/client"
 import { clientsPageStyles } from "../../app/clients-new-design/styles"
 
 interface ClientListProps {
@@ -81,8 +81,8 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm }: Clien
                 <div
                   className={clientsPageStyles.clientAvatar}
                   style={{
-                    backgroundColor: selectedClient?.id === client.id ? "#D2FF28" : "white",
-                    color: selectedClient?.id === client.id ? "black" : client.textColor
+                    backgroundColor: selectedClient?.id === client.id ? "#D2FF28" : "#FFFFFF",
+                    color:  "black"
                   }}
                 >
                   {client.initials}
@@ -101,10 +101,7 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm }: Clien
 
                   <div className={clientsPageStyles.clientWorkoutInfo}>
                     <p className={clientsPageStyles.clientWorkoutText}>
-                      {client.workoutsThisWeek > 0
-                        ? `${client.workoutsThisWeek} workout${client.workoutsThisWeek !== 1 ? 's' : ''} this week`
-                        : '—'
-                      }
+                      {client.status}
                     </p>
                   </div>
                 </div>

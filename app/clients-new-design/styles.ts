@@ -49,10 +49,9 @@ export const clientsPageStyles = {
 
   // Client details styles
   detailsContainer: "flex-1",
-  detailsContent: "space-y-6",
+  detailsContent: "space-y-6 bg-white border-b border-gray-200 px-8 py-6 rounded-lg shadow-sm border border-gray-200 p-6",
 
   // Client header card styles
-  clientHeaderCard: "bg-white rounded-lg shadow-sm border border-gray-200 p-6",
   clientHeaderFlex: "flex items-start justify-between",
   clientHeaderInfo: "flex items-center space-x-4",
   clientHeaderAvatar: "w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl",
@@ -78,14 +77,14 @@ export const clientsPageStyles = {
   workoutDaysFlex: "flex space-x-2",
   workoutDayActive: "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-[#D2FF28] text-black",
   workoutDayInactive: "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-gray-200 text-gray-500",
+  workoutDaySelected: "border border-gray-400",
 
   // Grid layout styles
   detailsGrid: "space-y-6",
 
   // Trainer note styles
-  trainerNoteCard: "bg-white rounded-lg shadow-sm border border-gray-200 p-6",
   trainerNoteTitle: "text-lg font-semibold text-gray-900 mb-4",
-  trainerNoteTextarea: "w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-[#D2FF28] focus:border-transparent",
+  trainerNoteTextarea: "w-full h-18 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-[#D2FF28] focus:border-transparent bg-[#F9FAFB]",
 
   // Loading styles
   clientListLoading: "text-center text-gray-500 py-4",
@@ -100,5 +99,36 @@ export const clientsPageStyles = {
   noClientTextContainer: "text-center",
   noClientTitle: "text-xl font-semibold text-gray-900 mb-2",
   noClientSubtitle: "text-gray-600",
+
+  // Workout card styles
+  workoutCard: "space-y-6",
+  workoutCardTitle: "text-2xl font-bold text-gray-900",
+  clientNoteSection: "space-y-2",
+  clientNoteLabel: "text-sm font-medium text-gray-700",
+  clientNoteText: "bg-[#F9FAFB] border border-gray-300 rounded-lg p-3 text-sm text-gray-600",
+  exerciseListSection: "space-y-3",
+  exerciseGrid: "grid grid-cols-3 gap-2",
+  exerciseNotSelected: "bg-gray-100 rounded-full px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors",
+  exerciseSelected: "bg-gray-100 rounded-full px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors border border-gray-400",
+  exerciseNumber: "text-sm font-medium text-gray-900",
+  exerciseName: "text-sm text-gray-700 flex-1 mx-2",
+  setsTextComplete: "text-sm text-gray-600",
+  setsTextIncomplete: "text-sm text-red-600",
+  exerciseDetailSection: "space-y-4",
+  exerciseDetailHeader: "flex items-center justify-between",
+  exerciseDetailTitle: "text-lg font-semibold text-gray-900",
+  viewHistoryLink: "text-sm text-gray-500 hover:text-[#D2FF28] underline",
+  setsSection: "space-y-2",
+  setsTitle: "text-sm font-medium text-gray-700",
+  setsList: "space-y-1",
+  setItem: "flex items-center justify-start",
+  setItemNumber: "text-sm font-medium text-gray-900 w-4 text-center",
+  setItemWeight: "text-sm text-gray-600 pl-4",
+  performanceSection: "space-y-3",
+  performanceTitle: "text-sm font-medium text-gray-700 text-center",
+  performanceGraph: "space-y-2",
+  performanceStats: "flex justify-between items-center",
+  performanceLabel: "text-sm text-gray-600",
+  performanceValue: "text-lg font-bold text-[#D2FF28]",
 
 }

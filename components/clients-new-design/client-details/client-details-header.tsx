@@ -10,6 +10,8 @@ import { useEffect, useState } from "react"
 interface ClientDetailsHeaderProps {
   client: Client
   workouts: FirebaseWorkout[]
+  selectedWorkout: FirebaseWorkout | null
+  handleWorkoutSelect: (workout: FirebaseWorkout | null) => void;
 }
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -19,11 +21,12 @@ export type WeekDay = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Session = {
   date: Date;
   completed: boolean;
+  workout: FirebaseWorkout | null;
 }
 
 export type WeeklySessions = Map<WeekDay, Session>;
 
-export function ClientDetailsHeader({ client, workouts }: ClientDetailsHeaderProps) {
+export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleWorkoutSelect }: ClientDetailsHeaderProps) {
   const [weeklySessions, setWeeklySessions] = useState<WeeklySessions>(new Map());
 
   useEffect(() => {
@@ -42,7 +45,8 @@ export function ClientDetailsHeader({ client, workouts }: ClientDetailsHeaderPro
       date.setDate(startDate.getDate() + i - 1);
       const session: Session = {
         date,
-        completed: false
+        completed: false,
+        workout: null
       };
       weeklySessions.set(i as WeekDay, session);
 
@@ -72,7 +76,8 @@ export function ClientDetailsHeader({ client, workouts }: ClientDetailsHeaderPro
         console.log("weekDay", weekDay)
         const session: Session = {
           date: completedDate,
-          completed: true
+          completed: true,
+          workout: workout
         };
         weeklySessions.set(weekDay, session);
       }
@@ -86,13 +91,17 @@ export function ClientDetailsHeader({ client, workouts }: ClientDetailsHeaderPro
     return isActive ? clientsPageStyles.workoutDayActive : clientsPageStyles.workoutDayInactive
   }
 
+  const getWorkoutSelectedStyle = (workout: FirebaseWorkout | null) => {
+    return selectedWorkout?.id === workout?.id ? clientsPageStyles.workoutDaySelected : ""
+  }
+
   const getDateLabel = (session: Session, weekDay: WeekDay) => {
     // should return the day of the month
     return DAYS[weekDay - 1];
   };
 
   return (
-    <div className={clientsPageStyles.clientHeaderCard}>
+    <div>
       <div className={clientsPageStyles.clientHeaderFlex}>
         <div className={clientsPageStyles.clientHeaderInfo}>
           <div
@@ -125,7 +134,8 @@ export function ClientDetailsHeader({ client, workouts }: ClientDetailsHeaderPro
           {Array.from(weeklySessions.entries()).map(([weekDay, session], index) => (
               <div
                 key={index}
-                className={getWorkoutDayStyle(session.completed)}
+                className={getWorkoutDayStyle(session.completed) + " " + getWorkoutSelectedStyle(session.workout)}
+                onClick={() => handleWorkoutSelect(session.workout)}
               >
                 {getDateLabel(session, weekDay)}
               </div>
