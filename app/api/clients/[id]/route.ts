@@ -28,29 +28,3 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Failed to fetch client" }, { status: 500 })
   }
 }
-
-// Allow to update customer
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const updatedClient = request.body as Partial<Client>
-  const { id: clientId } = await params
-  const cookieStore = await cookies()
-  // Get trainer ID from header or cookie
-  const userId = cookieStore.get("user_id")?.value
-  const userIdAlt = cookieStore.get("userId")?.value // Fallback for inconsistent naming
-  const trainerId = userId || userIdAlt
-  console.log("API Route - Trainer ID:", trainerId)
-  console.log("API Route - Client ID:", clientId)
-
-    if (!trainerId) {
-      return NextResponse.json({ error: "Unauthorized - Trainer ID not found" }, { status: 401 })
-    }
-
-    const client = await getClient(trainerId, clientId)
-
-    if (!client) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 })
-    }
-
-
-
-}
