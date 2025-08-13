@@ -3,12 +3,14 @@
 import { useState, useCallback, useEffect } from "react"
 import { clientsPageStyles } from "../../../app/clients-new-design/styles"
 import { FirebaseWorkout, WorkoutExercise, WorkoutSet } from "@/lib/firebase/workout-service"
+import { OneRMChart } from "./one-rm"
 
 interface WorkoutCardProps {
+  clientId: string,
   workout: FirebaseWorkout | null
 }
 
-export function WorkoutCard({ workout }: WorkoutCardProps) {
+export function WorkoutCard({ clientId, workout }: WorkoutCardProps) {
   const [selectedExercise, setSelectedExercise] = useState<WorkoutExercise | null>(null)
   const [setNumbers, setSetNumbers] = useState<Map<string, string> | null>(null)
 
@@ -16,7 +18,7 @@ export function WorkoutCard({ workout }: WorkoutCardProps) {
     // create a new map of string to string
     const setNumbers = new Map<string, string>()
     let setNumber = 1
-    exercise.sets.forEach((set, index) => {
+    exercise.sets.forEach((set) => {
       if (set.type === "warmup") {
         setNumbers.set(set.id, "W")
       } else {
@@ -105,25 +107,35 @@ export function WorkoutCard({ workout }: WorkoutCardProps) {
       {/* Detailed Exercise View */}
       {selectedExercise && (
         <div className={clientsPageStyles.exerciseDetailSection}>
-          <div className={clientsPageStyles.exerciseDetailHeader}>
-            <h3 className={clientsPageStyles.exerciseDetailTitle}>{selectedExercise.name}</h3>
-            <a href="#" className={clientsPageStyles.viewHistoryLink}>View history</a>
-          </div>
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left side - Exercise name and sets */}
+            <div>
+              <h2 className={clientsPageStyles.exerciseDetailTitle}>{selectedExercise.name}</h2>
 
-          {/* Sets Information */}
-          <div className={clientsPageStyles.setsSection}>
-            <h4 className={clientsPageStyles.setsTitle}>Sets</h4>
-            <div className={clientsPageStyles.setsList}>
-              {selectedExercise.sets.map((set) => (
-                <div key={set.id} className={clientsPageStyles.setItem}>
-                  <div className={clientsPageStyles.setItemNumber}>
-                    {setNumbers?.get(set.id)}
-                  </div>
-                  <div className={clientsPageStyles.setItemWeight}>
-                    {getSetText(set)}
-                  </div>
+              {/* Sets Information */}
+              <div className={clientsPageStyles.setsSection}>
+                <h4 className={clientsPageStyles.setsTitle}>Sets</h4>
+                <div className={clientsPageStyles.setsList}>
+                  {selectedExercise.sets.map((set) => (
+                    <div key={set.id} className={clientsPageStyles.setItem}>
+                      <div className={clientsPageStyles.setItemNumber}>
+                        {setNumbers?.get(set.id)}
+                      </div>
+                      <div className={clientsPageStyles.setItemWeight}>
+                        {getSetText(set)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            </div>
+
+            {/* Right side - View history and chart */}
+            <div>
+              <div className="flex justify-end mb-4">
+                <a href="#" className={clientsPageStyles.viewHistoryLink}>View history</a>
+              </div>
+              <OneRMChart clientId={clientId} exerciseId={selectedExercise.id}/>
             </div>
           </div>
         </div>

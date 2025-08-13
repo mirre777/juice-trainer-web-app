@@ -1,6 +1,6 @@
 import { getSharedWorkout } from "@/lib/firebase/shared-workout-service"
 import { getUserData } from "@/lib/firebase/user-data-service"
-import { getLastWorkout } from "@/lib/firebase/workout-service"
+import { getThisWeekWorkouts } from "@/lib/firebase/workout-service"
 import { ClientWorkoutView } from "@/components/client-workout-view"
 import { notFound } from "next/navigation"
 
@@ -50,21 +50,21 @@ function filterCurrentWeekWorkouts(workouts: any[]) {
   })
 }
 
-export default async function SharedWorkoutPage({ params }: SharedWorkoutPageProps) {
-  const { userId, workoutId } = params
+export default async function SharedWorkoutPage({ params }: { params: Promise<{ userId: string; workoutId: string }> }) {
+  const { userId, workoutId } = await params
 
   console.log(`[SharedWorkoutPage] Loading workout ${workoutId} for user ${userId}`)
 
   // Fetch workout data, user data, and all user workouts for weekly tracker
-  const [workoutResult, userResult, userWorkoutsResult] = await Promise.all([
+  const [workoutResult, userResult, latestWorkoutResult] = await Promise.all([
     getSharedWorkout(userId, workoutId),
     getUserData(userId),
-    getLastWorkout(userId),
+    getThisWeekWorkouts(userId),
   ])
 
   const { workout, error: workoutError } = workoutResult
-  const { user, error: userError } = userResult
-  const { workouts: allUserWorkouts, error: workoutsError } = userWorkoutsResult
+  const { user } = userResult
+  const allUserWorkouts = latestWorkoutResult || []
 
   if (workoutError) {
     console.error("[SharedWorkoutPage] Error loading workout:", workoutError)
@@ -81,6 +81,30 @@ export default async function SharedWorkoutPage({ params }: SharedWorkoutPagePro
 
   // Use actual user name or fallback to "User"
   const userName = user?.name || user?.displayName || workout.clientName || "User"
+
+  // Helper function to convert Firestore timestamp to ISO string
+  const convertTimestampToISO = (timestamp: any): string => {
+    if (!timestamp) return new Date().toISOString()
+
+    try {
+      // Handle Firestore timestamp
+      if (typeof timestamp === "object" && timestamp.seconds) {
+        return new Date(timestamp.seconds * 1000).toISOString()
+      }
+      // Handle regular Date object
+      if (timestamp instanceof Date) {
+        return timestamp.toISOString()
+      }
+      // Handle ISO string
+      if (typeof timestamp === "string") {
+        return new Date(timestamp).toISOString()
+      }
+      return new Date().toISOString()
+    } catch (error) {
+      console.error("Error converting timestamp:", error)
+      return new Date().toISOString()
+    }
+  }
 
   // Format date with weekday
   const formatDateWithWeekday = (dateValue: any) => {
@@ -131,15 +155,10 @@ export default async function SharedWorkoutPage({ params }: SharedWorkoutPagePro
         <div className="h-full">
           <ClientWorkoutView
             client={{
-              id: workout.clientId || userId,
+              id: userId,
               name: userName,
               image: user?.image || workout.clientImage,
               date: workoutDateWithWeekday,
-              // Don't show program tags for shared workouts
-              programWeek: undefined,
-              programTotal: undefined,
-              daysCompleted: undefined,
-              daysTotal: undefined,
               userId: userId,
             }}
             workout={{
@@ -147,10 +166,10 @@ export default async function SharedWorkoutPage({ params }: SharedWorkoutPagePro
               name: workout.name,
               focus: workout.focus,
               clientNote: workout.notes || workout.clientNote,
-              date: workout.createdAt || workout.startedAt || workout.date,
-              completedAt: workout.completedAt,
+              date: convertTimestampToISO(workout.createdAt || workout.startedAt || workout.date),
+              completedAt: convertTimestampToISO(workout.completedAt),
               userId: userId,
-              clientId: workout.clientId,
+              clientId: userId,
             }}
             exercises={workout.exercises || []}
             personalRecords={workout.personalRecords || []}

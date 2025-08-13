@@ -75,7 +75,7 @@ export function ClientDetails({ clientId }: ClientDetailsProps) {
         </div>
 
         {/* Latest Workout Card */}
-        <WorkoutCard workout={selectedWorkout} />
+        <WorkoutCard clientId={client.id} workout={selectedWorkout} />
       </div>
     </div>
     ) : (
