@@ -73,7 +73,7 @@
     "react-dom": "^18",
     "react-hook-form": "latest",
     "react-resizable-panels": "latest",
-    "recharts": "latest",
+    "recharts": "^3.1.0",
     "sonner": "latest",
     "stripe": "latest",
     "tailwind-merge": "^2.5.5",

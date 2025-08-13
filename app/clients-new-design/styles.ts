@@ -131,4 +131,8 @@ export const clientsPageStyles = {
   performanceLabel: "text-sm text-gray-600",
   performanceValue: "text-lg font-bold text-[#D2FF28]",
 
+  // OneRM Chart styles
+  oneRMChartContainer: "w-full h-48 bg-white rounded-lg",
+  oneRMChartTitle: "text-sm font-medium text-gray-700 mb-2",
+
 }

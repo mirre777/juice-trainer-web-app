@@ -8,6 +8,7 @@ import { PersonalRecordsDisplay } from "@/components/shared/personal-records-dis
 import { WeeklyTracker } from "@/components/shared/weekly-tracker"
 import { getDayOfWeek, getDayName } from "@/lib/utils/date-utils"
 import { useToast } from "@/hooks/use-toast"
+import { WorkoutExercise } from "@/lib/firebase/workout-service"
 
 interface ExerciseSet {
   number: number
@@ -75,7 +76,7 @@ interface ClientWorkoutViewProps {
     createdAt?: any // Added createdAt field
     startedAt?: any // Added startedAt field
   }
-  exercises?: Exercise[]
+  exercises?: WorkoutExercise[]
   personalRecords?: PersonalRecord[]
   onEmojiSelect?: (emoji: string) => void
   onComment?: (comment: string) => void
@@ -99,19 +100,12 @@ export function ClientWorkoutView({
   isMockData = false,
   allClientWorkouts = [],
   trainerId,
-  clientId,
   userId,
   weeklyWorkouts = [],
-  showInteractionButtons = true,
   isPublicPage = false,
 }: ClientWorkoutViewProps) {
   // State for selected exercise
   const [selectedExercise, setSelectedExercise] = useState<string>(exercises[0]?.id || "")
-
-  // State for emoji picker and comment input
-  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
-  const [commentInputVisible, setCommentInputVisible] = useState(false)
-  const [comment, setComment] = useState("")
 
   // State for pulsing animation
   const [isPulsing, setIsPulsing] = useState(true)
@@ -121,7 +115,6 @@ export function ClientWorkoutView({
 
   // Refs for overflow detection
   const exercisesContainerRef = useRef<HTMLDivElement>(null)
-  const commentInputRef = useRef<HTMLInputElement>(null)
 
   // States for overflow detection
   const [exercisesOverflow, setExercisesOverflow] = useState(false)

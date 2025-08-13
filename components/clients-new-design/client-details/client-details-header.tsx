@@ -32,7 +32,6 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
   useEffect(() => {
     const fetchWeeklySessions = async () => {
       const weeklySessions = await getWeeklySessions(workouts)
-      console.log("weeklySessions", weeklySessions)
       setWeeklySessions(weeklySessions)
     }
     fetchWeeklySessions()
@@ -55,7 +54,6 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
   }
 
   function getWeekDay(date: Date): WeekDay {
-    console.log("date", date, date instanceof Date)
     if (date && date instanceof Date) {
       return date.getDay() === 0 ? 7 : date.getDay() as WeekDay;
     }
@@ -73,7 +71,6 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
         // Convert string to Date object
         const completedDate = new Date(workout.completedAt);
         const weekDay = getWeekDay(completedDate);
-        console.log("weekDay", weekDay)
         const session: Session = {
           date: completedDate,
           completed: true,
