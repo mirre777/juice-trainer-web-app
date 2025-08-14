@@ -7,10 +7,11 @@ import { OneRMChart } from "./one-rm"
 
 interface WorkoutCardProps {
   clientId: string,
+  userId: string,
   workout: FirebaseWorkout | null
 }
 
-export function WorkoutCard({ clientId, workout }: WorkoutCardProps) {
+export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
   const [selectedExercise, setSelectedExercise] = useState<WorkoutExercise | null>(null)
   const [setNumbers, setSetNumbers] = useState<Map<string, string> | null>(null)
 
@@ -133,7 +134,7 @@ export function WorkoutCard({ clientId, workout }: WorkoutCardProps) {
             {/* Right side - View history and chart */}
             <div>
               <div className="flex justify-end mb-4">
-                <a href="#" className={clientsPageStyles.viewHistoryLink}>View history</a>
+                <a href={`/exercise-history/${userId}/${selectedExercise.id}`} target="_blank" className={clientsPageStyles.viewHistoryLink}>View history</a>
               </div>
               <OneRMChart clientId={clientId} exerciseId={selectedExercise.id}/>
             </div>

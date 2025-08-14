@@ -17,8 +17,8 @@ interface ExerciseData {
 }
 
 // Child component: only rendered when exerciseName is available
-function ClientExerciseHistoryContent({ clientId, exerciseName, exerciseId }: { clientId: string; exerciseName: string; exerciseId: string }) {
-  const { sessions, prs, loading, error } = useExerciseHistory(clientId, exerciseName, exerciseId);
+function ClientExerciseHistoryContent({ userId, exerciseName, exerciseId }: { userId: string; exerciseName: string; exerciseId: string }) {
+  const { sessions, prs, loading, error } = useExerciseHistory(userId, exerciseName, exerciseId);
   const chartData = useMemo(
     () =>
       sessions
@@ -131,7 +131,7 @@ function ClientExerciseHistoryContent({ clientId, exerciseName, exerciseId }: { 
 
 export default function ClientExerciseHistoryPage() {
   const params = useParams();
-  const clientId = params.clientId as string;
+  const userId = params.clientId as string;
   const exerciseId = params.exerciseId as string;
 
   const [exerciseName, setExerciseName] = useState<string | null>(null);
@@ -151,7 +151,7 @@ export default function ClientExerciseHistoryPage() {
         } else {
           // Try user-specific custom exercises
           try {
-            const userExerciseDoc = await getDoc(doc(db, `users/${clientId}/exercises`, exerciseId));
+            const userExerciseDoc = await getDoc(doc(db, `users/${userId}/exercises`, exerciseId));
             if (userExerciseDoc.exists() && userExerciseDoc.data().name) {
               setExerciseName(userExerciseDoc.data().name);
             } else {
@@ -166,7 +166,7 @@ export default function ClientExerciseHistoryPage() {
         setNameError("Failed to fetch exercise name");
       })
       .finally(() => setNameLoading(false));
-  }, [exerciseId, clientId]);
+  }, [exerciseId, userId]);
 
   if (!hasMounted) {
     return null;
@@ -179,5 +179,5 @@ export default function ClientExerciseHistoryPage() {
   }
 
   // Only render the content component when exerciseName is available
-  return <ClientExerciseHistoryContent clientId={clientId} exerciseName={exerciseName} exerciseId={exerciseId} />;
+  return <ClientExerciseHistoryContent userId={userId} exerciseName={exerciseName} exerciseId={exerciseId} />;
 }

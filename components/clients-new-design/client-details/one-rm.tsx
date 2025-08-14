@@ -34,11 +34,6 @@ export function OneRMChart({ clientId, exerciseId }: OneRMChartProps) {
     setData(data)
   }
 
-  const formatTime = (time: Date) => {
-    // display month in short format
-    return time.toLocaleDateString("en-US", { month: "short" })
-  }
-
   return (
     <div className={clientsPageStyles.oneRMChartContainer}>
       <h4 className={clientsPageStyles.oneRMChartTitle}>One Rep Max Progress</h4>
@@ -54,7 +49,7 @@ export function OneRMChart({ clientId, exerciseId }: OneRMChartProps) {
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" scale="time" tickFormatter={(unixTime) => formatTime(new Date(unixTime))} />
+            <XAxis dataKey="time" scale="time" domain={['auto', 'auto']}/>
             <YAxis />
             <Tooltip />
             <Area type="monotone" dataKey="oneRM" stroke="#D2FF28" fill="#D2FF28" fillOpacity={0.25} />
