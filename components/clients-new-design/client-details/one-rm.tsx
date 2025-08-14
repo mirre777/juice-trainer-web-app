@@ -34,11 +34,6 @@ export function OneRMChart({ clientId, exerciseId }: OneRMChartProps) {
     setData(data)
   }
 
-  const formatTime = (time: Date) => {
-    // display month in short format
-    return time.toLocaleDateString("en-US", { month: "short" })
-  }
-
   return (
     <div className={clientsPageStyles.oneRMChartContainer}>
       <h4 className={clientsPageStyles.oneRMChartTitle}>One Rep Max Progress</h4>
