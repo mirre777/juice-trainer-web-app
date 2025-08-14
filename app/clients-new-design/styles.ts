@@ -3,8 +3,8 @@ export const clientsPageStyles = {
   pageContainer: "min-h-screen bg-gray-50",
 
   // Header styles
-  headerContainer: "bg-white border-b border-gray-200 px-8 py-6",
-  headerContent: "max-w-7xl mx-auto",
+  headerContainer: "bg-white border-b border-gray-200 px-4 py-4",
+  headerContent: "max-w-7xl mx-auto px-4",
   headerFlex: "flex items-center justify-between",
   headerTitle: "text-3xl font-bold text-gray-900",
   headerSubtitle: "text-gray-600 mt-1",
@@ -20,18 +20,18 @@ export const clientsPageStyles = {
   addClientIcon: "h-4 w-4",
 
   // Main content styles
-  mainContainer: "max-w-7xl mx-auto px-8 py-8",
+  mainContainer: "max-w-7xl mx-auto pt-4 px-4",
   contentFlex: "flex gap-8",
 
   // Client list styles
-  clientListContainer: "w-80 bg-[#F9FAFB] rounded-lg shadow-sm",
+  clientListContainer: "w-80 bg-[#FFFFFF] rounded-lg shadow-sm border border-gray-200 flex flex-col h-[calc(100vh-200px)]",
   clientListContent: "flex flex-col h-full",
-  clientListScroll: "flex-1 overflow-y-auto",
+  clientListScroll: "flex-1 overflow-y-auto ph-2 space-y-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-gray-400",
 
   // Individual client item styles
   clientItem: "p-4 rounded-lg cursor-pointer transition-colors",
-  clientItemSelected: "p-4 rounded-lg cursor-pointer transition-colors bg-[#FFFFFF] border border-gray-200 border-l-[10px] border-l-[#D2FF28]",
-  clientItemHover: "p-4 rounded-lg cursor-pointer transition-colors hover:bg-[#FFFFFF]/10",
+  clientItemSelected: "p-4 rounded-lg cursor-pointer transition-colors bg-[#F9FAFB] border border-gray-200 border-l-[10px] border-l-[#D2FF28]",
+  clientItemHover: "p-4 rounded-lg cursor-pointer transition-colors hover:bg-[#F9FAFB]/10",
   clientItemFlex: "flex items-center space-x-3",
   clientAvatar: "w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm",
   clientInfo: "flex-1 min-w-0",

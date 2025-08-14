@@ -1,10 +1,8 @@
 import { collection, getDocs, orderBy, query, where } from "firebase/firestore"
 import { ErrorType, createError, logError } from "../utils/error-handler"
 import { db } from "../db"
-import { QueryDocumentSnapshot } from "firebase/firestore"
-import { DocumentData } from "firebase/firestore"
+import { DocumentData, QueryDocumentSnapshot } from "firebase/firestore"
 import { WorkoutSet } from "./workout-service"
-import { convertTimestampsToDates } from "../utils/date-utils"
 
 export type WorkoutExercise = {
   id: string

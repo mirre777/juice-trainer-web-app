@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getClient } from "@/lib/firebase/client-service"
-import { cookies } from "next/headers"
-import { Client } from "@/types"
 import { getTrainerIdFromCookie } from "@/lib/utils/user"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
