@@ -44,12 +44,30 @@ export async function GET() {
       const userData = userDoc.data()
       console.log("✅ User data extracted:", userData)
 
+      // Determine user role with fallback logic
+      let role = userData?.role
+
+      // If no explicit role is set, try to determine it from other fields
+      if (!role) {
+        // Check if user has trainer-specific fields
+        if (userData?.universalInviteCode || userData?.pendingUsers) {
+          role = "trainer"
+          console.log("🔍 [Role Detection] User has trainer fields, setting role to 'trainer'")
+        } else if (userData?.invitationCode && userData?.invitationCode !== "none") {
+          role = "client"
+          console.log("🔍 [Role Detection] User has invitation code, setting role to 'client'")
+        } else {
+          // Default fallback - assume trainer if they have access to trainer features
+          role = "trainer"
+          console.log("🔍 [Role Detection] No clear indicators, defaulting to 'trainer'")
+        }
+      }
+
       const response = {
         uid: userId,
         email: userData?.email || "",
         name: userData?.name || "",
-        // Only include role if it exists in the document
-        ...(userData?.role && { role: userData.role }),
+        role: role, // Always include the determined role
         // Only include user_type if it exists in the document
         ...(userData?.user_type && { user_type: userData.user_type }),
         universalInviteCode: userData?.universalInviteCode || "",
