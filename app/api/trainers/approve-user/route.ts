@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { approveUser } from "@/lib/firebase/user-service"
+import { approveUser, getUserById, rejectUser } from "@/lib/firebase/user-service"
+import { createClient, updateClient } from "@/lib/firebase/client-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,10 +15,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }
 
-    const result = await approveUser(trainerId, userId, action, matchToClientId, createNew)
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 500 })
+    if (action === "approve") {
+      await approveUser(userId, trainerId)
+      if (matchToClientId) {
+        // update client with user id
+        await updateClient(trainerId, matchToClientId, {
+          userId,
+        })
+      } else {
+        // create new client
+        const user = await getUserById(userId)
+        await createClient(trainerId, {
+          name: user?.name || "",
+          email: user?.email || "",
+          userId,
+        })
+        return NextResponse.json({ success: true })
+      }
+    } else if (action === "reject") {
+      await rejectUser(userId, trainerId)
     }
 
     return NextResponse.json({ success: true })

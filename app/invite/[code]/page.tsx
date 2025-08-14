@@ -2,17 +2,18 @@ import type { Metadata } from "next"
 import InviteClientPage from "./InviteClientPage"
 
 interface InvitePageProps {
-  params: {
+  params: Promise<{
     code: string
-  }
-  searchParams: {
+  }>
+  searchParams: Promise<{
     tn?: string
-  }
+  }>
 }
 
 export async function generateMetadata({ params, searchParams }: InvitePageProps): Promise<Metadata> {
-  const trainerName = searchParams.tn ? decodeURIComponent(searchParams.tn) : "your trainer"
-  const code = params.code || "unknown"
+  const { code } = await params
+  const { tn } = await searchParams
+  const trainerName = tn ? decodeURIComponent(tn) : "your trainer"
 
   console.log(`[InvitePage:generateMetadata] Code from params: ${code}`)
 
@@ -22,13 +23,13 @@ export async function generateMetadata({ params, searchParams }: InvitePageProps
   }
 }
 
-export default function InvitePage({ params, searchParams }: InvitePageProps) {
+export default async function InvitePage({ params, searchParams }: InvitePageProps) {
+  // Await params and searchParams
+  const { code } = await params
+  const { tn } = await searchParams
+
   // Log the params to debug
-  console.log(`[InvitePage] Rendering with params:`, JSON.stringify(params))
+  console.log(`[InvitePage] Rendering with code: ${code}, trainerName: ${tn}`)
 
-  // Ensure code is properly passed
-  const code = params.code
-  console.log(`[InvitePage] Code extracted: ${code}`)
-
-  return <InviteClientPage code={code} trainerName={searchParams.tn} />
+  return <InviteClientPage code={code} trainerName={tn} />
 }

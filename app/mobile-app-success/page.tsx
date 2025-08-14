@@ -23,7 +23,7 @@ export default function MobileAppSuccessPage() {
         <CardContent className="space-y-4">
           <div className="text-center">
             <img
-              src="/juice-mobile-app.jpeg"
+              src="/images/juice-mobile-app.jpeg"
               alt="Juice Mobile App"
               className="mx-auto w-32 h-32 object-cover rounded-lg mb-4"
             />

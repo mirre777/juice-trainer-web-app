@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { clientsPageStyles } from "../../../app/clients-new-design/styles"
+import { clientsPageStyles } from "../../../app/clients/styles"
 import { FirebaseWorkout, WorkoutExercise, WorkoutSet } from "@/lib/firebase/workout-service"
 import { OneRMChart } from "./one-rm"
 

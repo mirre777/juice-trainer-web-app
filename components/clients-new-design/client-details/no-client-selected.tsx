@@ -1,6 +1,6 @@
 "use client"
 
-import { clientsPageStyles } from "../../../app/clients-new-design/styles"
+import { clientsPageStyles } from "../../../app/clients/styles"
 import Image from "next/image"
 
 export function NoClientSelected() {

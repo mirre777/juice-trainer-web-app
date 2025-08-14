@@ -2,16 +2,17 @@
 
 import { useEffect, useState } from "react"
 import type { Client } from "@/types/client"
-import { clientsPageStyles } from "../../app/clients-new-design/styles"
+import { clientsPageStyles } from "../../app/clients/styles"
 import { capitalize } from "@/lib/utils"
 
 interface ClientListProps {
   selectedClient: Client | null
   onClientSelect: (client: Client) => void
   searchTerm: string
+  refreshTrigger: number
 }
 
-export function ClientList({ selectedClient, onClientSelect, searchTerm }: ClientListProps) {
+export function ClientList({ selectedClient, onClientSelect, searchTerm, refreshTrigger }: ClientListProps) {
   const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -23,13 +24,16 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm }: Clien
       if (data.success) {
         const clients = data.clients as Client[]
         setClients(clients)
+        if (!selectedClient && clients.length > 0) {
+          onClientSelect(clients[0])
+        }
       } else {
         console.error("❌ [ClientList] Failed to fetch clients")
       }
       setIsLoading(false)
     }
     fetchClients()
-  }, [])
+  }, [refreshTrigger])
 
   const [filteredClients, setFilteredClients] = useState<Client[]>([])
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { clientsPageStyles } from "../../../app/clients-new-design/styles";
+import { clientsPageStyles } from "../../../app/clients/styles";
 import { WorkoutExercise } from '@/lib/firebase/workout-exercise-service';
 import { useState, useEffect } from 'react';
 

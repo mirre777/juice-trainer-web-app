@@ -371,6 +371,7 @@ export async function addClient(
 }
 
 export async function updateClient(
+  trainerId: string,
   clientId: string,
   updates: Partial<Client>,
 ): Promise<{ success: boolean; error?: any }> {
@@ -379,7 +380,7 @@ export async function updateClient(
       return { success: false, error: "Client ID is required" }
     }
 
-    const clientRef = doc(db, "clients", clientId)
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
     const updateData = {
       ...updates,
       updatedAt: serverTimestamp(),
@@ -393,13 +394,13 @@ export async function updateClient(
   }
 }
 
-export async function deleteClient(clientId: string): Promise<{ success: boolean; error?: any }> {
+export async function deleteClient(trainerId: string, clientId: string): Promise<{ success: boolean; error?: any }> {
   try {
-    if (!clientId) {
+    if (!trainerId || !clientId) {
       return { success: false, error: "Client ID is required" }
     }
 
-    const clientRef = doc(db, "clients", clientId)
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
     await deleteDoc(clientRef)
 
     return { success: true }
@@ -408,13 +409,13 @@ export async function deleteClient(clientId: string): Promise<{ success: boolean
   }
 }
 
-export async function getClientById(clientId: string): Promise<{ client: Client | null; error?: any }> {
+export async function getClientById(trainerId: string, clientId: string): Promise<{ client: Client | null; error?: any }> {
   try {
-    if (!clientId) {
+    if (!trainerId || !clientId) {
       return { client: null, error: "Client ID is required" }
     }
 
-    const clientRef = doc(db, "clients", clientId)
+    const clientRef = doc(db, "users", trainerId, "clients", clientId)
     const clientDoc = await getDoc(clientRef)
 
     if (!clientDoc.exists()) {

@@ -208,6 +208,31 @@ export async function approveUser(userId: string, trainerId: string): Promise<{ 
   }
 }
 
+export async function rejectUser(userId: string, trainerId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    await updateUser(userId, {
+      status: "inactive",
+    })
+    const trainerRef = doc(db, "users", trainerId)
+    const trainerDoc = await getDoc(trainerRef)
+
+    if (trainerDoc.exists()) {
+      const trainerData = trainerDoc.data()
+      const pendingUsers = (trainerData.pendingUsers || []).filter((id: string) => id !== userId)
+
+      await updateDoc(trainerRef, {
+        pendingUsers,
+        updatedAt: serverTimestamp(),
+      })
+    }
+
+    return { success: true, message: "User rejected successfully" }
+  } catch (error) {
+    console.error("Error rejecting user:", error)
+    return { success: false, message: "Failed to reject user" }
+  }
+}
+
 export async function getPendingUsers(trainerId: string): Promise<User[]> {
   try {
     const trainerRef = doc(db, "users", trainerId)
