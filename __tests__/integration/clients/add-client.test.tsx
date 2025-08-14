@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
-import ClientsPage from "@/app/clients/page"
+import ClientsPage from "@/app/deprecated-clients/page"
 import { subscribeToClients } from "@/lib/firebase/client-service"
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { useToast } from "@/hooks/use-toast"

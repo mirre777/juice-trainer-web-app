@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { clientsPageStyles } from "../../app/clients-new-design/styles"
+import { clientsPageStyles } from "../../app/clients/styles"
 import { AddClientModal } from "../clients/add-client-modal"
 
 interface ClientPageHeaderProps {

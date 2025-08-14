@@ -1,7 +1,7 @@
 "use client"
 
 import { MoreVertical, Mail, Trash2, Edit } from "lucide-react"
-import { clientsPageStyles } from "../../../app/clients-new-design/styles"
+import { clientsPageStyles } from "../../../app/clients/styles"
 import { FirebaseWorkout } from "@/lib/firebase/workout-service"
 import { Client } from "@/types/client"
 import { getCurrentWeek } from "@/lib/utils/date-utils"

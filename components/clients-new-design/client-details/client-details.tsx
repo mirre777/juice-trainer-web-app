@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Client } from "@/types/client"
-import { clientsPageStyles } from "../../../app/clients-new-design/styles"
+import { clientsPageStyles } from "../../../app/clients/styles"
 import { ClientDetailsHeader } from "./client-details-header"
 import { NoClientSelected } from "./no-client-selected"
 import { WorkoutCard } from "./workout-card"

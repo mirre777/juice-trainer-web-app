@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import type { Client } from "@/types/client"
-import { clientsPageStyles } from "../../app/clients-new-design/styles"
+import { clientsPageStyles } from "../../app/clients/styles"
 import { capitalize } from "@/lib/utils"
 
 interface ClientListProps {
