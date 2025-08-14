@@ -46,9 +46,6 @@ export function useExerciseHistory(userId: string, exerciseName: string, exercis
     const fetchHistoryAndPRs = async () => {
       try {
         // Fetch exercise sessions
-        console.log("fetchHistoryAndPRs: userId", userId)
-        console.log("fetchHistoryAndPRs: exerciseName", exerciseName)
-        console.log("fetchHistoryAndPRs: exerciseId", exerciseId)
         const exercisesRef = collection(db, "users", userId, "workout_exercises")
         const q = query(exercisesRef, orderBy("createdAt", "desc"))
         const snapshot = await getDocs(q)
