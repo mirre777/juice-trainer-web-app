@@ -106,8 +106,8 @@ export async function mapClientDataWithUserInfo(id: string, data: any): Promise<
 
   const mergedData = {
     id: id,
-    name: userData?.name || data.name || "Unnamed Client",
-    initials: getInitials(userData?.name || data.name || "UC"),
+    name: data.name || userData?.name || "Unnamed Client",
+    initials: getInitials(data.name || userData?.name || "UC"),
     status: data.status || "Pending",
     progress: data.progress || 0,
     sessions: data.sessions || { completed: 0, total: 0 },

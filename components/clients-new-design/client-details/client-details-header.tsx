@@ -6,6 +6,7 @@ import { FirebaseWorkout } from "@/lib/firebase/workout-service"
 import { Client } from "@/types/client"
 import { getCurrentWeek } from "@/lib/utils/date-utils"
 import { useEffect, useState } from "react"
+import { capitalize } from "@/lib/utils"
 
 interface ClientDetailsHeaderProps {
   client: Client
@@ -62,22 +63,20 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
 
   async function getWeeklySessions(workouts: FirebaseWorkout[]): Promise<WeeklySessions> {
     // start date monday this week
-    const { startDate, endDate } = getCurrentWeek();
+    const { startDate } = getCurrentWeek();
     // create a map where the key is the date and the value is the boolean if the workout is completed
     const weeklySessions = initializeWeeklySessions(startDate);
     // set the workout completed to true if the workout is completed
     workouts.forEach((workout) => {
-      if (workout.completedAt) {
-        // Convert string to Date object
-        const completedDate = new Date(workout.completedAt);
-        const weekDay = getWeekDay(completedDate);
-        const session: Session = {
-          date: completedDate,
-          completed: true,
-          workout: workout
-        };
-        weeklySessions.set(weekDay, session);
-      }
+      // Convert string to Date object
+      const completedDate = new Date(workout.completedAt ?? workout.startedAt);
+      const weekDay = getWeekDay(completedDate);
+      const session: Session = {
+        date: completedDate,
+        completed: true,
+        workout: workout
+      };
+      weeklySessions.set(weekDay, session);
     });
     console.log("weeklySessions", weeklySessions)
     return weeklySessions;
@@ -113,7 +112,7 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
 
           <div>
             <div className={clientsPageStyles.clientHeaderNameRow}>
-              <h1 className={clientsPageStyles.clientHeaderName}>{client.name}</h1>
+              <h1 className={clientsPageStyles.clientHeaderName}>{capitalize(client.name)}</h1>
               <button className={clientsPageStyles.clientHeaderButton}>
                 <MoreVertical className={clientsPageStyles.clientHeaderIcon} />
               </button>

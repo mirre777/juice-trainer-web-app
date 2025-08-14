@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import type { Client } from "@/types/client"
 import { clientsPageStyles } from "../../app/clients-new-design/styles"
+import { capitalize } from "@/lib/utils"
 
 interface ClientListProps {
   selectedClient: Client | null
@@ -81,7 +82,7 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm }: Clien
                 <div
                   className={clientsPageStyles.clientAvatar}
                   style={{
-                    backgroundColor: selectedClient?.id === client.id ? "#D2FF28" : "#FFFFFF",
+                    backgroundColor: selectedClient?.id === client.id ? "#D2FF28" : "#F9FAFB",
                     color:  "black"
                   }}
                 >
@@ -92,7 +93,7 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm }: Clien
                 <div className={clientsPageStyles.clientInfo}>
                   <div className={clientsPageStyles.clientNameRow}>
                     <h3 className={clientsPageStyles.clientName}>
-                      {client.name}
+                      {capitalize(client.name)}
                     </h3>
                     <span className={getClientStatusStyle(client.status)}>
                       {client.status}

@@ -18,3 +18,9 @@ export function formatDate(date: Date | string | number): string {
     day: "numeric",
   })
 }
+
+export function capitalize(str: string) {
+  if (!str) return ""
+  // capitalize the first letter of each word
+  return str.split(" ").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")
+}

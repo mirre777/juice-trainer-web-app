@@ -39,10 +39,8 @@ export const ClientList: React.FC<ClientListProps> = ({ clients, loading = false
       <EmptyState
         title="No clients found"
         description="Start by adding your first client to begin tracking their progress."
-        actionLabel="Add Client"
-        onAction={() => {
-          /* Handle add client */
-        }}
+        actionText="Add Client"
+        actionLink="/clients"
       />
     )
   }

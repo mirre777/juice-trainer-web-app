@@ -366,7 +366,8 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
       return []
     }
 
-    return workoutsSnapshot.docs.filter((docSnapshot) => docSnapshot.data().completedAt)
+    return workoutsSnapshot.docs
+      .filter((docSnapshot) => docSnapshot.data().deletedAt === null || docSnapshot.data().deletedAt === undefined)
       .map((docSnapshot) => convertTimestampsToDates(docSnapshot.data()) as unknown as FirebaseWorkout)
   } catch (error) {
     const appError = createError(
