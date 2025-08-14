@@ -54,7 +54,7 @@ export function OneRMChart({ clientId, exerciseId }: OneRMChartProps) {
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" scale="time" tickFormatter={(unixTime) => formatTime(new Date(unixTime))} />
+            <XAxis dataKey="time" scale="time" domain={['auto', 'auto']}/>
             <YAxis />
             <Tooltip />
             <Area type="monotone" dataKey="oneRM" stroke="#D2FF28" fill="#D2FF28" fillOpacity={0.25} />
