@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { deleteClient } from "@/lib/firebase/client-service"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/toast-context"
 import { getCookie } from "cookies-next"
 
 interface DeleteClientDialogProps {
@@ -32,10 +32,9 @@ export function DeleteClientDialog({ isOpen, onClose, clientId, clientName, onDe
       const trainerId = getCookie("user_id") as string
 
       if (!trainerId) {
-        toast({
+        toast.error({
           title: "Error",
-          description: "You must be logged in to delete a client",
-          variant: "destructive",
+          message: "You must be logged in to delete a client",
         })
         return
       }
@@ -43,24 +42,22 @@ export function DeleteClientDialog({ isOpen, onClose, clientId, clientName, onDe
       const success = await deleteClient(trainerId, clientId)
 
       if (success) {
-        toast({
+        toast.success({
           title: "Client archived",
-          description: `${clientName} has been archived.`,
+          message: `${clientName} has been archived.`,
         })
         if (onDeleted) onDeleted()
       } else {
-        toast({
+        toast.error({
           title: "Error",
-          description: "Failed to archive client. Please try again.",
-          variant: "destructive",
+          message: "Failed to archive client. Please try again.",
         })
       }
     } catch (error) {
       console.error("Error deleting client:", error)
-      toast({
+      toast.error({
         title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
+        message: "An unexpected error occurred. Please try again.",
       })
     } finally {
       setIsDeleting(false)

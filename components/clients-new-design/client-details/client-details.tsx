@@ -10,9 +10,12 @@ import { FirebaseWorkout } from "@/lib/firebase/workout-service"
 
 interface ClientDetailsProps {
   clientId: string | null
+  trainerInviteCode: string
+  onClientDeleted?: () => void
+  onClientUpdated?: (client: Client) => void
 }
 
-export function ClientDetails({ clientId }: ClientDetailsProps) {
+export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, onClientUpdated }: ClientDetailsProps) {
   const [client, setClient] = useState<Client | null>(null)
   const [workouts, setWorkouts] = useState<FirebaseWorkout[]>([])
   const [selectedWorkout, setSelectedWorkout] = useState<FirebaseWorkout | null>(null)
@@ -60,7 +63,15 @@ export function ClientDetails({ clientId }: ClientDetailsProps) {
     client ? (
     <div className={clientsPageStyles.detailsContent}>
       {/* Client Header */}
-      <ClientDetailsHeader client={client} workouts={workouts} selectedWorkout={selectedWorkout} handleWorkoutSelect={handleWorkoutSelect} />
+      <ClientDetailsHeader
+        client={client}
+        workouts={workouts}
+        selectedWorkout={selectedWorkout}
+        handleWorkoutSelect={handleWorkoutSelect}
+        trainerInviteCode={trainerInviteCode}
+        onClientDeleted={onClientDeleted}
+        onClientUpdated={onClientUpdated}
+      />
 
       <div className={clientsPageStyles.detailsGrid}>
         {/* Trainer Note */}

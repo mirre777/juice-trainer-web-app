@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/toast-context"
 import { getCookie } from "cookies-next"
 import { ClientInvitationDialog } from "./client-invitation-dialog"
 import { DuplicateClientDialog } from "./duplicate-client-dialog"
@@ -237,9 +237,9 @@ export function AddClientModal({
         } else {
           console.log("❌ [ADD CLIENT] No invite code available")
           onClose()
-          toast({
+          toast.success({
             title: "Client Added",
-            description: "Client added successfully! Set up your invite code in Settings to send invitations.",
+            message: "Client added successfully! Set up your invite code in Settings to send invitations.",
           })
         }
 
@@ -253,10 +253,9 @@ export function AddClientModal({
     } catch (error: any) {
       console.error("💥 [ADD CLIENT] Error:", error)
       setErrorMessage(error.message || "Failed to add client")
-      toast({
+      toast.error({
         title: "Error",
-        description: error.message || "Failed to add client",
-        variant: "destructive",
+        message: error.message || "Failed to add client",
       })
     } finally {
       setIsSubmitting(false)

@@ -1,6 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import { clientsPageStyles } from "../../app/clients-new-design/styles"
+import { AddClientModal } from "../clients/add-client-modal"
 
 interface ClientPageHeaderProps {
   searchTerm: string
@@ -8,6 +10,7 @@ interface ClientPageHeaderProps {
 }
 
 export function ClientPageHeader({ searchTerm, onSearchChange }: ClientPageHeaderProps) {
+  const [showAddModal, setShowAddModal] = useState(false)
 
   return (
     <div className={clientsPageStyles.headerContainer}>
@@ -18,7 +21,7 @@ export function ClientPageHeader({ searchTerm, onSearchChange }: ClientPageHeade
             <p className={clientsPageStyles.headerSubtitle}>Manage your clients and track their progress</p>
           </div>
             {/* Add Client Button */}
-            <button className={clientsPageStyles.addClientButton}>
+            <button className={clientsPageStyles.addClientButton} onClick={() => setShowAddModal(true)}>
               <svg className={clientsPageStyles.addClientIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
@@ -42,6 +45,8 @@ export function ClientPageHeader({ searchTerm, onSearchChange }: ClientPageHeade
             </div>
           </div>
       </div>
+        {/* Add Client Modal */}
+        <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
     </div>
   )
 }

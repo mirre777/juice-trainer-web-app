@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Copy, Check, MessageCircle, Mail, Share2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/toast-context"
 
 interface ClientInvitationDialogProps {
   isOpen: boolean
@@ -39,16 +39,15 @@ export function ClientInvitationDialog({
     try {
       await navigator.clipboard.writeText(inviteLink)
       setCopied(true)
-      toast({
+      toast.success({
         title: "Copied!",
-        description: "Invitation link copied to clipboard",
+        message: "Invitation link copied to clipboard",
       })
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
-      toast({
+      toast.error({
         title: "Error",
-        description: "Failed to copy link",
-        variant: "destructive",
+        message: "Failed to copy link",
       })
     }
   }
