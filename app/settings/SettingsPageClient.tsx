@@ -300,28 +300,6 @@ export default function SettingsPageClient() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Contact Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center space-y-4">
-              <p className="text-gray-600">We won't spam you, but you can spam us</p>
-              <Button
-                onClick={() => {
-                  navigator.clipboard.writeText("hello@juice.fitness")
-                  setSaveMessage("Email address copied to clipboard!")
-                  setTimeout(() => setSaveMessage(""), 3000)
-                }}
-                className="bg-black text-white hover:bg-gray-800"
-              >
-                Copy Email Address
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Delete Account Modal */}
