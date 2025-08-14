@@ -1,11 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { approveUser, getUserById, rejectUser } from "@/lib/firebase/user-service"
 import { createClient, updateClient } from "@/lib/firebase/client-service"
+import { ClientStatus } from "@/types/client"
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { trainerId, userId, action, matchToClientId, createNew } = body
+    const { trainerId, userId, action, matchToClientId } = body
 
     if (!trainerId || !userId || !action) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
         // update client with user id
         await updateClient(trainerId, matchToClientId, {
           userId,
+          status: ClientStatus.Active,
         })
       } else {
         // create new client
@@ -28,6 +30,7 @@ export async function POST(request: NextRequest) {
         await createClient(trainerId, {
           name: user?.name || "",
           email: user?.email || "",
+          status: ClientStatus.Active,
           userId,
         })
         return NextResponse.json({ success: true })
