@@ -89,7 +89,7 @@ export function ProtectedRoute({
   return (
     <>
       {children}
-      <FloatingFeedbackButton userId={userId} />
+      {/*<FloatingFeedbackButton userId={userId} />*/}
     </>
   )
 }
