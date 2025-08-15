@@ -13,9 +13,10 @@ interface ClientDetailsProps {
   trainerInviteCode: string
   onClientDeleted?: () => void
   onClientUpdated?: (client: Client) => void
+  refreshTrigger: number
 }
 
-export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, onClientUpdated }: ClientDetailsProps) {
+export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, onClientUpdated, refreshTrigger }: ClientDetailsProps) {
   const [client, setClient] = useState<Client | null>(null)
   const [workouts, setWorkouts] = useState<FirebaseWorkout[]>([])
   const [selectedWorkout, setSelectedWorkout] = useState<FirebaseWorkout | null>(null)
@@ -36,14 +37,14 @@ export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, on
       }
     }
     fetchClientData()
-  }, [clientId])
+  }, [clientId, refreshTrigger])
 
-  const fetchClientInfo = async () => {
+  const fetchClientInfo: () => Promise<Client> = async () => {
     const clientResponse = await fetch(`/api/clients/${clientId}`)
     return await clientResponse.json() as Client
   }
 
-  const fetchWorkouts = async () => {
+  const fetchWorkouts: () => Promise<FirebaseWorkout[]> = async () => {
     const workoutsResponse = await fetch(`/api/clients/${clientId}/workouts`)
     const { workouts: fetchedWorkouts } = await workoutsResponse.json()
     return fetchedWorkouts as FirebaseWorkout[]

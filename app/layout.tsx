@@ -6,6 +6,7 @@ import ClientLayout from "./ClientLayout"
 import { DemoBanner } from "@/components/demo-banner"
 import { ToastProvider } from "@/components/ui/toast-context"
 import "./globals.css"
+import { SkeletonTheme } from "react-loading-skeleton"
 
 // Initialize the Sen font
 const sen = Sen({
@@ -26,10 +27,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${sen.variable} ${inter.variable}`}>
       <body>
-        <ToastProvider>
-          <DemoBanner />
-          <ClientLayout>{children}</ClientLayout>
-        </ToastProvider>
+        <SkeletonTheme baseColor="#202020" highlightColor="#444">
+          <ToastProvider>
+            <DemoBanner />
+            <ClientLayout>{children}</ClientLayout>
+          </ToastProvider>
+        </SkeletonTheme>
       </body>
     </html>
   )

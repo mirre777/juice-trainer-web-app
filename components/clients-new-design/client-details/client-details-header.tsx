@@ -10,6 +10,7 @@ import { capitalize } from "@/lib/utils"
 import { ClientInvitationDialog } from "@/components/clients/client-invitation-dialog"
 import { DeleteClientDialog } from "@/components/clients/delete-client-dialog"
 import { EditClientModal } from "@/components/clients/edit-client-modal"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface ClientDetailsHeaderProps {
   client: Client
@@ -39,14 +40,17 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchWeeklySessions = async () => {
+      setIsLoading(true)
       const weeklySessions = await getWeeklySessions(workouts)
       setWeeklySessions(weeklySessions)
+      setIsLoading(false)
     }
     fetchWeeklySessions()
-  }, [client,workouts])
+  }, [client, workouts])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -133,6 +137,10 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
     return DAYS[weekDay - 1];
   };
 
+  const withSkeleton = (value: string) => {
+    return isLoading ? <Skeleton/> : value
+  }
+
   return (
     <div>
       <div className={clientsPageStyles.clientHeaderFlex}>
@@ -144,7 +152,7 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
               color: "black"
             }}
           >
-            {client.initials}
+            {withSkeleton(client.initials)}
           </div>
 
           <div>
