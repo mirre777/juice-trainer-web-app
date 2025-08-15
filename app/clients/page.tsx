@@ -14,7 +14,7 @@ export default function ClientsPage() {
   const [trainerInviteCode, setTrainerInviteCode] = useState("")
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
-  const handleClientSelect = (client: Client) => {
+  const handleClientSelect = (client: Client | null) => {
     setSelectedClient(client)
   }
 
@@ -86,6 +86,7 @@ export default function ClientsPage() {
               trainerInviteCode={trainerInviteCode}
               onClientDeleted={handleClientDeleted}
               onClientUpdated={handleClientUpdated}
+              refreshTrigger={refreshTrigger}
             />
           </div>
         </div>

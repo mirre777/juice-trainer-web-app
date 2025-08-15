@@ -4,10 +4,11 @@ import { useEffect, useState } from "react"
 import type { Client } from "@/types/client"
 import { clientsPageStyles } from "../../app/clients/styles"
 import { capitalize } from "@/lib/utils"
+import { Skeleton } from "../ui/skeleton"
 
 interface ClientListProps {
   selectedClient: Client | null
-  onClientSelect: (client: Client) => void
+  onClientSelect: (client: Client | null) => void
   searchTerm: string
   refreshTrigger: number
 }
@@ -26,6 +27,8 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm, refresh
         setClients(clients)
         if (!selectedClient && clients.length > 0) {
           onClientSelect(clients[0])
+        } else {
+          onClientSelect(selectedClient)
         }
       } else {
         console.error("❌ [ClientList] Failed to fetch clients")
@@ -67,51 +70,84 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm, refresh
     }
   }
 
+  const clientSkeleton = () => {
+    return (
+      <div className={clientsPageStyles.clientItemHover}>
+        <div className={clientsPageStyles.clientItemFlex}>
+          <Skeleton className={clientsPageStyles.clientAvatar} />
+          <div className={clientsPageStyles.clientInfo}>
+            <div className={clientsPageStyles.clientNameRow}>
+              <h3 className={clientsPageStyles.clientName}>
+                <Skeleton className="w-36 h-4"/>
+              </h3>
+            </div>
+            <div className={clientsPageStyles.clientWorkoutInfo}>
+              <h1 className={clientsPageStyles.clientWorkoutText}>
+                <Skeleton className="w-28 h-4"/>
+              </h1>
+              </div>
+            </div>
+        </div>
+      </div>
+    )
+  }
+
+  const clientItem = (client: Client) => {
+    if (isLoading) return <Skeleton />
+    return (
+      <div
+          key={client.id}
+          onClick={() => onClientSelect(client)}
+          className={getClientItemStyle(selectedClient?.id === client.id)}
+        >
+          <div className={clientsPageStyles.clientItemFlex}>
+            {/* Avatar */}
+            <div
+              className={clientsPageStyles.clientAvatar}
+              style={{
+                backgroundColor: selectedClient?.id === client.id ? "#D2FF28" : "#F9FAFB",
+                color:  "black"
+              }}
+            >
+              {client.initials}
+            </div>
+
+            {/* Client Info */}
+            <div className={clientsPageStyles.clientInfo}>
+              <div className={clientsPageStyles.clientNameRow}>
+                <h3 className={clientsPageStyles.clientName}>
+                  {capitalize(client.name)}
+                </h3>
+                <span className={getClientStatusStyle(client.status)}>
+                  {client.status}
+                </span>
+              </div>
+
+              <div className={clientsPageStyles.clientWorkoutInfo}>
+                <p className={clientsPageStyles.clientWorkoutText}>
+                  {client.status}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+    )
+  }
+
   return (
     <div className={clientsPageStyles.clientListContent}>
       {/* Client List */}
       <div className={clientsPageStyles.clientListScroll}>
         <div>
           {isLoading ? (
-            <div className={clientsPageStyles.clientListLoading}>Loading...</div>
+            Array.from({ length: 10 }, (_, index) => (
+              <div key={index} className={clientsPageStyles.clientItem}>
+                {clientSkeleton()}
+              </div>
+            ))
           ) : (
             filteredClients.map((client) => (
-            <div
-              key={client.id}
-              onClick={() => onClientSelect(client)}
-              className={getClientItemStyle(selectedClient?.id === client.id)}
-            >
-              <div className={clientsPageStyles.clientItemFlex}>
-                {/* Avatar */}
-                <div
-                  className={clientsPageStyles.clientAvatar}
-                  style={{
-                    backgroundColor: selectedClient?.id === client.id ? "#D2FF28" : "#F9FAFB",
-                    color:  "black"
-                  }}
-                >
-                  {client.initials}
-                </div>
-
-                {/* Client Info */}
-                <div className={clientsPageStyles.clientInfo}>
-                  <div className={clientsPageStyles.clientNameRow}>
-                    <h3 className={clientsPageStyles.clientName}>
-                      {capitalize(client.name)}
-                    </h3>
-                    <span className={getClientStatusStyle(client.status)}>
-                      {client.status}
-                    </span>
-                  </div>
-
-                  <div className={clientsPageStyles.clientWorkoutInfo}>
-                    <p className={clientsPageStyles.clientWorkoutText}>
-                      {client.status}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+              clientItem(client)
           )))}
         </div>
       </div>

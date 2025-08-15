@@ -191,6 +191,9 @@ dependencies:
   react-hook-form:
     specifier: latest
     version: 7.61.1(react@18.3.1)
+  react-loading-skeleton:
+    specifier: ^3.5.0
+    version: 3.5.0(react@18.3.1)
   react-resizable-panels:
     specifier: latest
     version: 3.0.3(react-dom@18.3.1)(react@18.3.1)
@@ -6374,6 +6377,14 @@ packages:
 
   /react-is@19.1.0:
     resolution: {integrity: sha512-Oe56aUPnkHyyDxxkvqtd7KkdQP5uIUfHxd5XTb3wE9d/kRnZLmKbDB0GWk919tdQ+mxxPtG6EAs6RMT6i1qtHg==}
+    dev: false
+
+  /react-loading-skeleton@3.5.0(react@18.3.1):
+    resolution: {integrity: sha512-gxxSyLbrEAdXTKgfbpBEFZCO/P153DnqSCQau2+o6lNy1jgMRr2MmRmOzMmyrwSaSYLRB8g7b0waYPmUjz7IhQ==}
+    peerDependencies:
+      react: '>=16.8.0'
+    dependencies:
+      react: 18.3.1
     dev: false
 
   /react-redux@9.2.0(@types/react@18.3.23)(react@18.3.1)(redux@5.0.1):
