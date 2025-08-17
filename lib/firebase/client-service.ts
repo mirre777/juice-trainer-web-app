@@ -524,7 +524,7 @@ export async function processInvitation(
   }
 }
 
-export async function findClientByInvitationCode(
+export async function findClientByInviteCode(
   inviteCode: string,
 ): Promise<{ exists: boolean; trainerId?: string; clientId?: string; status?: string; error?: any }> {
   try {
@@ -648,12 +648,12 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
     const userQuery = query(usersRef, where("inviteCode", "!=", ""))
     const usersSnapshot = await getDocs(userQuery)
 
-    const invitationCodeMap = new Map<string, string>()
+    const inviteCodeMap = new Map<string, string>()
 
     usersSnapshot.forEach((userDoc) => {
       const userData = userDoc.data()
       if (userData.inviteCode) {
-        invitationCodeMap.set(userData.inviteCode, userDoc.id)
+        inviteCodeMap.set(userData.inviteCode, userDoc.id)
       }
     })
 
@@ -662,13 +662,12 @@ export async function linkPendingClientsWithUsers(trainerId: string): Promise<vo
 
     for (const clientDoc of clientsSnapshot.docs) {
       const clientData = clientDoc.data()
-      const clientId = clientDoc.id
 
       if (clientData.userId || !clientData.inviteCode) {
         continue
       }
 
-      const userId = invitationCodeMap.get(clientData.inviteCode)
+      const userId = inviteCodeMap.get(clientData.inviteCode)
 
       if (userId) {
         await updateDoc(clientDoc.ref, {
@@ -718,11 +717,11 @@ export async function getPendingClients(trainerId: string): Promise<Client[]> {
 }
 
 export async function processLoginInvitation(
-  invitationCode: string,
+  inviteCode: string,
   userId: string,
 ): Promise<{ success: boolean; trainerId?: string; error?: any }> {
   try {
-    if (!invitationCode || !userId) {
+    if (!inviteCode || !userId) {
       return {
         success: false,
         error: new Error("Invitation code and user ID are required"),
@@ -730,7 +729,7 @@ export async function processLoginInvitation(
     }
 
     const usersRef = collection(db, "users")
-    const q = query(usersRef, where("universalInviteCode", "==", invitationCode))
+    const q = query(usersRef, where("universalInviteCode", "==", inviteCode))
     const querySnapshot = await getDocs(q)
 
     if (querySnapshot.empty) {
@@ -747,7 +746,7 @@ export async function processLoginInvitation(
     await updateDoc(userRef, {
       status: "pending_approval",
       invitedBy: trainerId,
-      universalInviteCode: invitationCode,
+      universalInviteCode: inviteCode,
       updatedAt: serverTimestamp(),
     })
 

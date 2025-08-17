@@ -6,6 +6,7 @@ import { ClientWorkoutView } from "@/components/client-workout-view"
 import { useState, useEffect } from "react"
 import { getSharedWorkout } from "@/lib/firebase/shared-workout-service"
 import type { FirebaseWorkout } from "@/lib/firebase/workout-service"
+import { config } from "@/lib/config"
 
 export default function SignupPage() {
   const searchParams = useSearchParams()
@@ -15,12 +16,11 @@ export default function SignupPage() {
   const showWorkoutOnMobile = pathname.startsWith("/share/")
 
   // Extract invitation code and trainer name from URL parameters
-  const invitationCode = searchParams.get("code") as string | undefined
+  const inviteCode = searchParams.get(config.inviteCode) as string | undefined
   const trainerName = searchParams.get("tn") as string | undefined
-  const isTrainerSignup = !invitationCode // If no invitation code, assume trainer signup
+  const isTrainerSignup = !inviteCode // If no invitation code, assume trainer signup
 
   const [sharedWorkout, setSharedWorkout] = useState<FirebaseWorkout | null>(null)
-  const [isLoadingSharedWorkout, setIsLoadingSharedWorkout] = useState(false)
 
   useEffect(() => {
     // Check for shared workout in URL path
@@ -28,13 +28,11 @@ export default function SignupPage() {
     if (pathSegments.length === 2 && pathSegments[0] !== "signup") {
       // URL format: /userId/workoutId
       const [userId, workoutId] = pathSegments
-      setIsLoadingSharedWorkout(true)
 
       getSharedWorkout(userId, workoutId).then(({ workout, error }) => {
         if (workout && !error) {
           setSharedWorkout(workout)
         }
-        setIsLoadingSharedWorkout(false)
       })
     }
   }, [pathname])
@@ -54,12 +52,7 @@ export default function SignupPage() {
         className={`w-full ${showWorkoutOnMobile ? "lg:w-1/2" : "lg:w-1/2"} bg-white flex items-center justify-center lg:order-2 ${showWorkoutOnMobile ? "h-1/2 lg:h-full" : "h-full lg:h-full"}`}
       >
         <div className="w-full max-w-md px-6">
-          <AuthForm
-            mode="signup"
-            invitationCode={invitationCode}
-            trainerName={trainerName}
-            isTrainerSignup={isTrainerSignup}
-          />
+          <AuthForm mode="signup" inviteCode={inviteCode} trainerName={trainerName} isTrainerSignup={isTrainerSignup} />
         </div>
       </div>
 
@@ -93,13 +86,14 @@ export default function SignupPage() {
                 weight: exercise.sets?.[0]?.weight ? `${exercise.sets[0].weight} kg` : "0 kg",
                 reps: exercise.sets?.[0]?.reps?.toString() || "0",
                 completed: exercise.sets?.some((set) => set.weight > 0) || false,
-                isPR: exercise.sets?.some((set) => set.isPR) || false,
+                isPR: exercise.sets?.some((set) => set.isPersonalRecord) || false,
+                isPersonalRecord: exercise.sets?.some((set) => set.isPersonalRecord) || false,
                 sets:
                   exercise.sets?.map((set, setIndex) => ({
                     number: setIndex + 1,
                     weight: `${set.weight} kg`,
                     reps: set.reps.toString(),
-                    isPR: set.isPR || false,
+                    isPersonalRecord: set.isPersonalRecord || false,
                   })) || [],
               })) || [
                 // Fallback to mock data
@@ -156,7 +150,7 @@ export default function SignupPage() {
                   weight: "85 kg",
                   reps: "5 reps",
                   date: "April 18, 2025",
-                  isPR: true,
+                  isPersonalRecord: true,
                 },
                 {
                   exercise: "Deadlift",

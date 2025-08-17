@@ -3,35 +3,35 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { setCookie } from "cookies-next"
-import { storeInvitationCode } from "@/lib/firebase/user-service"
+import { storeInviteCode } from "@/lib/firebase/user-service"
+import { config } from "@/lib/config"
 
 interface AuthFormProps {
   mode: "login" | "signup"
-  invitationCode?: string
+  inviteCode?: string
   trainerName?: string
   isTrainerSignup?: boolean
 }
 
-export function AuthForm({ mode, invitationCode = "", trainerName = "", isTrainerSignup = false }: AuthFormProps) {
+export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = false }: AuthFormProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [showInviteInfo, setShowInviteInfo] = useState(!!invitationCode)
+  const [showInviteInfo, setShowInviteInfo] = useState(!!inviteCode)
 
   useEffect(() => {
-    // Update showInviteInfo if invitationCode changes
-    setShowInviteInfo(!!invitationCode)
-  }, [invitationCode])
+    // Update showInviteInfo if inviteCode changes
+    setShowInviteInfo(!!inviteCode)
+  }, [inviteCode])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,7 +40,7 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
 
     try {
       console.log(
-        `[AuthForm] Submitting ${mode} form with invitation code: ${invitationCode}, isTrainerSignup: ${isTrainerSignup}`,
+        `[AuthForm] Submitting ${mode} form with invitation code: ${inviteCode}, isTrainerSignup: ${isTrainerSignup}`,
       )
 
       const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/signup"
@@ -54,7 +54,7 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
           email,
           password,
           name: mode === "signup" ? name : undefined,
-          invitationCode: invitationCode || undefined,
+          inviteCode: inviteCode || undefined,
           isTrainerSignup: mode === "signup" ? isTrainerSignup : undefined,
         }),
       })
@@ -76,9 +76,9 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
         localStorage.setItem("user_id", data.userId)
 
         // If we have an invitation code, store it in the user document
-        if (invitationCode && mode === "signup") {
-          console.log(`[AuthForm] Storing invitation code ${invitationCode} for user ${data.userId}`)
-          await storeInvitationCode(data.userId, invitationCode)
+        if (inviteCode && mode === "signup") {
+          console.log(`[AuthForm] Storing invitation code ${inviteCode} for user ${data.userId}`)
+          await storeInviteCode(data.userId, inviteCode)
         }
       }
 
@@ -92,7 +92,7 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
 
       // Handle different response scenarios
       if (mode === "signup") {
-        if (invitationCode) {
+        if (inviteCode) {
           // If coming from an invitation signup, redirect to the download page
           console.log(`[AuthForm] Redirecting to download page after signup with invitation`)
           window.location.href = "https://juice.fitness/download-juice-app"
@@ -165,7 +165,7 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
         </p>
       </div>
 
-      {showInviteInfo && invitationCode && (
+      {showInviteInfo && inviteCode && (
         <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
           <p className="text-green-800 font-medium text-sm">
             {trainerName ? `You've been invited by ${trainerName}!` : "You've been invited to join Juice!"}
@@ -175,7 +175,7 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
               ? "Log in to connect with your trainer."
               : "Create an account to connect with your trainer."}
           </p>
-          <p className="text-xs text-green-600 mt-2">Invitation code: {invitationCode}</p>
+          <p className="text-xs text-green-600 mt-2">Invitation code: {inviteCode}</p>
         </div>
       )}
 
@@ -240,8 +240,8 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
             Don't have an account?{" "}
             <Link
               href={
-                invitationCode
-                  ? `/signup?code=${invitationCode}${trainerName ? `&tn=${encodeURIComponent(trainerName)}` : ""}`
+                inviteCode
+                  ? `/signup?${config.inviteCode}=${inviteCode}${trainerName ? `&tn=${encodeURIComponent(trainerName)}` : ""}`
                   : "/signup"
               }
               className="text-blue-600 hover:text-blue-800"
@@ -254,8 +254,8 @@ export function AuthForm({ mode, invitationCode = "", trainerName = "", isTraine
             Already have an account?{" "}
             <Link
               href={
-                invitationCode
-                  ? `/login?code=${invitationCode}${trainerName ? `&tn=${encodeURIComponent(trainerName)}` : ""}`
+                inviteCode
+                  ? `/login?${config.inviteCode}=${inviteCode}${trainerName ? `&tn=${encodeURIComponent(trainerName)}` : ""}`
                   : "/login"
               }
               className="text-blue-600 hover:text-blue-800"

@@ -183,14 +183,13 @@ export function handleApiError(
 
 export async function tryCatch<T>(
   operation: () => Promise<T>,
-  errorType: ErrorType,
-  metadata: any = {},
+  errorHandler: (error: any) => AppError,
 ): Promise<[T | null, AppError | null]> {
   try {
     const result = await operation()
     return [result, null]
   } catch (error) {
-    const appError = createError(errorType, error, metadata)
+    const appError = errorHandler(error)
     logError(appError)
     return [null, appError]
   }

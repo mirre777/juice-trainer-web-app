@@ -292,7 +292,6 @@ export function ClientsPageLayout({ isDemo = false }: ClientsPageLayoutProps) {
         isDemo={isDemo}
         loading={loading}
         onClientDeleted={handleClientDeleted}
-        showInviteActions={false}
       />
 
       {/* Add Client Modal */}

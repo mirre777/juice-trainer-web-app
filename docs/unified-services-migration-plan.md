@@ -43,7 +43,7 @@
 - UnifiedClientService implementation ✅
 - Update API routes for auth and clients
 
-### Phase 2: Components (Medium Priority)  
+### Phase 2: Components (Medium Priority)
 - Update auth components
 - Update client components
 - Update hooks
@@ -63,7 +63,7 @@
 
 ### Files importing from lib/firebase/user-service.ts:
 - app/api/auth/me/route.ts (direct Firestore access)
-- components/auth/auth-form.tsx (storeInvitationCode)
+- components/auth/auth-form.tsx (storeInviteCode)
 - lib/firebase/client-service.ts (getUserById)
 
 ### Files importing from lib/auth/auth-service.ts:

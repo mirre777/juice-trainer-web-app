@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { config } from "@/lib/config"
 
 interface InviteClientPageProps {
   code: string
@@ -106,7 +107,7 @@ export default function InviteClientPage({ code, trainerName }: InviteClientPage
 
         // Now redirect to external client app
         console.log("[InviteClientPage] 🔄 Redirecting to external client app")
-        window.location.href = `https://app.juice.fitness/signup?code=${code}${trainerInfo?.name ? `&tn=${encodeURIComponent(trainerInfo.name)}` : ""}`
+        window.location.href = getInviteUrl(code, trainerInfo?.name || "")
       } else {
         console.error("[InviteClientPage] ❌ Error accepting invitation:", data.error)
         setError("Error accepting invitation: " + (data.error || "Unknown error"))
@@ -121,12 +122,18 @@ export default function InviteClientPage({ code, trainerName }: InviteClientPage
 
   const handleExistingAccount = () => {
     console.log("[InviteClientPage] 👤 User has existing account, redirecting to login")
-    window.location.href = `https://app.juice.fitness/login?code=${code}${trainerInfo?.name ? `&tn=${encodeURIComponent(trainerInfo.name)}` : ""}`
+    window.location.href = getInviteUrl(code, trainerInfo?.name || "")
   }
 
   const handleContinueToSignup = () => {
     console.log("[InviteClientPage] 🔄 Continuing to signup with already accepted invitation")
-    window.location.href = `https://app.juice.fitness/signup?code=${code}${trainerInfo?.name ? `&tn=${encodeURIComponent(trainerInfo.name)}` : ""}`
+    window.location.href = getInviteUrl(code, trainerInfo?.name || "")
+  }
+
+  const getInviteUrl = (code: string, trainerName: string) => {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "")
+    const appUrlWithoutTrailingSlash = appUrl.endsWith("/") ? appUrl.slice(0, -1) : appUrl
+    return `${appUrlWithoutTrailingSlash}/signup?${config.inviteCode}=${code}${trainerName ? `&tn=${encodeURIComponent(trainerName)}` : ""}`
   }
 
   if (isValidating) {

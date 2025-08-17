@@ -91,7 +91,7 @@ export class UnifiedAuthService {
   /**
    * Sign in with email and password
    */
-  static async signIn(email: string, password: string, invitationCode?: string): Promise<AuthResult> {
+  static async signIn(email: string, password: string, inviteCode?: string): Promise<AuthResult> {
     try {
       console.log(`[UnifiedAuth] 🚀 Processing login for ${email}`)
 
@@ -112,7 +112,7 @@ export class UnifiedAuthService {
 
       if (!existingUser) {
         console.log(`[UnifiedAuth] ❌ User not found in Firestore: ${email}`)
-        if (invitationCode) {
+        if (inviteCode) {
           return {
             success: false,
             error: createError(
@@ -160,20 +160,20 @@ export class UnifiedAuthService {
       this.setAuthCookies(token, existingUser.uid)
 
       // Process invitation if provided
-      if (invitationCode) {
-        console.log(`[UnifiedAuth] Processing invitation code: ${invitationCode}`)
+      if (inviteCode) {
+        console.log(`[UnifiedAuth] Processing invitation code: ${inviteCode}`)
         // Store invitation code and process it
-        await this.storeInvitationCode(existingUser.uid, invitationCode)
+        await this.storeInviteCode(existingUser.uid, inviteCode)
         // Import and process the invitation
         const { processLoginInvitation } = await import("@/lib/firebase/client-service")
-        await processLoginInvitation(invitationCode, existingUser.uid)
+        await processLoginInvitation(inviteCode, existingUser.uid)
       }
 
       console.log(`[UnifiedAuth] ✅ Login successful for user: ${existingUser.uid}`)
       return {
         success: true,
         user: existingUser,
-        message: invitationCode ? "Login successful! Your request has been sent to the trainer." : "Login successful!",
+        message: inviteCode ? "Login successful! Your request has been sent to the trainer." : "Login successful!",
       }
     } catch (error: any) {
       const appError = createError(
@@ -236,11 +236,11 @@ export class UnifiedAuthService {
   /**
    * Store invitation code for user
    */
-  private static async storeInvitationCode(userId: string, invitationCode: string): Promise<void> {
+  private static async storeInviteCode(userId: string, inviteCode: string): Promise<void> {
     try {
       const userRef = doc(db, "users", userId)
       await updateDoc(userRef, {
-        inviteCode: invitationCode,
+        inviteCode: inviteCode,
         updatedAt: serverTimestamp(),
       })
       console.log(`[UnifiedAuth] ✅ Stored invitation code for user: ${userId}`)
