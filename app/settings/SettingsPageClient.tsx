@@ -200,45 +200,6 @@ export default function SettingsPageClient() {
           </CardContent>
         </Card>
 
-        {/* Notifications Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Notifications</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Email Notifications</h3>
-                  <p className="text-sm text-gray-500">Receive emails about client activity</p>
-                </div>
-                <Switch defaultChecked id="email-notifications" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Push Notifications</h3>
-                  <p className="text-sm text-gray-500">Receive push notifications on your device</p>
-                </div>
-                <Switch defaultChecked id="push-notifications" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">SMS Notifications</h3>
-                  <p className="text-sm text-gray-500">Receive text messages for important updates</p>
-                </div>
-                <Switch id="sms-notifications" />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Marketing Emails</h3>
-                  <p className="text-sm text-gray-500">Receive promotional emails and offers</p>
-                </div>
-                <Switch id="marketing-emails" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Account Actions Section */}
         <Card>
           <CardHeader>

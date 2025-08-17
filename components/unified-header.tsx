@@ -8,61 +8,22 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import {
   User,
   Settings,
-  CheckSquare,
-  Square,
-  Plus,
   X,
   Menu,
   ChevronLeft,
   ChevronRight,
-  Calendar,
   LogOut,
 } from "lucide-react"
-import { LogoutButton } from "@/components/auth/logout-button"
 import { db } from "@/lib/firebase/firebase"
 import { doc, onSnapshot } from "firebase/firestore"
 import { getCookie } from "cookies-next"
 import { LogoutModal } from "@/components/auth/logout-modal"
-
-// Memoize the LogoutButton to prevent re-renders
-const MemoizedLogoutButton = React.memo(LogoutButton)
-
-// Create a global variable to cache the username
-let cachedUserName: string | null = null
 
 // Memoize the main header component
 export const UnifiedHeader = React.memo(function UnifiedHeader() {
   const pathname = usePathname()
   const router = useRouter()
   const [showMobileMenu, setShowMobileMenu] = useState(false)
-  const [showTaskList, setShowTaskList] = useState(() => {
-    // Initialize from localStorage if available
-    if (typeof window !== "undefined") {
-      const savedTaskListState = localStorage.getItem("taskListOpen")
-      return savedTaskListState ? JSON.parse(savedTaskListState) : false
-    }
-    return false
-  })
-  const [darkMode, setDarkMode] = useState(false)
-  const [tasks, setTasks] = useState(() => {
-    // Initialize tasks from localStorage if available
-    if (typeof window !== "undefined") {
-      const savedTasks = localStorage.getItem("tasks")
-      return savedTasks
-        ? JSON.parse(savedTasks)
-        : [
-            { id: 1, text: "Complete client assessment", completed: false },
-            { id: 2, text: "Send invoice to new clients", completed: true },
-            { id: 3, text: "Prepare workout plan", completed: false },
-          ]
-    }
-    return [
-      { id: 1, text: "Complete client assessment", completed: false },
-      { id: 2, text: "Send invoice to new clients", completed: true },
-      { id: 3, text: "Prepare workout plan", completed: false },
-    ]
-  })
-  const [newTask, setNewTask] = useState("")
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [hasMounted, setHasMounted] = useState(false)
 
@@ -77,7 +38,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
     return "" // Only return empty if no cached value exists
   })
 
-  const taskListRef = useRef<HTMLDivElement>(null)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
 
   // Memoize demo mode check
@@ -127,7 +87,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
               }
 
               // Update the cached username
-              cachedUserName = name
               setUserName(name)
 
               // Save to localStorage for faster loading next time
@@ -215,23 +174,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
     [navItems, isActive],
   )
 
-  // Memoize task completion stats
-  const taskStats = useMemo(
-    () => ({
-      completed: tasks.filter((t) => t.completed).length,
-      total: tasks.length,
-    }),
-    [tasks],
-  )
-
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks))
-  }, [tasks])
-
-  useEffect(() => {
-    localStorage.setItem("taskListOpen", JSON.stringify(showTaskList))
-  }, [showTaskList])
-
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
@@ -244,65 +186,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [])
-
-  const toggleDarkMode = useCallback(() => {
-    setDarkMode(!darkMode)
-  }, [darkMode])
-
-  // First, add a function to play the sound when a task is completed
-  const playTaskCompleteSound = useCallback(() => {
-    const audio = new Audio("/sounds/task-complete.wav")
-    audio.volume = 0.5
-
-    // This ensures the sound plays even if the user hasn't interacted with the page
-    const playPromise = audio.play()
-
-    if (playPromise !== undefined) {
-      playPromise.catch((error) => {
-        console.error("Error playing sound:", error)
-      })
-    }
-  }, [])
-
-  // Then update the toggleTaskCompletion function to play the sound when a task is marked as completed
-  const toggleTaskCompletion = useCallback(
-    (id: number) => {
-      const task = tasks.find((t) => t.id === id)
-      const wasCompleted = task?.completed
-
-      setTasks(tasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)))
-
-      // Play sound only when marking as completed, not when unchecking
-      if (!wasCompleted) {
-        playTaskCompleteSound()
-      }
-    },
-    [tasks, playTaskCompleteSound],
-  )
-
-  const addTask = useCallback(() => {
-    if (newTask.trim()) {
-      const newId = Math.max(0, ...tasks.map((t) => t.id)) + 1
-      setTasks([...tasks, { id: newId, text: newTask.trim(), completed: false }])
-      setNewTask("")
-    }
-  }, [newTask, tasks])
-
-  const removeTask = useCallback(
-    (id: number) => {
-      setTasks(tasks.filter((task) => task.id !== id))
-    },
-    [tasks],
-  )
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        addTask()
-      }
-    },
-    [addTask],
-  )
 
   const navigateTo = useCallback(
     (direction: "prev" | "next") => {
@@ -380,76 +263,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
                 >
                   Upgrade
                 </Link>
-
-                {/* Task List icon */}
-                <div className="relative hidden md:block" ref={taskListRef}>
-                  <div
-                    className="w-11 h-11 relative overflow-hidden cursor-pointer hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
-                    onClick={() => {
-                      setShowTaskList(!showTaskList)
-                    }}
-                  >
-                    <CheckSquare className="h-6 w-6" />
-                  </div>
-
-                  {/* Task List Dropdown */}
-                  {showTaskList && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg z-10 border border-gray-200">
-                      <div className="p-4">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-medium text-lg">Tasks</h3>
-                          <div className="text-xs text-gray-500">
-                            {taskStats.completed}/{taskStats.total} completed
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-                          {tasks.map((task) => (
-                            <div key={task.id} className="flex items-center group">
-                              <button onClick={() => toggleTaskCompletion(task.id)} className="flex-shrink-0 mr-2">
-                                {task.completed ? (
-                                  <CheckSquare className="h-5 w-5 text-lime-500" />
-                                ) : (
-                                  <Square className="h-5 w-5 text-gray-400" />
-                                )}
-                              </button>
-                              <span className={`flex-1 text-sm ${task.completed ? "line-through text-gray-400" : ""}`}>
-                                {task.text}
-                              </span>
-                              <button
-                                onClick={() => removeTask(task.id)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="h-4 w-4 text-gray-400 hover:text-red-500" />
-                              </button>
-                            </div>
-                          ))}
-
-                          {tasks.length === 0 && (
-                            <div className="text-center text-sm text-gray-500 py-2">No tasks yet. Add one below!</div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center">
-                          <input
-                            type="text"
-                            placeholder="Add a new task..."
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-lime-300 text-sm"
-                            value={newTask}
-                            onChange={(e) => setNewTask(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                          />
-                          <button
-                            onClick={addTask}
-                            className="px-3 py-2 bg-lime-300 rounded-r-md hover:bg-lime-400 transition-colors"
-                          >
-                            <Plus className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
 
                 {/* Settings dropdown */}
                 <Link

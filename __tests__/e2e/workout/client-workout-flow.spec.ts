@@ -141,7 +141,6 @@ test.describe("Client Workout Data Flow", () => {
     await page.waitForSelector('[data-testid="client-workout-view"]')
 
     // Check personal records section
-    await expect(page.locator("text=Recent Personal Records")).toBeVisible()
     await expect(page.locator("text=Bench Press")).toBeVisible()
     await expect(page.locator("text=80 kg")).toBeVisible()
     await expect(page.locator("text=8")).toBeVisible()

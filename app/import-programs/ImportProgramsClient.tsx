@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
-import { Search, FileSpreadsheet, ChevronRight, X } from "lucide-react"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
+import { Search, FileSpreadsheet, ChevronRight } from "lucide-react"
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { useEffect, useState, useMemo } from "react"
@@ -168,13 +168,7 @@ export default function ImportProgramsClient() {
     return new Set()
   })
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
-  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false) // Moved here
-  const [doNotShowInstructionsAgain, setDoNotShowInstructionsAgain] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("doNotShowInstructionsAgain") === "true"
-    }
-    return false
-  })
+  // Removed showInstructionsDialog and doNotShowInstructionsAgain since instructions are now always visible
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -498,80 +492,112 @@ export default function ImportProgramsClient() {
     completedImports: completedImports.length,
     filteredImports: filteredImports.length,
     activeToastId,
-    showInstructionsDialog, // Added for debugging
+    // Removed showInstructionsDialog, doNotShowInstructionsAgain from debug log
   })
 
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-12">
+      <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Import Section */}
         <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <div className="w-8 h-8 bg-green-600 rounded-sm flex items-center justify-center">
-              <div className="grid grid-cols-3 gap-0.5">
-                {[...Array(9)].map((_, i) => (
-                  <div key={i} className="w-1 h-1 bg-white rounded-sm" />
-                ))}
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center">
+              <div className="w-8 h-8 bg-green-600 rounded-sm flex items-center justify-center">
+                <div className="grid grid-cols-3 gap-0.5">
+                  {[...Array(9)].map((_, i) => (
+                    <div key={i} className="w-1 h-1 bg-white rounded-sm" />
+                  ))}
+                </div>
               </div>
             </div>
+            <h1 className="text-[32px] font-bold text-gray-900 font-sen">Import Your Workout Program</h1>
           </div>
 
-          <h1 className="text-[32px] font-bold text-gray-900 mb-4 font-sen">Import Your Workout Program</h1>
           <p className="text-[18px] text-gray-500 mb-8 font-inter">
             Paste your Google Sheets link. We'll turn it into a structured program for your client.
           </p>
 
-          <div className="max-w-2xl mx-auto mb-6">
-            <label
-              htmlFor="program-name"
-              className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
-            >
-              Program Name <span className="text-red-500">*</span>
-            </label>
-            <Input
-              id="program-name"
-              type="text"
-              placeholder="e.g., My Client's Strength Program"
-              value={programNameInput}
-              onChange={(e) => setProgramNameInput(e.target.value)}
-              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400 mb-4"
-              required
-            />
+          {/* Two-column layout: Form on left, Instructions on right */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-6">
+            {/* Left Column - Form (60%) */}
+            <div className="lg:col-span-3 space-y-4">
+              <label
+                htmlFor="program-name"
+                className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
+              >
+                Program Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="program-name"
+                type="text"
+                placeholder="e.g., My Client's Strength Program"
+                value={programNameInput}
+                onChange={(e) => setProgramNameInput(e.target.value)}
+                className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
+                required
+              />
 
-            <label
-              htmlFor="google-sheets-link"
-              className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
-            >
-              Google Sheets Link <span className="text-red-500">*</span>
-            </label>
-            <Input
-              id="google-sheets-link"
-              type="url"
-              placeholder="https://docs.google.com/spreadsheets/d/..."
-              value={googleSheetsLink}
-              onChange={(e) => setGoogleSheetsLink(e.target.value)}
-              className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
-              required
-              onFocus={() => {
-                if (!doNotShowInstructionsAgain) {
-                  setShowInstructionsDialog(true)
-                }
-              }}
-            />
-          </div>
+              <label
+                htmlFor="google-sheets-link"
+                className="block text-left text-[14px] font-medium text-gray-700 mb-2 font-inter"
+              >
+                Google Sheets Link <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="google-sheets-link"
+                type="url"
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                value={googleSheetsLink}
+                onChange={(e) => setGoogleSheetsLink(e.target.value)}
+                className="w-full h-12 text-[14px] font-inter border-2 rounded-lg placeholder-gray-400"
+                required
+              />
 
-          <div className="flex items-center justify-end gap-4 max-w-2xl mx-auto mb-8">
-            <p className="text-[14px] font-inter text-right text-gray-500 max-w-[160px]">
-              You can still review and edit it before you send it to your clients in the Juice mobile app.
-            </p>
-            <Button
-              onClick={handleConvert}
-              disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
-              className="w-fit px-8 h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isProcessing ? "Processing..." : "Convert"}
-            </Button>
+              <div className="flex items-center justify-end gap-4 pt-4">
+                <p className="text-[14px] font-inter text-right text-gray-500">
+                  You can still review and edit it before you send it to your clients.
+                </p>
+                <Button
+                  onClick={handleConvert}
+                  disabled={isProcessing || !googleSheetsLink.trim() || !programNameInput.trim()}
+                  className="w-fit px-8 h-12 bg-primary hover:bg-primary/90 text-gray-700 font-medium text-[14px] font-sen rounded-lg border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? "Processing..." : "Convert"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Right Column - Instructions (40%) */}
+            <div className="lg:col-span-2 bg-gray-50 rounded-lg p-6 border border-gray-200">
+              <div className="flex items-center mb-4">
+                <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
+                  <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
+                </div>
+                <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
+              </div>
+              <ol className="space-y-4 text-[14px] text-gray-700">
+                <li className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">1.</span>
+                  <span>Open your workout program in Google Sheets.</span>
+                </li>
+                <li className="flex flex-col items-start">
+                  <div className="flex items-start">
+                    <span className="font-medium text-blue-600 mr-2">2.</span>
+                    <span>Click "Share" → "Anyone with the link can view".</span>
+                  </div>
+                  <img
+                    src="/images/google-sheets-share-dialog.png"
+                    alt="Google Sheets Share Dialog"
+                    className="mt-3 rounded-md border shadow-sm max-w-[200px] h-auto object-contain"
+                  />
+                </li>
+                <li className="flex items-start">
+                  <span className="font-medium text-blue-600 mr-2">3.</span>
+                  <span>Paste the link into the field above.</span>
+                </li>
+              </ol>
+            </div>
           </div>
 
           {/* Previously Imported Programs */}
@@ -630,15 +656,15 @@ export default function ImportProgramsClient() {
                                 <span className="text-[12px] text-gray-500 font-inter">{dayName}</span>
                                 <span className="text-[12px] text-gray-400 font-inter">•</span>
                                 <span className="text-[12px] text-gray-500 font-inter">{date}</span>
+                                  <Badge
+                                    variant={statusInfo.variant}
+                                    className={`text-[12px] font-normal font-inter ${statusInfo.className}`}
+                                  >
+                                    {statusInfo.text}
+                                  </Badge>
                               </div>
                             )}
                           </div>
-                          <Badge
-                            variant={statusInfo.variant}
-                            className={`text-[12px] font-normal font-inter ${statusInfo.className}`}
-                          >
-                            {statusInfo.text}
-                          </Badge>
                         </div>
 
                         <Button
@@ -646,7 +672,7 @@ export default function ImportProgramsClient() {
                           disabled={!isEditable}
                           className="bg-black hover:bg-gray-800 text-white font-normal text-[14px] font-sen px-4 py-2 h-8 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                         >
-                          {isReviewed ? "Edit" : "Review"}
+                          {isReviewed ? "Edit" : "Pending Approval"}
                           <ChevronRight className="w-4 h-4" />
                         </Button>
                       </div>
@@ -661,6 +687,9 @@ export default function ImportProgramsClient() {
         {/* Processing Modal */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="sm:max-w-md font-sen">
+            <DialogTitle className="text-[24px] font-bold mb-4 text-gray-900">
+              {isProcessing ? "Processing Your Workout Program" : "You are using the new version of our Import AI"}
+            </DialogTitle>
             <div className="text-center p-6">
               <div className="w-16 h-16 bg-lime-100 rounded-full mx-auto mb-4 flex items-center justify-center">
                 {isProcessing ? (
@@ -694,10 +723,6 @@ export default function ImportProgramsClient() {
                   </div>
                 )}
               </div>
-
-              <h3 className="text-[24px] font-bold mb-4 text-gray-900">
-                {isProcessing ? "Processing Your Workout Program" : "You are using the new version of our Import AI"}
-              </h3>
 
               <p className="text-[14px] text-gray-500 mb-6 leading-relaxed">
                 {isProcessing ? (
@@ -734,69 +759,7 @@ export default function ImportProgramsClient() {
           </DialogContent>
         </Dialog>
 
-        {/* Instructions Dialog - Moved here */}
-        <Dialog open={showInstructionsDialog} onOpenChange={setShowInstructionsDialog}>
-          <DialogContent className="sm:max-w-lg font-inter">
-            <DialogClose asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </Button>
-            </DialogClose>
-            <div className="p-4">
-              <div className="flex items-center mb-4">
-                <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center mr-3 flex-shrink-0">
-                  <div className="w-3 h-3 bg-amber-600 rounded-sm"></div>
-                </div>
-                <h3 className="font-semibold text-gray-900 text-[16px]">How to get your Google Sheets link:</h3>
-              </div>
-              <ol className="space-y-4 text-[14px] text-gray-700">
-                <li className="flex items-start">
-                  <span className="font-medium text-blue-600 mr-2">1.</span>
-                  <span>Open your workout program in Google Sheets.</span>
-                </li>
-                <li className="flex flex-col items-start">
-                  <div className="flex items-start">
-                    <span className="font-medium text-blue-600 mr-2">2.</span>
-                    <span>Click "Share" → "Anyone with the link can view".</span>
-                  </div>
-                  <img
-                    src="/images/google-sheets-share-dialog.png"
-                    alt="Google Sheets Share Dialog"
-                    className="mt-3 rounded-md border shadow-sm max-w-full h-auto"
-                  />
-                </li>
-                <li className="flex items-start">
-                  <span className="font-medium text-blue-600 mr-2">3.</span>
-                  <span>Paste the link into the field above.</span>
-                </li>
-              </ol>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  localStorage.setItem("doNotShowInstructionsAgain", "true")
-                  setDoNotShowInstructionsAgain(true)
-                  setShowInstructionsDialog(false)
-                }}
-                className="text-[14px] font-inter"
-              >
-                Don't show me again
-              </Button>
-              <Button
-                onClick={() => setShowInstructionsDialog(false)}
-                className="bg-black hover:bg-gray-800 text-white text-[14px] font-inter"
-              >
-                Ok Thanks
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Instructions are now always visible on the right side of the form */}
       </div>
     </div>
   )

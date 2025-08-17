@@ -1,13 +1,11 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight, Trophy, Activity } from "lucide-react"
-import { PersonalRecordsDisplay } from "@/components/shared/personal-records-display"
+import { Trophy, Activity } from "lucide-react"
 import { WeeklyTracker } from "@/components/shared/weekly-tracker"
 import { getDayOfWeek, getDayName } from "@/lib/utils/date-utils"
-import { useToast } from "@/hooks/use-toast"
 import { WorkoutExercise } from "@/lib/firebase/workout-service"
 
 interface ExerciseSet {
@@ -94,9 +92,6 @@ export function ClientWorkoutView({
   client,
   workout,
   exercises = [],
-  personalRecords,
-  onEmojiSelect,
-  onComment,
   isMockData = false,
   allClientWorkouts = [],
   trainerId,
@@ -107,37 +102,7 @@ export function ClientWorkoutView({
   // State for selected exercise
   const [selectedExercise, setSelectedExercise] = useState<string>(exercises[0]?.id || "")
 
-  // State for pulsing animation
-  const [isPulsing, setIsPulsing] = useState(true)
-
-  // State for real-time workout completion status
-  const [isWorkoutCompleted, setIsWorkoutCompleted] = useState(!!workout?.completedAt)
-
-  // Refs for overflow detection
-  const exercisesContainerRef = useRef<HTMLDivElement>(null)
-
-  // States for overflow detection
-  const [exercisesOverflow, setExercisesOverflow] = useState(false)
-
-  // States for scroll position
-  const [showLeftExerciseArrow, setShowLeftExerciseArrow] = useState(false)
-  const [showRightExerciseArrow, setShowRightExerciseArrow] = useState(true)
-
-  // Toast for notifications
-  const { toast } = useToast()
-
-  // Debug logging for props
-  useEffect(() => {
-    console.log("[ClientWorkoutView] Component mounted with props:", {
-      clientId: client?.id,
-      workoutId: workout?.id,
-      userId,
-      trainerId,
-      isMockData,
-      hasWorkoutId: !!workout?.id,
-      workoutKeys: Object.keys(workout || {}),
-    })
-  }, [client, workout, userId, trainerId, isMockData])
+  const isWorkoutCompleted = workout?.completedAt ? true : false
 
   // Format workout date from createdAt or startedAt
   const formatWorkoutDate = (workout: any) => {
@@ -209,7 +174,6 @@ export function ClientWorkoutView({
 
   // Get workout day information from the actual date
   const workoutDayOfWeek = workout?.date ? getDayOfWeek(workout.date) : null
-  const workoutDayName = workoutDayOfWeek !== null ? getDayName(workoutDayOfWeek) : null
 
   // Calculate active days based on weekly workouts
   const getActiveDaysFromWeeklyWorkouts = () => {
@@ -257,16 +221,16 @@ export function ClientWorkoutView({
   const isHappeningNow = !workout.completedAt && !isWorkoutCompleted && !isMockData
 
   // Function to find highest weight set from an exercise
-  const findHighestWeightSet = (exercise: Exercise) => {
+  const findHighestWeightSet = (exercise: WorkoutExercise) => {
     if (!exercise?.sets || exercise.sets.length === 0) {
-      return { weight: `${exercise?.weight || "N/A"}`, reps: exercise?.reps || "N/A" }
+      return { weight: `${exercise?.sets[0]?.weight || "N/A"}`, reps: exercise?.sets[0]?.reps || "N/A" }
     }
 
     let highestSet = exercise.sets[0]
-    let highestWeight = Number.parseFloat(exercise.sets[0]?.weight) || 0
+    let highestWeight = Number.parseFloat(exercise.sets[0]?.weight.toString()) || 0
 
     exercise.sets.forEach((set) => {
-      const weight = Number.parseFloat(set?.weight) || 0
+      const weight = Number.parseFloat(set?.weight.toString()) || 0
       if (weight > highestWeight) {
         highestWeight = weight
         highestSet = set
@@ -279,27 +243,16 @@ export function ClientWorkoutView({
   // Get highest weight set for current exercise
   const currentExerciseHighest = currentExercise ? findHighestWeightSet(currentExercise) : { weight: "×", reps: "reps" }
 
-  // Scroll functions for the containers
-  const scrollExercises = (direction: "left" | "right") => {
-    if (exercisesContainerRef.current) {
-      const container = exercisesContainerRef.current
-      const scrollAmount = 300
 
-      if (direction === "left") {
-        container.scrollBy({ left: -scrollAmount, behavior: "smooth" })
-      } else {
-        container.scrollBy({ left: scrollAmount, behavior: "smooth" })
-      }
-    }
-  }
 
   // Handle exercise selection
   const handleExerciseSelect = (id: string) => {
     setSelectedExercise(id)
   }
 
-  // Show personal records for mock data, empty state for real data
-  const shouldShowPersonalRecords = isMockData
+  const isCompleted = (exercise: WorkoutExercise) => {
+    return exercise.sets.some((set) => (set.weight && set.weight.toString().length > 0) || (set.reps && set.reps.toString().length > 0))
+  }
 
   // Get formatted date for display
   const displayDate = formatWorkoutDate(workout)
@@ -369,7 +322,7 @@ export function ClientWorkoutView({
           {/* Happening Now indicator - now with real-time updates */}
           {isHappeningNow && (
             <div
-              className={`absolute -top-1 left-0 flex items-center gap-1.5 text-green-600 text-xs font-medium transition-opacity duration-300 ${isPulsing ? "animate-pulse-twice" : ""}`}
+              className='absolute -top-1 left-0 flex items-center gap-1.5 text-green-600 text-xs font-medium transition-opacity duration-300'
             >
               <Activity className="h-3.5 w-3.5" />
               <span>HAPPENING NOW</span>
@@ -393,7 +346,6 @@ export function ClientWorkoutView({
         {/* Exercise Cards */}
         <div className="mb-8 relative">
           <div
-            ref={exercisesContainerRef}
             className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
@@ -412,14 +364,14 @@ export function ClientWorkoutView({
                     className={`flex-shrink-0 p-3 border rounded-lg cursor-pointer transition-all ${
                       selectedExercise === exercise.id
                         ? "border-[#D2FF28] bg-[#D2FF28]10"
-                        : exercise.completed === false
+                        : !isCompleted(exercise)
                           ? "border-amber-200 bg-amber-50"
                           : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
                     <div className="w-[120px]">
                       <p className="font-medium text-sm mb-1">{exercise?.name || "Unknown Exercise"}</p>
-                      {exercise.completed === false ? (
+                      {!isCompleted(exercise) ? (
                         <p className="text-amber-600 text-xs">Not Completed</p>
                       ) : (
                         <p className="text-xs text-gray-500">
@@ -436,28 +388,6 @@ export function ClientWorkoutView({
               </div>
             )}
           </div>
-
-          {/* Only show arrows when needed */}
-          {exercisesOverflow && (
-            <>
-              {showLeftExerciseArrow && (
-                <button
-                  className="absolute left-[-12px] top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center"
-                  onClick={() => scrollExercises("left")}
-                >
-                  <ChevronLeft className="w-5 h-5 text-gray-600" />
-                </button>
-              )}
-              {showRightExerciseArrow && (
-                <button
-                  className="absolute right-[-12px] top-1/2 transform -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center"
-                  onClick={() => scrollExercises("right")}
-                >
-                  <ChevronRight className="w-5 h-5 text-gray-600" />
-                </button>
-              )}
-            </>
-          )}
         </div>
 
         {/* Exercise Details */}
@@ -488,16 +418,16 @@ export function ClientWorkoutView({
                   <div className="space-y-3">
                     {currentExercise?.sets && currentExercise.sets.length > 0 ? (
                       currentExercise.sets.map((set, index) => (
-                        <div key={set?.number || index} className="flex items-center gap-2">
+                        <div key={index} className="flex items-center gap-2">
                           {/* Show set numbers in boxes */}
                           <div className="w-6 h-6 bg-gray-100 rounded-md flex items-center justify-center">
-                            <span className="text-[12px] font-medium">{set?.number || index + 1}</span>
+                            <span className="text-[12px] font-medium">{index + 1}</span>
                           </div>
                           <div className="flex items-center">
                             <span className="text-[12px]">
                               {set?.weight || "N/A"} × {set?.reps || "N/A"} reps
                             </span>
-                            {set?.isPR && <Trophy className="w-4 h-4 text-amber-500 ml-1" />}
+                            {set?.isPersonalRecord && <Trophy className="w-4 h-4 text-amber-500 ml-1" />}
                           </div>
                           {set?.notes && <span className="text-[10px] text-gray-500 ml-2">({set.notes})</span>}
                         </div>
@@ -511,26 +441,6 @@ export function ClientWorkoutView({
             </div>
           </div>
         )}
-
-        {/* Personal Records Section */}
-        <div className="p-6 pt-0">
-          {shouldShowPersonalRecords && personalRecords && personalRecords.length > 0 ? (
-            <PersonalRecordsDisplay records={personalRecords} />
-          ) : (
-            <div className="bg-white rounded-lg border border-gray-100 p-6">
-              <h3 className="text-lg font-semibold mb-4">Recent Personal Records</h3>
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="rounded-full bg-gray-100 p-3 mb-4">
-                  <Trophy className="h-6 w-6 text-gray-400" />
-                </div>
-                <p className="text-gray-500 mb-2">No personal records available yet</p>
-                <p className="text-gray-400 text-sm">
-                  Personal records will appear here as clients achieve new milestones
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )
