@@ -315,7 +315,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       }
 
       debugLog("Changes saved successfully")
-      toast({
+      toast.success({
         title: "Changes Saved",
         description: "Your program changes have been saved successfully.",
       })
@@ -323,10 +323,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setOriginalProgramState(JSON.parse(JSON.stringify(programState))) // Update original state
     } catch (error) {
       errorLog("Error saving changes:", error)
-      toast({
+      toast.error({
         title: "Save Failed",
         description: "Failed to save your changes. Please try again.",
-        variant: "destructive",
       })
     } finally {
       setIsSaving(false)
@@ -342,7 +341,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setExpandedRoutines({ 0: true }) // Reset expanded state
       setCurrentWeekIndex(0) // Reset week index
 
-      toast({
+      toast.default({
         title: "Changes Canceled",
         description: "All changes have been discarded and reverted to the original state.",
       })
@@ -354,10 +353,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
     if (!selectedClientId || !programState) {
       debugLog("Cannot send - missing client ID or program state")
-      toast({
+      toast.error({
         title: "Missing Information",
         description: "Please select a client and ensure program data is loaded.",
-        variant: "destructive",
       })
       return
     }
@@ -365,10 +363,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
     const selectedClient = clients.find((c) => c.id === selectedClientId)
     if (!selectedClient) {
       debugLog("Selected client not found in clients list")
-      toast({
+      toast.error({
         title: "Client Not Found",
         description: "The selected client could not be found.",
-        variant: "destructive",
       })
       return
     }
@@ -397,7 +394,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       const result = await response.json()
       debugLog("Program sent successfully:", result)
 
-      toast({
+      toast.success({
         title: "Program Sent Successfully!",
         description: `The program "${programState.name || programState.program_title}" has been sent to ${selectedClient.name}.`,
       })
@@ -407,10 +404,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       setShowSendDialog(false)
     } catch (error) {
       errorLog("Error sending program:", error)
-      toast({
+      toast.error({
         title: "Failed to Send Program",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
-        variant: "destructive",
       })
     } finally {
       setIsSending(false)
@@ -475,10 +471,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         if (baseRoutines.length === 0) {
           debugLog("No routines found for conversion")
-          toast({
+          toast.error({
             title: "No Routines Found",
             description: "Cannot convert to periodized - no routines found in the program.",
-            variant: "destructive",
           })
           setShowPeriodizationDialog(false)
           setPeriodizationAction(null)
@@ -515,7 +510,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           return newState
         })
 
-        toast({
+        toast.success({
           title: "Converted to Periodized",
           description: `Program converted to ${numberOfWeeks} weeks using ${baseRoutines.length} base routines`,
         })
@@ -530,10 +525,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
         if (routinesToKeep.length === 0) {
           debugLog("No routines found in selected week")
-          toast({
+          toast.error({
             title: "No Routines Found",
             description: `No routines found in week ${selectedWeekToKeep}. Please select a different week.`,
-            variant: "destructive",
           })
           return
         }
@@ -563,7 +557,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
           return newState
         })
 
-        toast({
+        toast.success({
           title: "Converted to Non-Periodized",
           description: `Program converted using routines from Week ${selectedWeekToKeep}. Duration remains ${programState.duration_weeks} weeks.`,
         })
@@ -577,10 +571,9 @@ export default function ReviewProgramClient({ importData, importId, initialClien
       debugLog("Periodization conversion completed successfully")
     } catch (error) {
       errorLog("Error in periodization conversion:", error)
-      toast({
+      toast.error({
         title: "Conversion Failed",
         description: "An error occurred during the conversion. Please try again.",
-        variant: "destructive",
       })
       setShowPeriodizationDialog(false)
       setPeriodizationAction(null)
@@ -589,7 +582,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
   const updateProgramField = useCallback(
     (field: keyof Program, value: any) => {
-      debugLog("Updating program field:", field, "with value:", value)
 
       if (!programState) {
         debugLog("Cannot update field - no program state")
@@ -598,6 +590,51 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
       setProgramState((prev) => {
         if (!prev) return prev
+
+        // Special handling for duration_weeks changes in periodized programs
+        if (field === "duration_weeks" && prev.is_periodized && prev.weeks && prev.weeks.length > 0) {
+          const newDuration = value as number
+          const currentDuration = prev.weeks.length
+
+          debugLog("Duration changed for periodized program:", { currentDuration, newDuration })
+
+          if (newDuration > currentDuration) {
+            // Add more weeks by duplicating the last week's routines
+            const newWeeks = [...prev.weeks]
+            const lastWeek = prev.weeks[currentDuration - 1]
+
+            for (let weekNum = currentDuration + 1; weekNum <= newDuration; weekNum++) {
+              newWeeks.push({
+                week_number: weekNum,
+                routines: lastWeek.routines.map((routine, index) => ({
+                  ...routine,
+                  name: `${routine.name?.replace(/ - Week \d+$/, "") || routine.title || `Routine ${index + 1}`} - Week ${weekNum}`,
+                })),
+              })
+            }
+
+            debugLog("Added weeks to periodized program:", newWeeks.length)
+
+            return {
+              ...prev,
+              [field]: value,
+              weeks: newWeeks,
+            }
+          } else if (newDuration < currentDuration) {
+            // Remove excess weeks
+            const newWeeks = prev.weeks.slice(0, newDuration)
+
+            debugLog("Removed weeks from periodized program:", newWeeks.length)
+
+            return {
+              ...prev,
+              [field]: value,
+              weeks: newWeeks,
+            }
+          }
+        }
+
+        // Default field update
         const newState = {
           ...prev,
           [field]: value,
@@ -673,7 +710,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
   const addSet = useCallback(
     (routineIndex: number, exerciseIndex: number) => {
-      debugLog("Adding set to routine:", routineIndex, "exercise:", exerciseIndex)
 
       setProgramState((prev) => {
         if (!prev) return prev
@@ -718,7 +754,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
   const removeSet = useCallback(
     (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-      debugLog("Removing set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
 
       setProgramState((prev) => {
         if (!prev) return prev
@@ -752,7 +787,6 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
   const duplicateSet = useCallback(
     (routineIndex: number, exerciseIndex: number, setIndex: number) => {
-      debugLog("Duplicating set from routine:", routineIndex, "exercise:", exerciseIndex, "set:", setIndex)
 
       setProgramState((prev) => {
         if (!prev) return prev

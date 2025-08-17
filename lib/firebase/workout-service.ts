@@ -142,11 +142,7 @@ export async function getClientWorkouts(trainerId: string, clientId: string): Pr
     const workoutsCollectionRef = collection(db, "users", trainerId, "clients", clientId, "workouts")
     const q = query(workoutsCollectionRef, orderBy("date", "desc"))
 
-    const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      function: "getClientWorkouts",
-      trainerId,
-      clientId,
-    })
+    const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), (error) => createError(ErrorType.DB_READ_FAILED, error, { function: "getClientWorkouts", trainerId, clientId }, "Error fetching workouts"))
 
     if (error || !workoutsSnapshot) {
       console.error("[workout-service] Error fetching workouts:", error)
@@ -204,12 +200,7 @@ export async function getWorkout(trainerId: string, clientId: string, workoutId:
     }
 
     const workoutRef = doc(db, "users", trainerId, "clients", clientId, "workouts", workoutId)
-    const [workoutDoc, error] = await tryCatch(() => getDoc(workoutRef), ErrorType.DB_READ_FAILED, {
-      function: "getWorkout",
-      trainerId,
-      clientId,
-      workoutId,
-    })
+    const [workoutDoc, error] = await tryCatch(() => getDoc(workoutRef), (error) => createError(ErrorType.DB_READ_FAILED, error, { function: "getWorkout", trainerId, clientId, workoutId }, "Error fetching workout"))
 
     if (error || !workoutDoc) {
       return null
@@ -273,8 +264,7 @@ export async function updateWorkout(
           ...validUpdates,
           updatedAt: serverTimestamp(),
         }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "updateWorkout", trainerId, clientId, workoutId },
+      (error) => createError(ErrorType.DB_WRITE_FAILED, error, { function: "updateWorkout", trainerId, clientId, workoutId }, "Error updating workout")
     )
 
     if (updateError) {
@@ -314,12 +304,7 @@ export async function deleteWorkout(
 
     const workoutRef = doc(db, "users", trainerId, "clients", clientId, "workouts", workoutId)
 
-    const [, deleteError] = await tryCatch(() => deleteDoc(workoutRef), ErrorType.DB_DELETE_FAILED, {
-      function: "deleteWorkout",
-      trainerId,
-      clientId,
-      workoutId,
-    })
+    const [, deleteError] = await tryCatch(() => deleteDoc(workoutRef), (error) => createError(ErrorType.DB_DELETE_FAILED, error, { function: "deleteWorkout", trainerId, clientId, workoutId }, "Error deleting workout"))
 
     if (deleteError) {
       return { success: false, error: deleteError }
@@ -357,10 +342,7 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
     const workoutsCollectionRef = collection(db, "users", userId, "workouts")
     const q = query(workoutsCollectionRef, orderBy("createdAt", "desc"), where("createdAt", ">=", startDate), where("createdAt", "<=", endDate))
 
-    const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), ErrorType.DB_READ_FAILED, {
-      function: "getThisWeeksWorkouts",
-      userId,
-    })
+    const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), (error) => createError(ErrorType.DB_READ_FAILED, error, { function: "getThisWeeksWorkouts", userId }, "Error fetching workouts"))
 
     if (error || !workoutsSnapshot || workoutsSnapshot.empty) {
       return []
