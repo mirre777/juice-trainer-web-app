@@ -65,9 +65,9 @@ When a coach creates a client:
 // components/clients/add-client-modal.tsx
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
-  
+
   setIsSubmitting(true);
-  
+
   try {
     // Create client in Firebase
     const result = await createClient(userId, {
@@ -76,7 +76,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       phone: formData.phone,
       // other client data...
     });
-    
+
     if (result.success) {
       // Show invitation dialog with the code
       setInviteCode(result.inviteCode);
@@ -104,7 +104,7 @@ export async function createClient(trainerId: string, clientData: {...}) {
   try {
     // Generate a unique invitation code
     const inviteCode = generateRandomString(8);
-    
+
     // Create client document data
     const clientDocData = {
       ...clientData,
@@ -117,18 +117,18 @@ export async function createClient(trainerId: string, clientData: {...}) {
       isTemporary: true,
       // Note: userId is not set yet
     };
-    
+
     // Create a new client document in the trainer's clients subcollection
     const clientsCollectionRef = collection(db, "users", trainerId, "clients");
     const newClientRef = await addDoc(clientsCollectionRef, clientDocData);
-    
+
     // Add the client document ID to the trainer's clients array
     const trainerRef = doc(db, "users", trainerId);
     await updateDoc(trainerRef, {
       clients: arrayUnion(newClientRef.id),
       updatedAt: serverTimestamp(),
     });
-    
+
     return {
       success: true,
       clientId: newClientRef.id,
@@ -166,7 +166,7 @@ const handleAcceptInvitation = async () => {
     const response = await fetch(`/api/invitations/${code}/accept`, {
       method: 'POST',
     });
-    
+
     if (response.ok) {
       // Redirect to signup or login
       router.push(`/signup?invite=${code}`);
@@ -188,7 +188,7 @@ After accepting the invitation, the client creates an account:
 // components/auth/auth-form.tsx
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
-  
+
   try {
     // Create user account
     const result = await signUp({
@@ -196,13 +196,13 @@ const handleSubmit = async (e: React.FormEvent) => {
       email: formData.email,
       password: formData.password,
     });
-    
+
     if (result.success) {
       // If there's an invitation code, process it
-      if (invitationCode) {
-        await processInvitation(invitationCode, result.user.uid);
+      if (inviteCode) {
+        await processInvitation(inviteCode, result.user.uid);
       }
-      
+
       // Redirect to dashboard
       router.push('/dashboard');
     }
@@ -220,22 +220,22 @@ The client is associated with the coach by updating both the client document and
 // app/api/auth/signup/route.ts
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
-  
+
   try {
     // Create user account and store invite code
     const result = await signUp({
       name: formData.name,
       email: formData.email,
       password: formData.password,
-      inviteCode: invitationCode, // Store invite code in user document
+      inviteCode: inviteCode, // Store invite code in user document
     });
-    
+
     if (result.success) {
       // Process the invitation automatically
-      if (invitationCode) {
-        await processInvitation(invitationCode, result.user.uid);
+      if (inviteCode) {
+        await processInvitation(inviteCode, result.user.uid);
       }
-      
+
       // Redirect to dashboard
       router.push('/dashboard');
     }
@@ -251,7 +251,7 @@ export async function processInvitation(inviteCode: string, userId: string) {
   try {
     // Find the client with this invitation code by searching trainer subcollections
     // ... (search logic)
-    
+
     // When found:
     // 1. Update the client document with the user ID
     await updateDoc(clientRef, {
@@ -260,14 +260,14 @@ export async function processInvitation(inviteCode: string, userId: string) {
       status: "Active",       // Change status to Active
       updatedAt: serverTimestamp(),
     });
-    
+
     // 2. Add the trainer to the user's trainers list
     const userRef = doc(collection(db, "users"), userId);
     await updateDoc(userRef, {
       trainers: arrayUnion(trainerId),
       updatedAt: serverTimestamp(),
     });
-    
+
     return { success: true, trainerId, clientId };
   } catch (error) {
     console.error("Error processing invitation:", error);
@@ -285,10 +285,10 @@ export async function fetchClients(trainerUid: string) {
   // Get all client documents from the trainer's clients subcollection
   const clientsCollectionRef = collection(db, "users", trainerUid, "clients");
   const clientsSnapshot = await getDocs(clientsCollectionRef);
-  
+
   // Map the documents to client objects
   const clients = clientsSnapshot.docs.map(doc => mapClientData(doc.id, doc.data()));
-  
+
   return clients;
 }
 \`\`\`
@@ -301,12 +301,12 @@ export async function findClientByUserId(trainerId: string, userId: string) {
   const clientsCollectionRef = collection(db, "users", trainerId, "clients");
   const q = query(clientsCollectionRef, where("userId", "==", userId));
   const clientsSnapshot = await getDocs(q);
-  
+
   if (!clientsSnapshot.empty) {
     const doc = clientsSnapshot.docs[0];
     return mapClientData(doc.id, doc.data());
   }
-  
+
   return null;
 }
 \`\`\`

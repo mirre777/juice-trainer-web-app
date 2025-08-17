@@ -6,11 +6,11 @@
  */
 
 import { storeTokens } from "@/lib/auth/token-service"
-import { AppError, ErrorType, handleClientError, tryCatch } from "@/lib/utils/error-handler"
+import { AppError, createError, ErrorType, handleClientError, tryCatch } from "@/lib/utils/error-handler"
 
 export async function loginWithGoogle() {
   return tryCatch(
-    () => {
+    async () => {
       // Redirect to Google OAuth endpoint
       window.location.href = "/api/auth/google/simple"
     },
@@ -19,7 +19,7 @@ export async function loginWithGoogle() {
         component: "AuthService",
         operation: "loginWithGoogle",
         message: "Failed to initiate Google login",
-        errorType: ErrorType.AUTH_ERROR,
+        errorType: ErrorType.AUTH_PROVIDER_ERROR,
       })
     },
   )
@@ -27,7 +27,7 @@ export async function loginWithGoogle() {
 
 export async function logoutUser() {
   return tryCatch(
-    () => {
+    async () => {
       // Redirect to logout endpoint
       window.location.href = "/api/auth/google/logout"
     },
@@ -36,7 +36,7 @@ export async function logoutUser() {
         component: "AuthService",
         operation: "logoutUser",
         message: "Failed to logout user",
-        errorType: ErrorType.AUTH_ERROR,
+        errorType: ErrorType.AUTH_PROVIDER_ERROR,
       })
     },
   )
@@ -46,10 +46,7 @@ export async function exchangeCodeForTokens(code: string) {
   return tryCatch(
     async () => {
       if (!code) {
-        throw new AppError({
-          message: "Authorization code is required",
-          errorType: ErrorType.VALIDATION_ERROR,
-        })
+        throw createError(ErrorType.INVALID_INPUT, null, null, "Authorization code is required")
       }
 
       const response = await fetch("/api/auth/google/callback", {
@@ -61,11 +58,7 @@ export async function exchangeCodeForTokens(code: string) {
       })
 
       if (!response.ok) {
-        throw new AppError({
-          message: "Failed to exchange code for tokens",
-          errorType: ErrorType.AUTH_ERROR,
-          statusCode: response.status,
-        })
+        throw createError(ErrorType.AUTH_PROVIDER_ERROR, null, null, "Failed to exchange code for tokens")
       }
 
       const tokenData = await response.json()
@@ -73,16 +66,13 @@ export async function exchangeCodeForTokens(code: string) {
 
       return { success: true }
     },
-    (error) => {
-      const appError = handleClientError(error, {
+    (error: ErrorType) => {
+      return handleClientError(error, {
         component: "AuthService",
         operation: "exchangeCodeForTokens",
         message: "Failed to exchange code for tokens",
-        errorType: ErrorType.AUTH_ERROR,
+        errorType: ErrorType.AUTH_PROVIDER_ERROR,
       })
-
-      console.error("Error exchanging code for tokens:", appError)
-      return { success: false, error: appError }
     },
   )
 }

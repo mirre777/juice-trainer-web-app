@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { config as appConfig } from "@/lib/config"
 
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
@@ -40,7 +41,7 @@ export function middleware(request: NextRequest) {
   // Handle redirects from old invite URL format to new format
   const { pathname, searchParams } = request.nextUrl
   if (pathname.startsWith("/signup") && searchParams.has("invite")) {
-    const inviteCode = searchParams.get("invite")
+    const inviteCode = searchParams.get("invite") || searchParams.get(appConfig.inviteCode)
     console.log(`[Middleware] Redirecting old invite format to new: /invite/${inviteCode}`)
     return NextResponse.redirect(`${request.nextUrl.origin}/invite/${inviteCode}`)
   }
@@ -66,7 +67,8 @@ export function middleware(request: NextRequest) {
   // BUT allow login/signup with invite code to proceed regardless of token
   if ((path === "/login" || path === "/signup") && token && token.trim() !== "") {
     // Allow login/signup page if there's an invite code in the URL
-    if (searchParams.has("code")) {
+    const inviteCode = searchParams.get(appConfig.inviteCode) || searchParams.get("invite")
+    if (inviteCode) {
       console.log(`[Middleware] Allowing ${path} with invite code despite existing token`)
       return NextResponse.next()
     }

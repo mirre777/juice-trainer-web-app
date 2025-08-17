@@ -33,7 +33,9 @@ export function ClientInvitationDialog({
 
   // Generate the invite link using trainer's universal code
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "")
-  const inviteLink = `${appUrl}/invite/${inviteCode}`
+  // if the appUrl ends with /, remove it
+  const appUrlWithoutTrailingSlash = appUrl.endsWith("/") ? appUrl.slice(0, -1) : appUrl
+  const inviteLink = `${appUrlWithoutTrailingSlash}/invite/${inviteCode}`
 
   const copyToClipboard = async () => {
     try {

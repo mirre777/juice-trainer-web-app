@@ -6,6 +6,7 @@ import { ClientWorkoutView } from "@/components/client-workout-view"
 import { useEffect, useState } from "react"
 import { getSharedWorkout } from "@/lib/firebase/shared-workout-service"
 import type { FirebaseWorkout } from "@/lib/firebase/workout-service"
+import { config } from "@/lib/config"
 
 export default function LoginPage() {
   const searchParams = useSearchParams()
@@ -15,7 +16,7 @@ export default function LoginPage() {
   const showWorkoutOnMobile = pathname.startsWith("/share/")
 
   // Extract invitation code and trainer name from URL parameters
-  const invitationCode = searchParams.get("code") as string | undefined
+  const inviteCode = searchParams.get(config.inviteCode) as string | undefined
   const trainerName = searchParams.get("tn") as string | undefined
 
   const [sharedWorkout, setSharedWorkout] = useState<FirebaseWorkout | null>(null)
@@ -53,7 +54,7 @@ export default function LoginPage() {
         className={`w-full ${showWorkoutOnMobile ? "lg:w-1/2" : "lg:w-1/2"} bg-white flex items-center justify-center lg:order-2 ${showWorkoutOnMobile ? "h-1/2 lg:h-full" : "h-full lg:h-full"}`}
       >
         <div className="w-full max-w-md px-6">
-          <AuthForm mode="login" invitationCode={invitationCode} trainerName={trainerName} />
+          <AuthForm mode="login" inviteCode={inviteCode} trainerName={trainerName} />
         </div>
       </div>
 

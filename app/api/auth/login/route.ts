@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase/firebase"
-import { getUserByEmail, updateUser, storeInvitationCode } from "@/lib/firebase/user-service"
+import { getUserByEmail, updateUser, storeInviteCode } from "@/lib/firebase/user-service"
 
 export async function POST(request: Request) {
   try {
-    const { email, password, invitationCode } = await request.json()
+    const { email, password, inviteCode } = await request.json()
 
     console.log(`[API:login] Processing login for ${email}`)
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
     if (!user) {
       console.log(`[API:login] User not found: ${email}`)
-      if (invitationCode) {
+      if (inviteCode) {
         return NextResponse.json(
           {
             error: "Account not found. Please sign up first.",
@@ -59,15 +59,15 @@ export async function POST(request: Request) {
 
         console.log(`[API:login] Firebase Auth successful for user: ${user.id}`)
 
-        if (invitationCode) {
-          console.log(`[API:login] Processing invitation code: ${invitationCode}`)
+        if (inviteCode) {
+          console.log(`[API:login] Processing invitation code: ${inviteCode}`)
 
           try {
-            await storeInvitationCode(user.id, invitationCode)
+            await storeInviteCode(user.id, inviteCode)
 
             try {
               const { processLoginInvitation } = await import("@/lib/firebase/client-service")
-              const inviteResult = await processLoginInvitation(invitationCode, user.id)
+              const inviteResult = await processLoginInvitation(inviteCode, user.id)
 
               if (inviteResult.success) {
                 console.log(`[API:login] Successfully processed invitation`)

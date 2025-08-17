@@ -42,7 +42,7 @@ export async function GET() {
       }
 
       const userData = userDoc.data()
-      console.log("✅ User data extracted:", userData)
+      console.log("✅ User data extracted:", userData.id, userData.name, userData.role)
 
       // Determine user role with fallback logic
       let role = userData?.role
@@ -53,7 +53,7 @@ export async function GET() {
         if (userData?.universalInviteCode || userData?.pendingUsers) {
           role = "trainer"
           console.log("🔍 [Role Detection] User has trainer fields, setting role to 'trainer'")
-        } else if (userData?.invitationCode && userData?.invitationCode !== "none") {
+        } else if (userData?.inviteCode && userData?.inviteCode !== "none") {
           role = "client"
           console.log("🔍 [Role Detection] User has invitation code, setting role to 'client'")
         } else {

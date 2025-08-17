@@ -23,7 +23,7 @@ export interface User {
   status?: "active" | "pending_approval" | "inactive"
   createdAt?: Timestamp
   updatedAt?: Timestamp
-  invitationCode?: string
+  inviteCode?: string
   universalInviteCode?: string
   pendingUsers?: string[]
   hasFirebaseAuth?: boolean
@@ -135,9 +135,9 @@ export async function getUserById(userId: string): Promise<User | null> {
   }
 }
 
-export async function storeInvitationCode(userId: string, invitationCode: string): Promise<void> {
+export async function storeInviteCode(userId: string, inviteCode: string): Promise<void> {
   try {
-    await updateUser(userId, { invitationCode })
+    await updateUser(userId, { inviteCode })
   } catch (error) {
     console.error("Error storing invitation code:", error)
     throw error
@@ -166,7 +166,7 @@ export async function signupWithUniversalCode(
       name,
       role: "client",
       status: "pending_approval",
-      invitationCode: universalCode,
+      inviteCode: universalCode,
     })
 
     await updateDoc(doc(db, "users", trainerId), {

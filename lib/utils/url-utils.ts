@@ -1,17 +1,17 @@
-import { AppError, ErrorType, handleServerError, tryCatch } from "@/lib/utils/error-handler"
+import { AppError, createError, ErrorType, handleServerError, tryCatch } from "@/lib/utils/error-handler"
 
 /**
  * Gets the application URL from environment variables or falls back to localhost
  * @returns The application URL
  */
-export function getAppUrl(): string {
-  return tryCatch(
-    () => {
+export async function getAppUrl(): Promise<string> {
+  const [appUrl, error]: [string | null, AppError | null] = await tryCatch(
+    async () => {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
       return appUrl.endsWith("/") ? appUrl.slice(0, -1) : appUrl
     },
-    (error) => {
-      throw handleServerError(error, {
+    (error: any) => {
+      return handleServerError(error, {
         service: "UrlUtils",
         operation: "getAppUrl",
         message: "Failed to get application URL",
@@ -19,6 +19,12 @@ export function getAppUrl(): string {
       })
     },
   )
+
+  if (appUrl && appUrl !== null) {
+    return appUrl
+  } else {
+    throw error
+  }
 }
 
 /**
@@ -27,13 +33,12 @@ export function getAppUrl(): string {
  * @param path The path to append
  * @returns The joined URL without double slashes
  */
-export function joinUrl(base: string, path: string): string {
-  return tryCatch(
-    () => {
+export async function joinUrl(base: string, path: string): Promise<string> {
+  const [url, error]: [string | null, AppError | null] = await tryCatch(
+    async () => {
       if (!base) {
-        throw new AppError({
+        throw createError(ErrorType.INVALID_INPUT, null, {
           message: "Base URL is required",
-          errorType: ErrorType.VALIDATION_ERROR,
         })
       }
 
@@ -41,13 +46,19 @@ export function joinUrl(base: string, path: string): string {
       const normalizedPath = path.startsWith("/") ? path : `/${path}`
       return `${normalizedBase}${normalizedPath}`
     },
-    (error) => {
-      throw handleServerError(error, {
+    (error: any) => {
+      return handleServerError(error, {
         service: "UrlUtils",
         operation: "joinUrl",
         message: "Failed to join URL parts",
-        errorType: ErrorType.INTERNAL_ERROR,
+        errorType: ErrorType.API_SERVER_ERROR,
       })
     },
   )
+
+  if (url && url !== null) {
+    return url
+  } else {
+    throw error
+  }
 }

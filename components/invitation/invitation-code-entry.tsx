@@ -34,10 +34,9 @@ export function InvitationCodeEntry({ onSuccess, userId }: InvitationCodeEntryPr
       const result = await processInvitation(inviteCode.trim(), userId)
 
       if (result.success && result.trainerId && result.clientId) {
-        toast({
+        toast.success({
           title: "Success!",
           description: "You've been connected with your trainer.",
-          variant: "default",
         })
 
         if (onSuccess) {

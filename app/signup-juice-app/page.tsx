@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default function JuiceAppSignupPage({
   searchParams,
 }: {
-  searchParams: { code?: string; tn?: string }
+  searchParams: { inviteCode?: string; tn?: string }
 }) {
-  const invitationCode = searchParams.code || ""
+  const inviteCode = searchParams.inviteCode || ""
   const trainerName = searchParams.tn ? decodeURIComponent(searchParams.tn) : ""
 
   return (
@@ -17,7 +17,7 @@ export default function JuiceAppSignupPage({
           <CardTitle className="text-2xl font-bold text-center">Join Juice</CardTitle>
           <CardDescription className="text-center">Create your account to start your fitness journey</CardDescription>
 
-          {invitationCode && (
+          {inviteCode && (
             <div className="p-3 bg-green-50 border border-green-200 rounded-md">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
@@ -39,7 +39,7 @@ export default function JuiceAppSignupPage({
                   <div className="mt-2 text-sm text-green-700">
                     <p>Create an account to connect with your trainer.</p>
                     <p className="mt-1">
-                      <strong>Invitation code:</strong> {invitationCode}
+                      <strong>Invitation code:</strong> {inviteCode}
                     </p>
                     {trainerName && (
                       <p>
@@ -55,7 +55,7 @@ export default function JuiceAppSignupPage({
 
         <CardContent>
           <Suspense fallback={<div>Loading...</div>}>
-            <AuthForm mode="signup" invitationCode={invitationCode} trainerName={trainerName} isTrainerSignup={false} />
+            <AuthForm mode="signup" inviteCode={inviteCode} trainerName={trainerName} isTrainerSignup={false} />
           </Suspense>
         </CardContent>
       </Card>

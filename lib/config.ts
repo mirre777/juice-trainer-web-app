@@ -1,4 +1,4 @@
-import { AppError, ErrorType } from "@/lib/utils/error-handler"
+import { createError, ErrorType } from "@/lib/utils/error-handler"
 
 // Application configuration
 export const config = {
@@ -16,6 +16,9 @@ export const config = {
   // Stripe
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
+
+  // invite code variable
+  inviteCode: "inviteCode",
 
   // Firebase
   firebase: {
@@ -45,10 +48,7 @@ export const config = {
     const missingVars = requiredEnvVars.filter((v) => !v.value).map((v) => v.name)
 
     if (missingVars.length > 0 && this.isProduction) {
-      throw new AppError({
-        message: `Missing required environment variables: ${missingVars.join(", ")}`,
-        errorType: ErrorType.CONFIG_ERROR,
-      })
+      throw createError(ErrorType.CONFIG_ERROR, null, null, `Missing required environment variables: ${missingVars.join(", ")}`)
     }
 
     if (missingVars.length > 0) {
