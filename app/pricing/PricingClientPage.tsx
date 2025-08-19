@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, X } from "lucide-react"
 
 import PricingCard from "@/components/payment/pricing-card"
 import { Testimonial } from "@/components/testimonial"
@@ -38,16 +38,15 @@ export default function PricingPage() {
   ]
 
   return (
-    <div className="container max-w-6xl py-12 px-4 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <button
-          onClick={() => window.history.back()}
-          className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </button>
-      </div>
+    <div className="container max-w-6xl py-12 px-4 sm:px-6 lg:px-8 relative">
+      {/* Close button in upper right corner */}
+      <button
+        onClick={() => window.history.back()}
+        className="absolute top-4 right-4 p-2 text-black hover:text-gray-700 hover:bg-gray-100 transition-colors duration-200 z-50"
+        aria-label="Close"
+      >
+        <X className="h-5 w-5" />
+      </button>
 
       <div className="text-center mb-12">
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Simple, transparent pricing</h1>
