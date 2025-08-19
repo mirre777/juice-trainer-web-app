@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
+import { X } from "lucide-react"
 import { PricingCard } from "@/components/payment/pricing-card"
-import { ComingSoonOverlay } from "@/components/ui/coming-soon-overlay"
 import { getUserSubscriptionPlan } from "@/lib/firebase/subscription-service"
 
 export default function PricingPage() {
   const [currentPlan, setCurrentPlan] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchUserPlan() {
@@ -23,8 +22,6 @@ export default function PricingPage() {
         }
       } catch (error) {
         console.error("Error fetching user plan:", error)
-      } finally {
-        setLoading(false)
       }
     }
 
@@ -32,7 +29,16 @@ export default function PricingPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white relative">
+      {/* Close button in upper right corner */}
+      <button
+        onClick={() => window.history.back()}
+        className="absolute top-4 right-4 p-2 text-black hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors duration-200 z-50 bg-white shadow-sm border border-gray-200"
+        aria-label="Close"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
       <div className="container mx-auto px-4 py-16">
         {/* Header */}
         <div className="text-center mb-16">
@@ -49,9 +55,8 @@ export default function PricingPage() {
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Basic Plan */}
           <PricingCard
-            title="Basic"
+            name="Basic"
             price="0"
-            period="month"
             description="Perfect for getting started"
             features={[
               "Up to 3 clients",
@@ -61,20 +66,15 @@ export default function PricingPage() {
               "Mobile app access",
             ]}
             buttonText={currentPlan === "trainer_basic" ? "Current Plan" : "Start"}
-            buttonVariant={currentPlan === "trainer_basic" ? "outline" : "default"}
-            isPopular={false}
-            isCurrent={currentPlan === "trainer_basic"}
+            isCurrentPlan={currentPlan === "trainer_basic"}
             planId="trainer_basic"
-            disabled={currentPlan === "trainer_basic"}
           />
 
           {/* Pro Plan */}
           <div className="relative">
-            <ComingSoonOverlay />
             <PricingCard
-              title="Pro"
+              name="Pro"
               price="49"
-              period="month"
               description="For growing coaching businesses"
               features={[
                 "Unlimited clients",
@@ -85,21 +85,16 @@ export default function PricingPage() {
                 "Email & chat support",
               ]}
               buttonText="Pay us for Pro"
-              buttonVariant="default"
-              isPopular={true}
-              isCurrent={currentPlan === "trainer_pro"}
+              isCurrentPlan={currentPlan === "trainer_pro"}
               planId="trainer_pro"
-              disabled={true}
             />
           </div>
 
           {/* Elite Plan */}
           <div className="relative">
-            <ComingSoonOverlay />
             <PricingCard
-              title="Elite"
+              name="Elite"
               price="69"
-              period="month"
               description="For established coaching businesses"
               features={[
                 "Everything in Pro",
@@ -111,11 +106,8 @@ export default function PricingPage() {
                 "Dedicated account manager",
               ]}
               buttonText="Pay us for Elite"
-              buttonVariant="default"
-              isPopular={false}
-              isCurrent={currentPlan === "trainer_elite"}
+              isCurrentPlan={currentPlan === "trainer_elite"}
               planId="trainer_elite"
-              disabled={true}
             />
           </div>
         </div>

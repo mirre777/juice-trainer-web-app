@@ -223,7 +223,7 @@ export function ClientWorkoutView({
   // Function to find highest weight set from an exercise
   const findHighestWeightSet = (exercise: WorkoutExercise) => {
     if (!exercise?.sets || exercise.sets.length === 0) {
-      return { weight: `${exercise?.sets[0]?.weight || "N/A"}`, reps: exercise?.sets[0]?.reps || "N/A" }
+      return { weight: "N/A", reps: "N/A" }
     }
 
     let highestSet = exercise.sets[0]
@@ -251,7 +251,10 @@ export function ClientWorkoutView({
   }
 
   const isCompleted = (exercise: WorkoutExercise) => {
-    return exercise.sets.some((set) => (set.weight && set.weight.toString().length > 0) || (set.reps && set.reps.toString().length > 0))
+    if (!exercise.sets || exercise.sets.length === 0) {
+      return false
+    }
+    return exercise.sets.some((set) => (set.weight && set.weight.toString().length > 0) || (set.reps && set.reps.toString().length > 0)) || exercise.sets.some((set) => set.isPersonalRecord)
   }
 
   // Get formatted date for display
