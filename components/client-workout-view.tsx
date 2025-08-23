@@ -227,10 +227,10 @@ export function ClientWorkoutView({
     }
 
     let highestSet = exercise.sets[0]
-    let highestWeight = Number.parseFloat(exercise.sets[0]?.weight.toString()) || 0
+    let highestWeight = Number.parseFloat(exercise.sets[0]?.weight?.toString()) || 0
 
     exercise.sets.forEach((set) => {
-      const weight = Number.parseFloat(set?.weight.toString()) || 0
+      const weight = Number.parseFloat(set?.weight?.toString()) || 0
       if (weight > highestWeight) {
         highestWeight = weight
         highestSet = set
