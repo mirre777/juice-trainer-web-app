@@ -23,7 +23,7 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm, refresh
       const response = await fetch("/api/clients")
       const data = await response.json()
       if (data.success) {
-        const clients = data.clients as Client[]
+        const clients = data.clients.sort((a: Client, b: Client) => a.name.localeCompare(b.name)) as Client[]
         setClients(clients)
         if (!selectedClient && clients.length > 0) {
           onClientSelect(clients[0])
@@ -44,7 +44,7 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm, refresh
     const filteredClients = clients.filter(client =>
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.email.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    ).sort((a: Client, b: Client) => a.name.localeCompare(b.name))
     if (filteredClients.length === 1) {
       onClientSelect(filteredClients[0])
     }
