@@ -8,16 +8,7 @@ export interface Client {
     name: string
     date: string
     completion: number
-  }
-  workoutDays: {
-    monday: boolean,
-    tuesday: boolean,
-    wednesday: boolean,
-    thursday: boolean,
-    friday: boolean,
-    saturday: boolean,
-    sunday: boolean,
-  }
+  },
   email: string
   phone: string // Added phone field
   goal: string

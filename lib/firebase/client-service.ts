@@ -99,55 +99,28 @@ export async function mapClientDataWithUserInfo(id: string, data: any): Promise<
     return null
   }
 
-  let userData = null
-  if (data.userId) {
-    userData = await getUserDataFromUserId(data.userId)
-  }
-
   const mergedData = {
     id: id,
-    name: data.name || userData?.name || "Unnamed Client",
-    initials: getInitials(data.name || userData?.name || "UC"),
+    name: data.name || "Unnamed Client",
+    initials: getInitials(data.name || "UC"),
     status: data.status || "Pending",
     progress: data.progress || 0,
     sessions: data.sessions || { completed: 0, total: 0 },
     completion: data.completion || 0,
     notes: data.notes || "",
-    email: userData?.email || data.email || "",
+    email: data.email || "",
     goal: data.goal || "",
     program: data.program || "",
     createdAt: data.createdAt,
     inviteCode: data.inviteCode || "",
     userId: data.userId || "",
-    phone: userData?.phone || data.phone || "",
-    userStatus: userData?.status || "unknown",
-    hasLinkedAccount: !!(data.userId && userData),
-    workoutDays: data.workoutDays || { monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false },
+    phone: data.phone || "",
+    userStatus: data.status || "unknown",
+    hasLinkedAccount: data.userId ?? false,
     _lastUpdated: Date.now(),
   } as Client
 
   return mergedData
-}
-
-async function getUserDataFromUserId(userId: string): Promise<any> {
-  try {
-    if (!userId) {
-      return null
-    }
-
-    const userRef = doc(db, "users", userId)
-    const userDoc = await getDoc(userRef)
-
-    if (userDoc.exists()) {
-      const userData = userDoc.data()
-      return userData
-    } else {
-      return null
-    }
-  } catch (error) {
-    console.error(`[getUserDataFromUserId] Error getting user data for ${userId}:`, error)
-    return null
-  }
 }
 
 export function mapClientData(id: string, data: any): Client | null {
@@ -200,26 +173,14 @@ export async function getTotalClients(trainerId: string): Promise<number> {
 export async function fetchClients(trainerId: string): Promise<Client[]> {
   try {
     const clientsCollectionRef = collection(db, `users/${trainerId}/clients`)
-    const simpleSnapshot = await getDocs(clientsCollectionRef)
+    const q = query(clientsCollectionRef, orderBy("name", "asc"))
+    const simpleSnapshot = await getDocs(q)
 
     if (simpleSnapshot.size === 0) {
       return []
     }
 
-    const clients: Client[] = []
-
-    for (const docSnapshot of simpleSnapshot.docs) {
-      const clientId = docSnapshot.id
-      const clientData = docSnapshot.data()
-
-      const client = await mapClientDataWithUserInfo(clientId, clientData)
-
-      if (client) {
-        clients.push(client)
-      }
-    }
-
-    return clients
+    return Promise.all(simpleSnapshot.docs.map((doc) => mapClientData(doc.id, doc.data()))) as Promise<Client[]>
   } catch (error) {
     console.error(`[fetchClients] Error:`, error)
     return []
