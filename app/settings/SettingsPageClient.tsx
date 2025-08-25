@@ -151,6 +151,7 @@ export default function SettingsPageClient() {
                     <input
                       type="email"
                       value={userData.email}
+                      disabled={true}
                       onChange={(e) => setUserData((prev) => ({ ...prev, email: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="Enter email"

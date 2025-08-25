@@ -7,10 +7,18 @@ import { AddClientModal } from "../clients/add-client-modal"
 interface ClientPageHeaderProps {
   searchTerm: string
   onSearchChange: (term: string) => void
+  onClientAdded?: (clientId: string) => void
 }
 
-export function ClientPageHeader({ searchTerm, onSearchChange }: ClientPageHeaderProps) {
+export function ClientPageHeader({ searchTerm, onSearchChange, onClientAdded }: ClientPageHeaderProps) {
   const [showAddModal, setShowAddModal] = useState(false)
+
+  const handleClientAdded = (clientId: string) => {
+    if (onClientAdded) {
+      onClientAdded(clientId)
+    }
+    setShowAddModal(false)
+  }
 
   return (
     <div className={clientsPageStyles.headerContainer}>
@@ -46,7 +54,11 @@ export function ClientPageHeader({ searchTerm, onSearchChange }: ClientPageHeade
           </div>
       </div>
         {/* Add Client Modal */}
-        <AddClientModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+        <AddClientModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onAddClient={handleClientAdded}
+        />
     </div>
   )
 }
