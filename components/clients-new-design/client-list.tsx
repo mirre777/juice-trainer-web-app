@@ -7,13 +7,13 @@ import { capitalize } from "@/lib/utils"
 import { Skeleton } from "../ui/skeleton"
 
 interface ClientListProps {
-  selectedClient: Client | null
-  onClientSelect: (client: Client | null) => void
+  selectedClientId: string | null
+  onClientSelect: (clientId: string) => void
   searchTerm: string
   refreshTrigger: number
 }
 
-export function ClientList({ selectedClient, onClientSelect, searchTerm, refreshTrigger }: ClientListProps) {
+export function ClientList({ selectedClientId, onClientSelect, searchTerm, refreshTrigger }: ClientListProps) {
   const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -25,10 +25,9 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm, refresh
       if (data.success) {
         const clients = data.clients.sort((a: Client, b: Client) => a.name.localeCompare(b.name)) as Client[]
         setClients(clients)
-        if (!selectedClient && clients.length > 0) {
-          onClientSelect(clients[0])
-        } else {
-          onClientSelect(selectedClient)
+        // Only auto-select first client if no client is currently selected
+        if (!selectedClientId && clients.length > 0) {
+          onClientSelect(clients[0].id)
         }
       } else {
         console.error("❌ [ClientList] Failed to fetch clients")
@@ -46,7 +45,7 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm, refresh
       client.email.toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a: Client, b: Client) => a.name.localeCompare(b.name))
     if (filteredClients.length === 1) {
-      onClientSelect(filteredClients[0])
+      onClientSelect(filteredClients[0].id)
     }
     setFilteredClients(filteredClients)
   }, [clients, searchTerm])
@@ -97,15 +96,15 @@ export function ClientList({ selectedClient, onClientSelect, searchTerm, refresh
     return (
       <div
           key={client.id}
-          onClick={() => onClientSelect(client)}
-          className={getClientItemStyle(selectedClient?.id === client.id)}
+          onClick={() => onClientSelect(client.id)}
+          className={getClientItemStyle(selectedClientId === client.id)}
         >
           <div className={clientsPageStyles.clientItemFlex}>
             {/* Avatar */}
             <div
               className={clientsPageStyles.clientAvatar}
               style={{
-                backgroundColor: selectedClient?.id === client.id ? "#D2FF28" : "#F9FAFB",
+                backgroundColor: selectedClientId === client.id ? "#D2FF28" : "#F9FAFB",
                 color:  "black"
               }}
             >

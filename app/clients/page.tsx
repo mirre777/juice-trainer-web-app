@@ -9,13 +9,13 @@ import type { Client } from "@/types/client"
 
 
 export default function ClientsPage() {
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [trainerInviteCode, setTrainerInviteCode] = useState("")
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
-  const handleClientSelect = (client: Client | null) => {
-    setSelectedClient(client)
+  const handleClientSelect = (clientId: string) => {
+    setSelectedClientId(clientId)
   }
 
   const handleSearchChange = (term: string) => {
@@ -24,14 +24,21 @@ export default function ClientsPage() {
 
   const handleClientDeleted = useCallback(() => {
     // Clear the selected client since it was deleted
-    setSelectedClient(null)
+    setSelectedClientId(null)
     // Trigger a refresh of the client list
     setRefreshTrigger(prev => prev + 1)
   }, [])
 
   const handleClientUpdated = useCallback((updatedClient: Client) => {
     // Update the selected client with the new data
-    setSelectedClient(updatedClient)
+    setSelectedClientId(updatedClient.id)
+    // Trigger a refresh of the client list
+    setRefreshTrigger(prev => prev + 1)
+  }, [])
+
+  const handleClientAdded = useCallback(async (clientId: string) => {
+    // Fetch the newly added client data and set it as selected
+    setSelectedClientId(clientId)
     // Trigger a refresh of the client list
     setRefreshTrigger(prev => prev + 1)
   }, [])
@@ -64,7 +71,11 @@ export default function ClientsPage() {
   return (
     <div className={clientsPageStyles.pageContainer}>
       {/* Top Header Section */}
-      <ClientPageHeader searchTerm={searchTerm} onSearchChange={handleSearchChange} />
+      <ClientPageHeader
+        searchTerm={searchTerm}
+        onSearchChange={handleSearchChange}
+        onClientAdded={handleClientAdded}
+      />
 
       {/* Main Content Section */}
       <div className={clientsPageStyles.mainContainer}>
@@ -72,7 +83,7 @@ export default function ClientsPage() {
           {/* Left Section - Client List */}
           <div className={clientsPageStyles.clientListContainer}>
             <ClientList
-              selectedClient={selectedClient}
+              selectedClientId={selectedClientId}
               onClientSelect={handleClientSelect}
               searchTerm={searchTerm}
               refreshTrigger={refreshTrigger}
@@ -82,7 +93,7 @@ export default function ClientsPage() {
           {/* Right Section - Client Details */}
           <div className={clientsPageStyles.detailsContainer}>
             <ClientDetails
-              clientId={selectedClient?.id || null}
+              clientId={selectedClientId}
               trainerInviteCode={trainerInviteCode}
               onClientDeleted={handleClientDeleted}
               onClientUpdated={handleClientUpdated}
