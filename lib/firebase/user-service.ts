@@ -79,6 +79,17 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   }
 }
 
+export async function getUserByUid(uid: string): Promise<User | null> {
+  try {
+    const userRef = doc(db, "users", uid)
+    const userSnap = await getDoc(userRef)
+    return userSnap.exists() ? { id: uid, ...userSnap.data() } as User : null
+  } catch (error) {
+    console.error("Error getting user by UID:", error)
+    throw error
+  }
+}
+
 export async function createUser(userData: Omit<User, "id" | "createdAt" | "updatedAt">): Promise<User> {
   try {
     const userRef = doc(collection(db, "users"))

@@ -4,6 +4,7 @@ export const runtime = "nodejs"
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/firebase/firebase"
+import { collection, doc, getDoc } from "firebase/firestore"
 
 export async function GET() {
   try {
@@ -30,7 +31,6 @@ export async function GET() {
       console.log("🔍 Querying Firestore for user:", userId)
 
       // Import collection and doc from firebase/firestore
-      const { collection, doc, getDoc } = await import("firebase/firestore")
       const userDocRef = doc(collection(db, "users"), userId)
       const userDoc = await getDoc(userDocRef)
 
@@ -45,23 +45,7 @@ export async function GET() {
       console.log("✅ User data extracted:", userData.id, userData.name, userData.role)
 
       // Determine user role with fallback logic
-      let role = userData?.role
-
-      // If no explicit role is set, try to determine it from other fields
-      if (!role) {
-        // Check if user has trainer-specific fields
-        if (userData?.universalInviteCode || userData?.pendingUsers) {
-          role = "trainer"
-          console.log("🔍 [Role Detection] User has trainer fields, setting role to 'trainer'")
-        } else if (userData?.inviteCode && userData?.inviteCode !== "none") {
-          role = "client"
-          console.log("🔍 [Role Detection] User has invitation code, setting role to 'client'")
-        } else {
-          // Default fallback - assume trainer if they have access to trainer features
-          role = "trainer"
-          console.log("🔍 [Role Detection] No clear indicators, defaulting to 'trainer'")
-        }
-      }
+      let role = userData?.role ?? "client"
 
       const response = {
         uid: userId,

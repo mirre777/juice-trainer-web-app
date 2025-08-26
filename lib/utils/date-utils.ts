@@ -230,3 +230,18 @@ export function convertTimestampsToDates(data: any) {
   });
   return result;
 }
+
+export function convertTimestampsToISO(data: any) {
+  const result = { ...data };
+  Object.keys(data).forEach((key) => {
+    if (data[key] instanceof Timestamp) {
+      try {
+        result[key] = data[key]?.toDate().toISOString();
+      } catch (error) {
+        console.log("error converting to date", data.id, key, data[key]);
+        throw error;
+      }
+    }
+  });
+  return result;
+}
