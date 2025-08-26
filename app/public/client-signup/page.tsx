@@ -9,7 +9,7 @@ enum SourceType {
 
 interface ClientSignupProps {
     params: Promise<{}>
-    searchParams: Promise<{ source?: string }>
+    searchParams: Promise<{ source: string, programId: string }>
 }
 
   export async function generateMetadata({ searchParams }: ClientSignupProps): Promise<Metadata> {
@@ -25,10 +25,10 @@ interface ClientSignupProps {
   }
 
   export default async function ClientSignupPage({ searchParams }: ClientSignupProps) {
-    const { source } = await searchParams
+    const { source, programId } = await searchParams
     const sourceType = source === "program" ? SourceType.PROGRAM : SourceType.TRAINER_INVITE
     console.log("source", sourceType)
-    const successUrl = sourceType === SourceType.PROGRAM ? "https://app.juice.fitness/celebration-program" : "https://juice.fitness/download-juice-app"
+    const successUrl = sourceType === SourceType.PROGRAM ? `https://app.juice.fitness/program-import/celebration?global-program-id=${programId}` : "https://juice.fitness/download-juice-app"
 
     return (
       <>
