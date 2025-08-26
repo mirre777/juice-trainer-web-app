@@ -2,11 +2,10 @@
 
 import type React from "react"
 import { Sen, Inter } from "next/font/google"
-import ClientLayout from "./ClientLayout"
-import { DemoBanner } from "@/components/demo-banner"
 import { ToastProvider } from "@/components/ui/toast-context"
 import "./globals.css"
 import { SkeletonTheme } from "react-loading-skeleton"
+import { LayoutWrapper } from "@/components/layout-wrapper"
 
 // Initialize the Sen font
 const sen = Sen({
@@ -29,8 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <SkeletonTheme baseColor="#202020" highlightColor="#444">
           <ToastProvider>
-            <DemoBanner />
-            <ClientLayout>{children}</ClientLayout>
+            <LayoutWrapper>{children}</LayoutWrapper>
           </ToastProvider>
         </SkeletonTheme>
       </body>

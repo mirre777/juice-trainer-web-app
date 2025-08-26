@@ -20,6 +20,7 @@ export function middleware(request: NextRequest) {
     path === "/mobile-app-success" ||
     path === "/payment-success" ||
     path === "/invite-app" ||
+    path.startsWith("/programs/") ||
     path.startsWith("/images/") ||
     path.startsWith("/invite/") ||
     path.startsWith("/shared/") ||
@@ -27,6 +28,7 @@ export function middleware(request: NextRequest) {
     path.startsWith("/api/invitations/") ||
     path.startsWith("/api/shared/") ||
     path.startsWith("/api/auth/") ||
+    path.startsWith("/api/programs/") ||
     path.startsWith("/demo/") // Demo routes remain public
 
   // Get the token from the cookies

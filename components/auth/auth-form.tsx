@@ -4,34 +4,58 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { setCookie } from "cookies-next"
 import { storeInviteCode } from "@/lib/firebase/user-service"
-import { config } from "@/lib/config"
+
+enum SourceType {
+  TRAINER_INVITE = "trainer-invite",
+  PROGRAM = "program"
+}
 
 interface AuthFormProps {
   mode: "login" | "signup"
   inviteCode?: string
   trainerName?: string
   isTrainerSignup?: boolean
+  successUrl?: string
+  source?: SourceType
 }
 
-export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = false }: AuthFormProps) {
+export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = false, successUrl = "", source = SourceType.TRAINER_INVITE }: AuthFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [showInviteInfo, setShowInviteInfo] = useState(!!inviteCode)
+  const [showInviteInfo, setShowInviteInfo] = useState(false)
+  const [currentMode, setCurrentMode] = useState(mode)
+  console.log("successUrl", successUrl, mode, source)
 
   useEffect(() => {
     // Update showInviteInfo if inviteCode changes
     setShowInviteInfo(!!inviteCode)
   }, [inviteCode])
+
+  const getSubTitle = () => {
+    if (source === SourceType.TRAINER_INVITE && currentMode === "signup") {
+      return "Join Juice to connect with your trainer"
+    } else if (source === SourceType.PROGRAM && currentMode === "signup") {
+      return "Join Juice to add this workout program"
+    } else if (source === SourceType.TRAINER_INVITE && currentMode === "login") {
+      return "Log in to connect with your trainer"
+    } else if (source === SourceType.PROGRAM && currentMode === "login") {
+      return "Log in to add this workout program"
+    }
+    // Fallback for server-side rendering
+    return currentMode === "login"
+      ? "Enter your email below to login to your account"
+      : "Enter your information below to create your account"
+  }
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,10 +64,10 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
 
     try {
       console.log(
-        `[AuthForm] Submitting ${mode} form with invitation code: ${inviteCode}, isTrainerSignup: ${isTrainerSignup}`,
+        `[AuthForm] Submitting ${currentMode} form with invitation code: ${inviteCode}, isTrainerSignup: ${isTrainerSignup}`,
       )
 
-      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/signup"
+      const endpoint = currentMode === "login" ? "/api/auth/login" : "/api/auth/signup"
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -53,22 +77,22 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
         body: JSON.stringify({
           email,
           password,
-          name: mode === "signup" ? name : undefined,
+          name: currentMode === "signup" ? name : undefined,
           inviteCode: inviteCode || undefined,
-          isTrainerSignup: mode === "signup" ? isTrainerSignup : undefined,
+          isTrainerSignup: currentMode === "signup" ? isTrainerSignup : undefined,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        console.error(`[AuthForm] ${mode} failed:`, data)
-        setError(data.error || `Failed to ${mode}. Please try again.`)
+        console.log(`[AuthForm] ${currentMode} failed:`, data)
+        setError(data.error || `Failed to ${currentMode}. Please try again.`)
         setLoading(false)
         return
       }
 
-      console.log(`[AuthForm] ${mode} successful:`, data)
+      console.log(`[AuthForm] ${currentMode} successful:`, data)
 
       // Set cookies and local storage
       if (data.userId) {
@@ -76,7 +100,7 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
         localStorage.setItem("user_id", data.userId)
 
         // If we have an invitation code, store it in the user document
-        if (inviteCode && mode === "signup") {
+        if (inviteCode && currentMode === "signup") {
           console.log(`[AuthForm] Storing invitation code ${inviteCode} for user ${data.userId}`)
           await storeInviteCode(data.userId, inviteCode)
         }
@@ -91,11 +115,11 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
       }
 
       // Handle different response scenarios
-      if (mode === "signup") {
+      if (currentMode === "signup") {
         if (inviteCode) {
           // If coming from an invitation signup, redirect to the download page
           console.log(`[AuthForm] Redirecting to download page after signup with invitation`)
-          window.location.href = "https://juice.fitness/download-juice-app"
+          window.location.href = successUrl ?? "https://juice.fitness/download-juice-app"
         } else if (isTrainerSignup) {
           // Trainer signup
           if (data.autoSignedIn) {
@@ -110,9 +134,9 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
         } else {
           // Mobile app signup (no trainer role) - redirect to download
           console.log(`[AuthForm] Redirecting to download page after mobile app signup`)
-          window.location.href = "https://juice.fitness/download-juice-app"
+          window.location.href = successUrl ?? "https://juice.fitness/download-juice-app"
         }
-      } else if (mode === "login") {
+      } else if (currentMode === "login") {
         // Successful login - get user data to determine redirect
         console.log(`[AuthForm] Successful login, checking user role`)
 
@@ -130,7 +154,7 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
           if (!userResponse.ok) {
             console.error("[AuthForm] Failed to get user data:", userData)
             // Fallback to mobile app success for safety
-            router.push("/mobile-app-success")
+            navigateToSuccess()
             return
           }
 
@@ -139,29 +163,36 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
             router.push("/overview")
           } else {
             console.log(`[AuthForm] User is not trainer (role: ${userData.role}), redirecting to mobile app success`)
-            router.push("/mobile-app-success")
+            navigateToSuccess()
           }
         } catch (userError) {
           console.error("[AuthForm] Error fetching user data:", userError)
           // Fallback to mobile app success for safety
-          router.push("/mobile-app-success")
+          navigateToSuccess()
         }
       }
     } catch (err) {
-      console.error(`[AuthForm] Error during ${mode}:`, err)
+      console.error(`[AuthForm] Error during ${currentMode}:`, err)
       setError(`An unexpected error occurred. Please try again.`)
       setLoading(false)
+    }
+  }
+
+  const navigateToSuccess = () => {
+    console.log("Navigating to success url", successUrl)
+    if (successUrl) {
+      window.location.href = successUrl
+    } else {
+      router.push("/mobile-app-success")
     }
   }
 
   return (
     <div className="w-full max-w-md space-y-6">
       <div className="space-y-2 text-center">
-        <h1 className="text-2xl font-bold">{mode === "login" ? "Login" : "Create an account"}</h1>
+        <h1 className="text-2xl font-bold">{currentMode === "login" ? "Login" : "Create an account"}</h1>
         <p className="text-gray-500 text-sm">
-          {mode === "login"
-            ? "Enter your email below to login to your account"
-            : "Enter your information below to create your account"}
+          {getSubTitle()}
         </p>
       </div>
 
@@ -171,7 +202,7 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
             {trainerName ? `You've been invited by ${trainerName}!` : "You've been invited to join Juice!"}
           </p>
           <p className="text-green-700 text-sm mt-1">
-            {mode === "login"
+            {currentMode === "login"
               ? "Log in to connect with your trainer."
               : "Create an account to connect with your trainer."}
           </p>
@@ -185,8 +216,8 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {mode === "signup" && (
+              <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
+        {currentMode === "signup" && (
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
@@ -225,39 +256,42 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
             disabled={loading}
           />
         </div>
+        {currentMode === "signup" && (
+        <p className="text-xs text-gray-500">
+          By signing up, you agree to our <a href="https://www.juice.fitness/legal?tab=terms" target="_blank" className="underline decoration-[#D2FF28] hover:decoration-[#B8E624]">Terms of Service</a> and acknowledge that our <a href="https://www.juice.fitness/legal?tab=privacy" target="_blank" className="underline decoration-[#D2FF28] hover:decoration-[#B8E624]">Privacy Policy</a> applies to you.
+        </p>
+        )}
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Processing..." : mode === "login" ? "Login" : "Create account"}
+          {loading ? "Processing..." : currentMode === "login" ? "Login" : "Create Free Account"}
         </Button>
       </form>
       <div className="text-center text-sm">
-        {mode === "login" ? (
+        {currentMode === "login" ? (
           <p>
-            Don't have an account?{" "}
-            <Link
-              href={
-                inviteCode
-                  ? `/signup?${config.inviteCode}=${inviteCode}${trainerName ? `&tn=${encodeURIComponent(trainerName)}` : ""}`
-                  : "/signup"
-              }
-              className="text-blue-600 hover:text-blue-800"
+            Don't have an account?
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentMode("signup")
+              }}
+              className="text-black underline decoration-[#D2FF28] hover:decoration-[#B8E624] ml-1"
             >
               Sign up
-            </Link>
+            </button>
           </p>
-        ) : (
-          <p>
-            Already have an account?{" "}
-            <Link
-              href={
-                inviteCode
-                  ? `/login?${config.inviteCode}=${inviteCode}${trainerName ? `&tn=${encodeURIComponent(trainerName)}` : ""}`
-                  : "/login"
-              }
-              className="text-blue-600 hover:text-blue-800"
+          ) : (
+            <div className="flex items-center justify-center">
+            <p>Already have an account?</p>
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentMode("login")
+              }}
+              className="text-black underline decoration-[#D2FF28] hover:decoration-[#B8E624] ml-1"
             >
               Login
-            </Link>
-          </p>
+            </button>
+          </div>
         )}
       </div>
     </div>
