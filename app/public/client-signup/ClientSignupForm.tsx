@@ -10,14 +10,17 @@ enum SourceType {
 interface ClientSignupFormProps {
   source: SourceType
   successUrl: string
+  successCallback: (programId: string) => Promise<void>
+  programId: string
 }
 
-export function ClientSignupForm({ source, successUrl }: ClientSignupFormProps) {
+export function ClientSignupForm({ source, successUrl, successCallback, programId }: ClientSignupFormProps) {
   return (
     <AuthForm
       mode="signup"
       successUrl={successUrl}
       source={source}
+      successCallback={() => successCallback(programId)}
     />
   )
 }
