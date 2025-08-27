@@ -10,7 +10,7 @@ export const importProgram = async (programId: string) => {
     .map(cookie => `${cookie.name}=${cookie.value}`)
     .join('; ')
 
-  const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/programs/${programId}/import`, {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/programs/${programId}/import`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
