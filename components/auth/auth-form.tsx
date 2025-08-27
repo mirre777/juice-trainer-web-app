@@ -22,9 +22,10 @@ interface AuthFormProps {
   isTrainerSignup?: boolean
   successUrl?: string
   source?: SourceType
+  successCallback?: () => Promise<void>
 }
 
-export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = false, successUrl = "", source = SourceType.TRAINER_INVITE }: AuthFormProps) {
+export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = false, successUrl = "", source = SourceType.TRAINER_INVITE, successCallback }: AuthFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -178,7 +179,10 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
     }
   }
 
-  const navigateToSuccess = () => {
+  const navigateToSuccess = async() => {
+    if (successCallback) {
+      await successCallback()
+    }
     console.log("Navigating to success url", successUrl)
     if (successUrl) {
       window.location.href = successUrl
