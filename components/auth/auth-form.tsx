@@ -184,12 +184,11 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
       console.log("Calling success callback")
       await successCallback()
     }
-    // console.log("Navigating to success url", successUrl)
-    // if (successUrl) {
-    //   window.location.href = successUrl
-    // } else {
-    //   router.push("/mobile-app-success")
-    // }
+    if (source === SourceType.PROGRAM) {
+      router.push("/mobile-app-success")
+    } else {
+      window.location.href = successUrl ?? "https://juice.fitness/download-juice-app"
+    }
   }
 
   return (
