@@ -65,45 +65,6 @@ export interface MobileExercise {
   deletedAt: null
 }
 
-interface Exercise {
-  name: string
-  sets?: Array<{
-    reps?: string | number
-    weight?: string | number
-    rpe?: string | number
-    rest?: string | number
-    notes?: string
-    set_number?: number
-  }>
-  notes?: string
-  order?: number
-}
-
-interface Routine {
-  name?: string
-  title?: string
-  exercises: Exercise[]
-  order?: number
-}
-
-interface Week {
-  week_number: number
-  routines: Routine[]
-}
-
-interface Program {
-  name?: string
-  program_title?: string
-  title?: string
-  description?: string
-  duration_weeks?: number
-  program_weeks?: number
-  is_periodized?: boolean
-  weeks?: Week[]
-  routines?: Routine[]
-  notes?: string
-}
-
 export class ProgramConversionService {
   /**
    * Ensures an exercise exists in either global or user's custom collection

@@ -175,12 +175,13 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
     } catch (err) {
       console.error(`[AuthForm] Error during ${currentMode}:`, err)
       setError(`An unexpected error occurred. Please try again.`)
-      setLoading(false)
     }
+    setLoading(false)
   }
 
   const navigateToSuccess = async() => {
     if (successCallback) {
+      console.log("Calling success callback")
       await successCallback()
     }
     console.log("Navigating to success url", successUrl)

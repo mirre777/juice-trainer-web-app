@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getGlobalProgram } from "@/lib/firebase/global-programs"
 import { cookies } from "next/headers"
+import { importProgram } from "@/lib/firebase/program-import"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const { id } = await params
@@ -26,11 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Program not found" }, { status: 404 })
     }
 
-    // TODO: Add logic to import the program for the user
-    // This would typically involve:
-    // 1. Creating a copy of the program in the user's programs collection
-    // 2. Associating it with the user's account
-    // 3. Returning success response
+    await importProgram(program, userId)
 
     return NextResponse.json({ message: "Program imported successfully", userId, programId: id })
   } catch (error) {
