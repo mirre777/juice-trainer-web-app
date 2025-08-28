@@ -8,6 +8,7 @@ export type WorkoutExercise = {
   id: string
   name: string
   createdAt: Date
+  muscleGroup?: string
   sets: WorkoutSet[],
   oneRepMax: number | null
 }
