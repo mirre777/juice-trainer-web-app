@@ -12,7 +12,7 @@ export default function Page() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4">
       {/* Juice Logo */}
       <div className="text-center mb-8">
-        <Image src="/images/logo.svg" alt="Logo de Juice" width={66} height={100} />
+        <Image src="/images/logo.svg" alt="Juice Logo" width={66} height={100} />
         <h1 className="text-xl font-medium text-gray-900">juice</h1>
         <h2 className="text-2xl font-bold text-gray-900 my-3">All set!</h2>
       </div>
@@ -50,7 +50,7 @@ export default function Page() {
             >
               <Image
                 src="/images/appstore-badge.svg"
-                alt="Descargar en App Store"
+                alt="Download on the App Store"
                 width={120}
                 height={48}
                 className="h-12 w-auto"
@@ -63,7 +63,7 @@ export default function Page() {
             >
               <Image
                 src="/images/googleplay-badge.svg"
-                alt="Descargar en Google Play"
+                alt="Download on the Google Play"
                 width={120}
                 height={48}
                 className="h-12 w-auto"
