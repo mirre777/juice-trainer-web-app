@@ -182,7 +182,15 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
   const navigateToSuccess = async() => {
     if (successCallback) {
       console.log("Calling success callback")
-      await successCallback()
+      try {
+        await successCallback()
+      } catch (err) {
+        const error = source === SourceType.PROGRAM ? "Error importing program" : "Error connecting with trainer"
+        console.error(error, err)
+        setError(error)
+        setLoading(false)
+        return
+      }
     }
     console.log("Navigating to success url", successUrl)
     if (successUrl) {
