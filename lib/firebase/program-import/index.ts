@@ -11,15 +11,16 @@ type SimpleExercise = {
 export async function importProgram(program: ProgramWithRoutines, userId: string) {
   console.log("importing program", program.id, "for user", userId)
   const allExercises = await getAllExercises(userId)
+
   // import routines sequentially and wait for the response
-  const routines = await program?.routines.map(async (routine: RoutineWithOrder) => {
+  const routines = await Promise.all(program?.routines.map(async (routine: RoutineWithOrder) => {
     await importRoutine(userId, routine, program.id, allExercises)
     return {
       routineId: routine.id,
       week: routine.week,
       order: routine.order
     }
-  })
+  }))
 
   const newProgram = {
     id: program.id,
