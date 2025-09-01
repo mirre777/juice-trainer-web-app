@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,16 +32,10 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
   const [name, setName] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [showInviteInfo, setShowInviteInfo] = useState(false)
   const [currentMode, setCurrentMode] = useState(mode)
-  console.log("successUrl", successUrl, mode, source)
+  const showInviteInfo = !!inviteCode
 
-  useEffect(() => {
-    // Update showInviteInfo if inviteCode changes
-    setShowInviteInfo(!!inviteCode)
-  }, [inviteCode])
-
-  const getSubTitle = () => {
+  const getSubTitle = useCallback(() => {
     if (source === SourceType.TRAINER_INVITE && currentMode === "signup") {
       return "Join Juice to connect with your trainer"
     } else if (source === SourceType.PROGRAM && currentMode === "signup") {
@@ -55,8 +49,28 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
     return currentMode === "login"
       ? "Enter your email below to login to your account"
       : "Enter your information below to create your account"
-  }
+  }, [source, currentMode])
 
+  const navigateToSuccess = useCallback(async () => {
+    if (successCallback) {
+      console.log("Calling success callback")
+      try {
+        await successCallback()
+      } catch (err) {
+        const error = source === SourceType.PROGRAM ? "Error importing program" : "Error connecting with trainer"
+        console.error(error, err)
+        setError(error)
+        setLoading(false)
+        return
+      }
+    }
+    console.log("Navigating to success url", successUrl)
+    if (successUrl) {
+      window.location.href = successUrl
+    } else {
+      router.push("/mobile-app-success")
+    }
+  }, [successCallback, successUrl, source, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -177,27 +191,6 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
       setError(`An unexpected error occurred. Please try again.`)
     }
     setLoading(false)
-  }
-
-  const navigateToSuccess = async() => {
-    if (successCallback) {
-      console.log("Calling success callback")
-      try {
-        await successCallback()
-      } catch (err) {
-        const error = source === SourceType.PROGRAM ? "Error importing program" : "Error connecting with trainer"
-        console.error(error, err)
-        setError(error)
-        setLoading(false)
-        return
-      }
-    }
-    console.log("Navigating to success url", successUrl)
-    if (successUrl) {
-      window.location.href = successUrl
-    } else {
-      router.push("/mobile-app-success")
-    }
   }
 
   return (
