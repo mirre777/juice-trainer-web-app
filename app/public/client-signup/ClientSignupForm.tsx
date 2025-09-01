@@ -20,6 +20,7 @@ export function ClientSignupForm({ source, successUrl, successCallback, programI
       mode="signup"
       successUrl={successUrl}
       source={source}
+      isTrainerSignup={false}
       successCallback={() => successCallback(programId)}
     />
   )

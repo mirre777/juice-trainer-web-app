@@ -25,7 +25,7 @@ interface AuthFormProps {
   successCallback?: () => Promise<void>
 }
 
-export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = false, successUrl = "", source = SourceType.TRAINER_INVITE, successCallback }: AuthFormProps) {
+export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = true, successUrl = "", source = SourceType.TRAINER_INVITE, successCallback }: AuthFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -158,7 +158,7 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
             navigateToSuccess()
             return
           }
-
+          console.log("userData", userData)
           if (userData.role === "trainer") {
             console.log(`[AuthForm] User is trainer, redirecting to overview`)
             router.push("/overview")
