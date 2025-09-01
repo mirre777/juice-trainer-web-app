@@ -57,6 +57,27 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
       : "Enter your information below to create your account"
   }
 
+  const saveAuth = async (data: any) => {
+    // Set cookies and local storage
+    if (data.userId) {
+      setCookie("user_id", data.userId)
+      localStorage.setItem("user_id", data.userId)
+
+      // If we have an invitation code, store it in the user document
+      if (inviteCode && currentMode === "signup") {
+        console.log(`[AuthForm] Storing invitation code ${inviteCode} for user ${data.userId}`)
+        await storeInviteCode(data.userId, inviteCode)
+      }
+    }
+
+    // Set auth token cookie from the response (for login or auto-signed-in signup)
+    if (data.token) {
+      setCookie("auth_token", data.token)
+      console.log("[AuthForm] Auth token set in cookies")
+    } else {
+      console.log("[AuthForm] No auth token received from server")
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,27 +114,10 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
         return
       }
 
-      console.log(`[AuthForm] ${currentMode} successful:`, data)
+      console.log(`[AuthForm] ${currentMode} completed:`, data)
 
       // Set cookies and local storage
-      if (data.userId) {
-        setCookie("user_id", data.userId)
-        localStorage.setItem("user_id", data.userId)
-
-        // If we have an invitation code, store it in the user document
-        if (inviteCode && currentMode === "signup") {
-          console.log(`[AuthForm] Storing invitation code ${inviteCode} for user ${data.userId}`)
-          await storeInviteCode(data.userId, inviteCode)
-        }
-      }
-
-      // Set auth token cookie from the response (for login or auto-signed-in signup)
-      if (data.token) {
-        setCookie("auth_token", data.token)
-        console.log("[AuthForm] Auth token set in cookies")
-      } else {
-        console.log("[AuthForm] No auth token received from server")
-      }
+      await saveAuth(data)
 
       // Handle different response scenarios
       if (currentMode === "signup") {
@@ -121,21 +125,11 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
           // If coming from an invitation signup, redirect to the download page
           console.log(`[AuthForm] Redirecting to download page after signup with invitation`)
           window.location.href = successUrl ?? "https://juice.fitness/download-juice-app"
-        } else if (isTrainerSignup) {
+        } else {
           // Trainer signup
-          if (data.autoSignedIn) {
             // Successfully auto-signed in, redirect to overview
             console.log(`[AuthForm] Trainer auto-signed in, redirecting to overview`)
-            router.push("/overview")
-          } else {
-            // Account created but auto-signin failed, redirect to login
-            console.log(`[AuthForm] Trainer account created but auto-signin failed, redirecting to login`)
-            router.push("/login?message=Account created successfully. Please log in.")
-          }
-        } else {
-          // Mobile app signup (no trainer role) - redirect to download
-          console.log(`[AuthForm] Redirecting to download page after mobile app signup`)
-          window.location.href = successUrl ?? "https://juice.fitness/download-juice-app"
+            navigateToSuccess()
         }
       } else if (currentMode === "login") {
         // Successful login - get user data to determine redirect
@@ -196,7 +190,11 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
     if (successUrl) {
       window.location.href = successUrl
     } else {
-      router.push("/mobile-app-success")
+      if (isTrainerSignup) {
+        router.push("/overview")
+      } else {
+        router.push("/mobile-app-success")
+      }
     }
   }
 
