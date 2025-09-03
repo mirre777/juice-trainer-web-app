@@ -10,6 +10,8 @@ import {
   limit,
   serverTimestamp,
   where,
+  or,
+  and,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
@@ -56,6 +58,7 @@ export interface FirebaseWorkout {
   startedAt: string
   completedAt: Date | null
   createdAt: string
+  deletedAt: string | null
   duration?: number
   status: string
   exercises: WorkoutExercise[]
@@ -338,19 +341,32 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
     }
 
     const { startDate, endDate } = getCurrentWeek();
+    console.log("startDate", startDate)
+    console.log("endDate", endDate)
 
     const workoutsCollectionRef = collection(db, "users", userId, "workouts")
-    const q = query(workoutsCollectionRef, orderBy("createdAt", "desc"), where("createdAt", ">=", startDate), where("createdAt", "<=", endDate))
+    // (createAt >= startDate and createAt <= endDate) or (completedAt >= startDate and completedAt <= endDate)
+    const q = query(
+      workoutsCollectionRef,
+      or(
+        and(where("createdAt", ">=", startDate), where("createdAt", "<=", endDate)),
+        and(where("completedAt", ">=", startDate), where("completedAt", "<=", endDate))
+      ),
+      orderBy("completedAt", "desc"),
+      orderBy("createdAt", "desc"),
+    )
 
     const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), (error) => createError(ErrorType.DB_READ_FAILED, error, { function: "getThisWeeksWorkouts", userId }, "Error fetching workouts"))
 
     if (error || !workoutsSnapshot || workoutsSnapshot.empty) {
       return []
     }
+    const workouts = workoutsSnapshot.docs.map((docSnapshot) => docSnapshot.data() as unknown as FirebaseWorkout)
 
-    return workoutsSnapshot.docs
-      .filter((docSnapshot) => docSnapshot.data().deletedAt === null || docSnapshot.data().deletedAt === undefined)
-      .map((docSnapshot) => convertTimestampsToDates(docSnapshot.data()) as unknown as FirebaseWorkout)
+    return workouts
+      .filter((workout) => workout.deletedAt === null || workout.deletedAt === undefined)
+      .map((workout) => convertTimestampsToDates(workout) as unknown as FirebaseWorkout)
+      .filter((workout) => isThisWeekWorkout(workout, startDate, endDate))
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
@@ -361,6 +377,11 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
     logError(appError)
     return null
   }
+}
+
+const isThisWeekWorkout = (workout: FirebaseWorkout, startDate: Date, endDate: Date): boolean => {
+  const completeAt = workout.completedAt ?? workout.startedAt;
+  return completeAt >= startDate && completeAt <= endDate;
 }
 
 export async function getUserWorkouts(userId: string): Promise<{ workouts: FirebaseWorkout[]; error: any }> {
@@ -422,6 +443,7 @@ export async function getUserWorkouts(userId: string): Promise<{ workouts: Fireb
           duration: data.duration || 0,
           status: data.status || "N/A",
           exercises: data.exercises || [],
+          deletedAt: data.deletedAt || null,
 
           // Derived fields for UI
           day: "N/A", // We'll calculate this based on the workout sequence
@@ -535,6 +557,7 @@ export async function getUserWorkoutById(
       duration: data.duration || 0,
       status: data.status || "N/A",
       exercises: data.exercises || [],
+      deletedAt: data.deletedAt || null,
 
       // Derived fields for UI
       day: "N/A",
@@ -636,6 +659,7 @@ export async function getLatestWorkoutForUser(
       duration: data.duration || 0,
       status: data.status || "N/A",
       exercises: data.exercises || [],
+      deletedAt: data.deletedAt || null,
 
       // Derived fields for UI
       day: "N/A",
