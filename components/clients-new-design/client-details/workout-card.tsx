@@ -19,6 +19,7 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
     // create a new map of string to string
     const setNumbers = new Map<string, string>()
     let setNumber = 1
+    console.log("exercise.sets", exercise)
     exercise.sets.forEach((set) => {
       if (set.type === "warmup") {
         setNumbers.set(set.id, "W")
@@ -36,8 +37,12 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
   }, [buildSetNumber])
 
   useEffect(() => {
-    if (workout) {
+    console.log("workout exercises", workout?.exercises)
+    if (workout && workout.exercises.length > 0) {
       selectExercise(workout.exercises[0])
+    } else {
+      setSelectedExercise(null)
+      setSetNumbers(null)
     }
   }, [workout])
 
@@ -88,6 +93,7 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
       )}
 
       {/* Exercise List */}
+      {workout.exercises.length > 0 ? (
       <div className={clientsPageStyles.exerciseListSection}>
         <div className={clientsPageStyles.exerciseGrid}>
           {workout.exercises.map((exercise, index) => (
@@ -102,8 +108,15 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
               </span>
             </div>
           ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className={clientsPageStyles.exerciseListSection}>
+          <div className={clientsPageStyles.exerciseGrid}>
+            <p>No exercises found</p>
+          </div>
+        </div>
+      )}
 
       {/* Detailed Exercise View */}
       {selectedExercise && (

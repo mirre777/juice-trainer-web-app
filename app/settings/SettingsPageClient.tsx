@@ -179,7 +179,7 @@ export default function SettingsPageClient() {
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Share this code with clients: {typeof window !== "undefined" ? window.location.origin : ""}
-                      /invite/
+                      /public/trainer-invite/
                       {inviteCode || "YOUR_CODE"}
                     </p>
                   </div>
