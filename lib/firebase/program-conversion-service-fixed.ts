@@ -502,8 +502,6 @@ export class ProgramConversionServiceFixed {
           id: userData.id,
           email: userData.email,
           status: userData.status,
-          hasFirebaseAuth: userData.hasFirebaseAuth,
-          firebaseUid: userData.firebaseUid,
         })
       } else {
         console.log(`[getClientUserId] ❌ User document does NOT exist at: ${userDocPath}`)

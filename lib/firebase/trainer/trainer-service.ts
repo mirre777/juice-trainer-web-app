@@ -10,11 +10,15 @@ interface AcceptInvitationResult {
 
 
 export const acceptInvitation = async (invitationCode: string, userId: string): Promise<AcceptInvitationResult> => {
-  const trainer = await getTrainerByInviteCode(invitationCode)
+  const trainer = await getTrainerByInviteCode(invitationCode);
   // add userId to pendingUsers inside the trainer document
   await updateDoc(doc(db, "users", trainer.id), {
     pendingUsers: arrayUnion(userId),
-  })
+  });
+
+  await updateDoc(doc(db, "users", userId), {
+    trainerId: trainer.id,
+  });
 
   return {
     success: true,

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
+
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { User, LogOut, Trash2 } from "lucide-react"
+import { LogOut, Trash2 } from "lucide-react"
 import { PageLayout } from "@/components/shared/page-layout"
 import { LogoutModal } from "@/components/auth/logout-modal"
 

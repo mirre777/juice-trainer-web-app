@@ -20,7 +20,6 @@ export default function LoginPage() {
   const trainerName = searchParams.get("tn") as string | undefined
 
   const [sharedWorkout, setSharedWorkout] = useState<FirebaseWorkout | null>(null)
-  const [isLoadingSharedWorkout, setIsLoadingSharedWorkout] = useState(false)
 
   useEffect(() => {
     // Check for shared workout in URL path
@@ -28,13 +27,11 @@ export default function LoginPage() {
     if (pathSegments.length === 2 && pathSegments[0] !== "login") {
       // URL format: /userId/workoutId
       const [userId, workoutId] = pathSegments
-      setIsLoadingSharedWorkout(true)
 
       getSharedWorkout(userId, workoutId).then(({ workout, error }) => {
         if (workout && !error) {
           setSharedWorkout(workout)
         }
-        setIsLoadingSharedWorkout(false)
       })
     }
   }, [pathname])
@@ -54,7 +51,7 @@ export default function LoginPage() {
         className={`w-full ${showWorkoutOnMobile ? "lg:w-1/2" : "lg:w-1/2"} bg-white flex items-center justify-center lg:order-2 ${showWorkoutOnMobile ? "h-1/2 lg:h-full" : "h-full lg:h-full"}`}
       >
         <div className="w-full max-w-md px-6">
-          <AuthForm mode="login" inviteCode={inviteCode} trainerName={trainerName} />
+          <AuthForm mode="login"/>
         </div>
       </div>
 
