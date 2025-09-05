@@ -2,6 +2,7 @@ import { db } from "@/lib/firebase/firebase"
 import { collection, getDocs, query, where, doc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { NextResponse } from "next/server"
 
+// deprecated, use /api/invitations/[code]/redeem instead
 export async function POST(req: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
 

@@ -1,7 +1,7 @@
 import { Metadata } from "next"
 import Image from "next/image"
 import { ClientSignupForm } from "./ClientSignupForm"
-import { importProgram } from "./actions"
+import { importProgram, acceptInvite } from "./actions"
 
 enum SourceType {
     TRAINER_INVITE = "trainer-invite",
@@ -10,7 +10,7 @@ enum SourceType {
 
 interface ClientSignupProps {
     params: Promise<{}>
-    searchParams: Promise<{ source: string, programId: string }>
+    searchParams: Promise<{ source: string, programId?: string, inviteCode?: string }>
 }
 
 export async function generateMetadata({ searchParams }: ClientSignupProps): Promise<Metadata> {
@@ -26,7 +26,7 @@ export async function generateMetadata({ searchParams }: ClientSignupProps): Pro
 }
 
 export default async function ClientSignupPage({ searchParams }: ClientSignupProps) {
-  const { source, programId } = await searchParams
+  const { source, programId, inviteCode } = await searchParams
   const sourceType = source === "program" ? SourceType.PROGRAM : SourceType.TRAINER_INVITE
   console.log("source", sourceType)
   const successUrl = sourceType === SourceType.PROGRAM? `/program-import-celebration` : "https://juice.fitness/download-juice-app"
@@ -42,12 +42,19 @@ export default async function ClientSignupPage({ searchParams }: ClientSignupPro
 
         {/* Main Content Card */}
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
-          <ClientSignupForm
-            source={sourceType}
-            successUrl={successUrl}
-            successCallback={importProgram}
-            programId={programId}
-          />
+          {sourceType === SourceType.PROGRAM ? (
+            <ClientSignupForm
+              source={SourceType.PROGRAM}
+              successUrl={successUrl}
+              programId={programId!}
+            />
+          ) : (
+            <ClientSignupForm
+              source={SourceType.TRAINER_INVITE}
+              successUrl={successUrl}
+              inviteCode={inviteCode!}
+            />
+          )}
         </div>
       </div>
     </>

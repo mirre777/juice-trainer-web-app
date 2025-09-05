@@ -2,13 +2,12 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { setCookie } from "cookies-next"
-import { storeInviteCode } from "@/lib/firebase/user-service"
 
 enum SourceType {
   TRAINER_INVITE = "trainer-invite",
@@ -17,29 +16,22 @@ enum SourceType {
 
 interface AuthFormProps {
   mode: "login" | "signup"
-  inviteCode?: string
-  trainerName?: string
   isTrainerSignup?: boolean
   successUrl?: string
   source?: SourceType
   successCallback?: () => Promise<void>
 }
 
-export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSignup = false, successUrl = "", source = SourceType.TRAINER_INVITE, successCallback }: AuthFormProps) {
+export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source = SourceType.TRAINER_INVITE, successCallback }: AuthFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [showInviteInfo, setShowInviteInfo] = useState(false)
   const [currentMode, setCurrentMode] = useState(mode)
   console.log("successUrl", successUrl, mode, source)
 
-  useEffect(() => {
-    // Update showInviteInfo if inviteCode changes
-    setShowInviteInfo(!!inviteCode)
-  }, [inviteCode])
 
   const getSubTitle = () => {
     if (source === SourceType.TRAINER_INVITE && currentMode === "signup") {
@@ -57,6 +49,21 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
       : "Enter your information below to create your account"
   }
 
+  const saveAuth = async (data: any) => {
+    // Set cookies and local storage
+    if (data.userId) {
+      setCookie("user_id", data.userId)
+      localStorage.setItem("user_id", data.userId)
+    }
+
+    // Set auth token cookie from the response (for login or auto-signed-in signup)
+    if (data.token) {
+      setCookie("auth_token", data.token)
+      console.log("[AuthForm] Auth token set in cookies")
+    } else {
+      console.log("[AuthForm] No auth token received from server")
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,7 +72,7 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
 
     try {
       console.log(
-        `[AuthForm] Submitting ${currentMode} form with invitation code: ${inviteCode}, isTrainerSignup: ${isTrainerSignup}`,
+        `[AuthForm] Submitting ${currentMode}, isTrainerSignup: ${isTrainerSignup}`,
       )
 
       const endpoint = currentMode === "login" ? "/api/auth/login" : "/api/auth/signup"
@@ -79,7 +86,6 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
           email,
           password,
           name: currentMode === "signup" ? name : undefined,
-          inviteCode: inviteCode || undefined,
           isTrainerSignup: currentMode === "signup" ? isTrainerSignup : undefined,
         }),
       })
@@ -93,50 +99,15 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
         return
       }
 
-      console.log(`[AuthForm] ${currentMode} successful:`, data)
+      console.log(`[AuthForm] ${currentMode} completed:`, data)
 
       // Set cookies and local storage
-      if (data.userId) {
-        setCookie("user_id", data.userId)
-        localStorage.setItem("user_id", data.userId)
-
-        // If we have an invitation code, store it in the user document
-        if (inviteCode && currentMode === "signup") {
-          console.log(`[AuthForm] Storing invitation code ${inviteCode} for user ${data.userId}`)
-          await storeInviteCode(data.userId, inviteCode)
-        }
-      }
-
-      // Set auth token cookie from the response (for login or auto-signed-in signup)
-      if (data.token) {
-        setCookie("auth_token", data.token)
-        console.log("[AuthForm] Auth token set in cookies")
-      } else {
-        console.log("[AuthForm] No auth token received from server")
-      }
+      await saveAuth(data)
 
       // Handle different response scenarios
       if (currentMode === "signup") {
-        if (inviteCode) {
-          // If coming from an invitation signup, redirect to the download page
-          console.log(`[AuthForm] Redirecting to download page after signup with invitation`)
-          window.location.href = successUrl ?? "https://juice.fitness/download-juice-app"
-        } else if (isTrainerSignup) {
-          // Trainer signup
-          if (data.autoSignedIn) {
-            // Successfully auto-signed in, redirect to overview
-            console.log(`[AuthForm] Trainer auto-signed in, redirecting to overview`)
-            router.push("/overview")
-          } else {
-            // Account created but auto-signin failed, redirect to login
-            console.log(`[AuthForm] Trainer account created but auto-signin failed, redirecting to login`)
-            router.push("/login?message=Account created successfully. Please log in.")
-          }
-        } else {
-          // Mobile app signup (no trainer role) - redirect to download
-          console.log(`[AuthForm] Redirecting to download page after mobile app signup`)
-          window.location.href = successUrl ?? "https://juice.fitness/download-juice-app"
-        }
+        console.log(`[AuthForm] Trainer auto-signed in, redirecting to overview`)
+        navigateToSuccess()
       } else if (currentMode === "login") {
         // Successful login - get user data to determine redirect
         console.log(`[AuthForm] Successful login, checking user role`)
@@ -158,7 +129,7 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
             navigateToSuccess()
             return
           }
-
+          console.log("userData", userData)
           if (userData.role === "trainer") {
             console.log(`[AuthForm] User is trainer, redirecting to overview`)
             router.push("/overview")
@@ -196,7 +167,11 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
     if (successUrl) {
       window.location.href = successUrl
     } else {
-      router.push("/mobile-app-success")
+      if (isTrainerSignup) {
+        router.push("/overview")
+      } else {
+        router.push("/mobile-app-success")
+      }
     }
   }
 
@@ -208,20 +183,6 @@ export function AuthForm({ mode, inviteCode = "", trainerName = "", isTrainerSig
           {getSubTitle()}
         </p>
       </div>
-
-      {showInviteInfo && inviteCode && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
-          <p className="text-green-800 font-medium text-sm">
-            {trainerName ? `You've been invited by ${trainerName}!` : "You've been invited to join Juice!"}
-          </p>
-          <p className="text-green-700 text-sm mt-1">
-            {currentMode === "login"
-              ? "Log in to connect with your trainer."
-              : "Create an account to connect with your trainer."}
-          </p>
-          <p className="text-xs text-green-600 mt-2">Invitation code: {inviteCode}</p>
-        </div>
-      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4">

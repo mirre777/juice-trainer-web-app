@@ -97,6 +97,7 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
     workouts.forEach((workout) => {
       // Convert string to Date object
       const completedDate = new Date(workout.completedAt ?? workout.startedAt);
+      console.log("completedDate", completedDate)
       const weekDay = getWeekDay(completedDate);
       const session: Session = {
         date: completedDate,

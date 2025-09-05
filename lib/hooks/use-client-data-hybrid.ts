@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { collection, onSnapshot, query, where, orderBy, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import type { Client } from "@/types/client"
+import { ClientStatus } from "@/types/client"
 
 export function useClientDataHybrid(isDemo = false) {
   const [clients, setClients] = useState<Client[]>([])
@@ -17,19 +18,9 @@ export function useClientDataHybrid(isDemo = false) {
       id: "1",
       name: "Salty Snack",
       initials: "SS",
-      status: "Active",
-      progress: 38,
-      sessions: { completed: 12, total: 30 },
-      completion: 38,
+      status: ClientStatus.Active,
       notes: "Working on strength training and nutrition plan.",
-      bgColor: "#f3f4f6",
-      textColor: "#111827",
       lastWorkout: { name: "Upper Body Strength", date: "2 days ago", completion: 85 },
-      metrics: [
-        { name: "Weight", value: "165 lbs", change: "+2 lbs" },
-        { name: "Body Fat", value: "18%", change: "-1.5%" },
-        { name: "Squat 1RM", value: "225 lbs", change: "+15 lbs" },
-      ],
       email: "salty@example.com",
       goal: "Build muscle",
       program: "Strength Training",
@@ -37,7 +28,6 @@ export function useClientDataHybrid(isDemo = false) {
       inviteCode: "",
       userId: "demo-user-1",
       phone: "",
-      hasLinkedAccount: true,
     },
   ]
 
@@ -57,14 +47,8 @@ export function useClientDataHybrid(isDemo = false) {
       name: data.name || "Unnamed Client",
       initials: getInitials(data.name || "UC"),
       status: data.status || "Active",
-      progress: data.progress || 0,
-      sessions: data.sessions || { completed: 0, total: 0 },
-      completion: data.completion || 0,
       notes: data.notes || "",
-      bgColor: data.bgColor || "#f3f4f6",
-      textColor: data.textColor || "#111827",
       lastWorkout: data.lastWorkout || { name: "", date: "", completion: 0 },
-      metrics: data.metrics || [],
       email: data.email || "",
       goal: data.goal || "",
       program: data.program || "",
@@ -72,7 +56,6 @@ export function useClientDataHybrid(isDemo = false) {
       inviteCode: data.inviteCode || "",
       userId: data.userId || "",
       phone: data.phone || "",
-      hasLinkedAccount: data.hasLinkedAccount || false,
     }
   }
 
@@ -109,14 +92,8 @@ export function useClientDataHybrid(isDemo = false) {
           name: client.name || "Unnamed Client",
           initials: client.initials || getInitials(client.name || "UC"),
           status: client.status || "Active",
-          progress: client.progress || 0,
-          sessions: client.sessions || { completed: 0, total: 0 },
-          completion: client.completion || 0,
           notes: client.notes || "",
-          bgColor: client.bgColor || "#f3f4f6",
-          textColor: client.textColor || "#111827",
           lastWorkout: client.lastWorkout || { name: "", date: "", completion: 0 },
-          metrics: client.metrics || [],
           email: client.email || "",
           goal: client.goal || "",
           program: client.program || "",
@@ -124,7 +101,6 @@ export function useClientDataHybrid(isDemo = false) {
           inviteCode: client.inviteCode || "",
           userId: client.userId || "",
           phone: client.phone || "",
-          hasLinkedAccount: client.hasLinkedAccount || false,
         }))
 
         console.log("✅ [Hybrid] Transformed clients:", transformedClients.length)
