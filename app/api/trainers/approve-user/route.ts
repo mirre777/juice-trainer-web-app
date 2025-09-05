@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { approveUser, getUserById, rejectUser } from "@/lib/firebase/user-service"
+import { getUserById, removePendingUser } from "@/lib/firebase/user-service"
 import { createClient, updateClient } from "@/lib/firebase/client-service"
 import { ClientStatus } from "@/types/client"
 
@@ -15,9 +15,7 @@ export async function POST(request: NextRequest) {
     if (!["approve", "reject"].includes(action)) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }
-
     if (action === "approve") {
-      await approveUser(userId, trainerId)
       if (matchToClientId) {
         // update client with user id
         await updateClient(trainerId, matchToClientId, {
@@ -35,9 +33,8 @@ export async function POST(request: NextRequest) {
         })
         return NextResponse.json({ success: true })
       }
-    } else if (action === "reject") {
-      await rejectUser(userId, trainerId)
     }
+    await removePendingUser(userId, trainerId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

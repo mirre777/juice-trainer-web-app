@@ -52,6 +52,7 @@ export function ClientRequests({ trainerId, hideTitle = false }: ClientRequestsP
 
         const trainerData = trainerDoc.data()
         const pendingUserIds = trainerData.pendingUsers || []
+        console.log("pendingUserIds", pendingUserIds)
 
         console.log(`[ClientRequests] 📋 Trainer data:`, {
           universalInviteCode: trainerData.universalInviteCode,
@@ -82,22 +83,16 @@ export function ClientRequests({ trainerId, hideTitle = false }: ClientRequestsP
                 name: userData.name,
                 email: userData.email,
                 status: userData.status,
-                universalInviteCode: userData.universalInviteCode,
-                invitedBy: userData.invitedBy,
               })
 
-              if (userData.status === "pending_approval") {
-                pendingUsersData.push({
-                  id: userId,
-                  name: userData.name || userData.firstName || "Unknown User",
-                  email: userData.email || "",
-                  createdAt: userData.createdAt,
-                  status: userData.status,
-                })
-                console.log(`[ClientRequests] ✅ Added pending user: ${userData.name || userData.email}`)
-              } else {
-                console.log(`[ClientRequests] ⚠️ User ${userId} has status: ${userData.status} (not pending_approval)`)
-              }
+              pendingUsersData.push({
+                id: userId,
+                name: userData.name || userData.firstName || "Unknown User",
+                email: userData.email || "",
+                createdAt: userData.createdAt,
+                status: userData.status,
+              })
+              console.log(`[ClientRequests] ✅ Added pending user: ${userData.name || userData.email}`)
             } else {
               console.log(`[ClientRequests] ❌ User document not found for ID: ${userId}`)
             }

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { signupWithUniversalCode, createUser } from "@/lib/firebase/user-service"
+import { createUser, User } from "@/lib/firebase/user-service"
 import { signUp } from "@/lib/auth/auth-service"
 
 export async function POST(request: NextRequest) {
@@ -26,49 +26,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Create authenticaition user in firebase
-    const signUpResult = await signUp(email, password)
-    if (!signUpResult.success) {
+    const { success, error, user } = await signUp(email, password)
+    if (!success || !user) {
       return NextResponse.json(
         {
           success: false,
-          error: signUpResult.error,
+          error: error,
         },
         { status: 400 },
       )
     }
 
-    let result
-    if (inviteCode && !isTrainerSignup) {
-      console.log(`[Signup] 🎫 Signing up with invite code: ${inviteCode} (no role assigned)`)
-      result = await signupWithUniversalCode(
-        email,
-        name,
-        inviteCode,
-      )
-
-      if (!result.success) {
-        console.log(`[Signup] ❌ Failed to signup with invite code:`, result.message)
-        return NextResponse.json(
-          {
-            success: false,
-            error: result.message || "Failed to create account with invite code",
-          },
-          { status: 400 },
-        )
-      }
-
-      console.log(`[Signup] ✅ Successfully signed up with invite code (user, no role)`)
-      return NextResponse.json({
-        success: true,
-        userId: result.userId,
-        pendingApproval: true,
-        autoSignedIn: false,
-        role: "client",
-        subscriptionPlan: "client_basic",
-        message: "Account created successfully. Waiting for trainer approval.",
-      })
-    } else {
-      console.log(`[Signup] 👤 Regular signup - isTrainerSignup: ${isTrainerSignup}`)
+    console.log(`[Signup] 👤 signup with invite code: ${inviteCode} - isTrainerSignup: ${isTrainerSignup}`)
 
       // Only assign trainer role if this is explicitly a trainer signup
       const role = isTrainerSignup ? "trainer" : "client"
@@ -77,23 +46,24 @@ export async function POST(request: NextRequest) {
         `[Signup] Creating user with role: ${role || "none"}${role === "trainer" ? " and trainer_basic plan" : ""}`,
       )
 
-      result = await createUser({
+      const newUser = {
         email,
         name,
-        role: role, // undefined for regular users, "trainer" for trainers
-      })
+        role: role,
+        ...(inviteCode && { inviteCode }),
+      } as Omit<User, "id" | "createdAt" | "updatedAt">
+      await createUser(user.uid, newUser)
 
       console.log(`[Signup] ✅ Successfully created account with role: ${role || "none"} and trainer_basic plan`)
 
       return NextResponse.json({
         success: true,
-        userId: result.id,
+        userId: user.uid,
         pendingApproval: false,
         autoSignedIn: isTrainerSignup,
         role,
         subscriptionPlan: role === "trainer" ? "trainer_basic" : "client_basic",
       })
-    }
   } catch (error) {
     console.error("[Signup] ❌ Signup error:", error)
     return NextResponse.json(
