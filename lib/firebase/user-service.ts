@@ -19,15 +19,11 @@ export interface User {
   email: string
   name?: string
   role?: "trainer" | "client" | "admin"
-  isApproved?: boolean
-  status?: "active" | "pending_approval" | "inactive"
   createdAt?: Timestamp
   updatedAt?: Timestamp
   inviteCode?: string
   universalInviteCode?: string
   pendingUsers?: string[]
-  hasFirebaseAuth?: boolean
-  firebaseUid?: string
 }
 
 export async function getCurrentUser(): Promise<FirebaseUser | null> {
@@ -90,9 +86,9 @@ export async function getUserByUid(uid: string): Promise<User | null> {
   }
 }
 
-export async function createUser(userData: Omit<User, "id" | "createdAt" | "updatedAt">): Promise<User> {
+export async function createUser(userId: string, userData: Omit<User, "id" | "createdAt" | "updatedAt">): Promise<User> {
   try {
-    const userRef = doc(collection(db, "users"))
+    const userRef = doc(collection(db, "users"), userId)
     const newUser: Omit<User, "id"> = {
       ...userData,
       createdAt: serverTimestamp() as Timestamp,
@@ -102,10 +98,8 @@ export async function createUser(userData: Omit<User, "id" | "createdAt" | "upda
     await setDoc(userRef, newUser)
 
     return {
-      id: userRef.id,
-      ...userData,
-      createdAt: serverTimestamp() as Timestamp,
-      updatedAt: serverTimestamp() as Timestamp,
+      id: userId,
+      ...newUser,
     }
   } catch (error) {
     console.error("Error creating user:", error)
@@ -156,6 +150,7 @@ export async function storeInviteCode(userId: string, inviteCode: string): Promi
 }
 
 export async function signupWithUniversalCode(
+  userId: string,
   email: string,
   name: string,
   universalCode: string,
@@ -172,11 +167,10 @@ export async function signupWithUniversalCode(
     const trainerDoc = trainerResult.docs[0]
     const trainerId = trainerDoc.id
 
-    const newUser = await createUser({
+    const newUser = await createUser(userId, {
       email,
       name,
       role: "client",
-      status: "pending_approval",
       inviteCode: universalCode,
     })
 
@@ -192,13 +186,8 @@ export async function signupWithUniversalCode(
   }
 }
 
-export async function approveUser(userId: string, trainerId: string): Promise<{ success: boolean; message: string }> {
+export async function removePendingUser(userId: string, trainerId: string): Promise<{ success: boolean; message: string }> {
   try {
-    await updateUser(userId, {
-      status: "active",
-      isApproved: true,
-    })
-
     const trainerRef = doc(db, "users", trainerId)
     const trainerDoc = await getDoc(trainerRef)
 
@@ -212,35 +201,10 @@ export async function approveUser(userId: string, trainerId: string): Promise<{ 
       })
     }
 
-    return { success: true, message: "User approved successfully" }
+    return { success: true, message: "User removed from pending list successfully" }
   } catch (error) {
-    console.error("Error approving user:", error)
-    return { success: false, message: "Failed to approve user" }
-  }
-}
-
-export async function rejectUser(userId: string, trainerId: string): Promise<{ success: boolean; message: string }> {
-  try {
-    await updateUser(userId, {
-      status: "inactive",
-    })
-    const trainerRef = doc(db, "users", trainerId)
-    const trainerDoc = await getDoc(trainerRef)
-
-    if (trainerDoc.exists()) {
-      const trainerData = trainerDoc.data()
-      const pendingUsers = (trainerData.pendingUsers || []).filter((id: string) => id !== userId)
-
-      await updateDoc(trainerRef, {
-        pendingUsers,
-        updatedAt: serverTimestamp(),
-      })
-    }
-
-    return { success: true, message: "User rejected successfully" }
-  } catch (error) {
-    console.error("Error rejecting user:", error)
-    return { success: false, message: "Failed to reject user" }
+    console.error("Error removing user from pending list:", error)
+    return { success: false, message: "Failed to remove user from pending list" }
   }
 }
 
