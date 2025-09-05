@@ -122,7 +122,7 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "Invalid email address format." }, { status: 400 })
         }
 
-        return NextResponse.json({ error: `Sorry! not the right password or email` }, { status: 401 })
+        return NextResponse.json({ error: `Authentication failed: Invalid email or password.` }, { status: 401 })
       }
 
   } catch (error: any) {
