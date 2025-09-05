@@ -130,7 +130,7 @@ export function ProgramDetails({ programId }: ProgramDetailsProps) {
             You can use this program for free in our Juice app workout tracker.
           </p>
           <Button className="w-full bg-[#D2FF28] hover:bg-[#B8E624] text-gray-900 font-medium py-4 px-6 rounded-lg text-lg" onClick={() => {
-            window.location.href = `/public/client-signup?source=program&programId=${programId}`
+            window.location.href = `/client-signup?source=program&programId=${programId}`
           }}>
             Get Program
           </Button>
