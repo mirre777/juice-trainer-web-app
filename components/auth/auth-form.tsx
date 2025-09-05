@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,10 +30,8 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [currentMode, setCurrentMode] = useState(mode)
-  console.log("successUrl", successUrl, mode, source)
 
-
-  const getSubTitle = () => {
+  const getSubTitle = useCallback(() => {
     if (source === SourceType.TRAINER_INVITE && currentMode === "signup") {
       return "Join Juice to connect with your trainer"
     } else if (source === SourceType.PROGRAM && currentMode === "signup") {
@@ -47,7 +45,28 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
     return currentMode === "login"
       ? "Enter your email below to login to your account"
       : "Enter your information below to create your account"
-  }
+  }, [source, currentMode])
+
+  const navigateToSuccess = useCallback(async () => {
+    if (successCallback) {
+      console.log("Calling success callback")
+      try {
+        await successCallback()
+      } catch (err) {
+        const error = source === SourceType.PROGRAM ? "Error importing program" : "Error connecting with trainer"
+        console.error(error, err)
+        setError(error)
+        setLoading(false)
+        return
+      }
+    }
+    console.log("Navigating to success url", successUrl)
+    if (successUrl) {
+      window.location.href = successUrl
+    } else {
+      router.push("/mobile-app-success")
+    }
+  }, [successCallback, successUrl, source, router])
 
   const saveAuth = async (data: any) => {
     // Set cookies and local storage
@@ -99,8 +118,6 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
         return
       }
 
-      console.log(`[AuthForm] ${currentMode} completed:`, data)
-
       // Set cookies and local storage
       await saveAuth(data)
 
@@ -129,7 +146,6 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
             navigateToSuccess()
             return
           }
-          console.log("userData", userData)
           if (userData.role === "trainer") {
             console.log(`[AuthForm] User is trainer, redirecting to overview`)
             router.push("/overview")
@@ -148,31 +164,6 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
       setError(`An unexpected error occurred. Please try again.`)
     }
     setLoading(false)
-  }
-
-  const navigateToSuccess = async() => {
-    if (successCallback) {
-      console.log("Calling success callback")
-      try {
-        await successCallback()
-      } catch (err) {
-        const error = source === SourceType.PROGRAM ? "Error importing program" : "Error connecting with trainer"
-        console.error(error, err)
-        setError(error)
-        setLoading(false)
-        return
-      }
-    }
-    console.log("Navigating to success url", successUrl)
-    if (successUrl) {
-      window.location.href = successUrl
-    } else {
-      if (isTrainerSignup) {
-        router.push("/overview")
-      } else {
-        router.push("/mobile-app-success")
-      }
-    }
   }
 
   return (
