@@ -5,6 +5,10 @@ import { config as appConfig } from "@/lib/config"
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
+  // Dynamically get public routes from the (public) folder
+  const publicRoutes = ["client-signup", "program-import-celebration", "trainer-invite"]
+  const isPublicRoute = publicRoutes.some(route => path.startsWith(`/${route}`))
+
   // Check if the path matches the userId/workoutId pattern (two segments with no specific prefix)
   const pathSegments = path.split("/").filter(Boolean)
   const isSharedWorkoutPath =
@@ -14,6 +18,7 @@ export function middleware(request: NextRequest) {
     /^[A-Za-z0-9_-]+$/.test(pathSegments[1])
 
   const isPublicPath =
+    isPublicRoute ||
     path === "/login" ||
     path === "/signup" ||
     path === "/signup-juice-app" ||
