@@ -31,7 +31,6 @@ export async function POST(request: NextRequest) {
           status: ClientStatus.Active,
           userId,
         })
-        return NextResponse.json({ success: true })
       }
     }
     await removePendingUser(userId, trainerId)

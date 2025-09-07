@@ -193,7 +193,9 @@ export async function removePendingUser(userId: string, trainerId: string): Prom
 
     if (trainerDoc.exists()) {
       const trainerData = trainerDoc.data()
+      console.log("before removing", trainerData.pendingUsers)
       const pendingUsers = (trainerData.pendingUsers || []).filter((id: string) => id !== userId)
+      console.log("pendingUsers", pendingUsers)
 
       await updateDoc(trainerRef, {
         pendingUsers,
