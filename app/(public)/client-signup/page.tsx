@@ -29,7 +29,7 @@ export default async function ClientSignupPage({ searchParams }: ClientSignupPro
   const { source, programId, inviteCode } = await searchParams
   const sourceType = source === "program" ? SourceType.PROGRAM : SourceType.TRAINER_INVITE
   console.log("source", sourceType)
-  const successUrl = sourceType === SourceType.PROGRAM? `/public/program-import-celebration` : "https://juice.fitness/download-juice-app"
+  const successUrl = sourceType === SourceType.PROGRAM? `/program-import-celebration` : "https://juice.fitness/download-juice-app"
 
   return (
     <>
