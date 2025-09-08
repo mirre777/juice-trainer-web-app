@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { programConversionService } from "@/lib/firebase/program-conversion-service"
+import { getUserIdFromCookie } from "@/lib/utils/user"
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,6 +10,15 @@ export async function POST(request: NextRequest) {
     console.log("[send-to-client API] Request body:", JSON.stringify(body, null, 2))
 
     const { clientId, programData, customMessage } = body
+
+    const trainerId = await getUserIdFromCookie()
+    if (!trainerId) {
+      console.log("[send-to-client API] ❌ Missing userId")
+      return NextResponse.json(
+        { error: "Unauthorized", details: "userId field is missing from request" },
+        { status: 401 },
+      )
+    }
 
     // Validate required fields
     if (!clientId) {
@@ -87,7 +97,7 @@ export async function POST(request: NextRequest) {
     console.log("[send-to-client API] Calling programConversionService.sendProgramToClient...")
 
     // Call the service method
-    const result = await programConversionService.sendProgramToClient(clientId, programData, customMessage)
+    const result = await programConversionService.sendProgramToClient(trainerId, clientId, programData, customMessage)
 
     console.log("[send-to-client API] ✅ Program sent successfully:", result)
 

@@ -495,14 +495,13 @@ export class ProgramConversionService {
   /**
    * Send program to client - main method called by the API
    */
-  async sendProgramToClient(clientId: string, programData: any, customMessage?: string): Promise<any> {
+  async sendProgramToClient(trainerId: string, clientId: string, programData: any, customMessage?: string): Promise<any> {
     try {
       console.log(`[sendProgramToClient] === STARTING PROGRAM SEND PROCESS ===`)
       console.log(`[sendProgramToClient] Client ID: ${clientId}`)
       console.log(`[sendProgramToClient] Program: ${programData.name || programData.program_title}`)
 
       // Get the client's userId from the trainer's client document
-      const trainerId = "5tVdK6LXCifZgjxD7rml3nEOXmh1" // This should come from auth context
 
       const clientUserId = await this.getClientUserId(trainerId, clientId)
 
