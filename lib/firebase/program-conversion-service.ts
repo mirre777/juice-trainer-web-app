@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore"
 import { fetchClients } from "./client-service"
 import { v4 as uuidv4 } from "uuid"
+import { getAllExercises, SimpleExercise } from "./program-import"
 
 // Types matching your mobile app structure
 export interface MobileProgram {
@@ -70,54 +71,42 @@ export class ProgramConversionService {
    * Ensures an exercise exists in either global or user's custom collection
    * Creates it if it doesn't exist
    */
-  private async ensureExerciseExists(userId: string, exerciseName: string): Promise<string> {
+  private async ensureExerciseExists(userId: string, allExercises: SimpleExercise[], exerciseName: string): Promise<string> {
     console.log(`[ensureExerciseExists] Checking for exercise: ${exerciseName}`)
 
     try {
-      // First check global exercises collection
-      const globalExercisesRef = collection(db, "exercises")
-      const globalQuery = query(globalExercisesRef, where("name", "==", exerciseName))
-      const globalSnapshot = await getDocs(globalQuery)
+      console.log("searching for exercise", exerciseName)
+      const existingExercise = allExercises.find((e) => e.name.toLowerCase() === exerciseName.toLowerCase())
 
-      if (!globalSnapshot.empty) {
-        console.log(`[ensureExerciseExists] Found in global collection: ${globalSnapshot.docs[0].id}`)
-        return globalSnapshot.docs[0].id
+      if (existingExercise) {
+          console.log("found existingExercise", existingExercise)
+          return existingExercise.id
       }
-
-      // Check user's custom exercises collection
-      const userExercisesRef = collection(db, "users", userId, "exercises")
-      const userQuery = query(userExercisesRef, where("name", "==", exerciseName))
-      const userSnapshot = await getDocs(userQuery)
-
-      if (!userSnapshot.empty) {
-        console.log(`[ensureExerciseExists] Found in user collection: ${userSnapshot.docs[0].id}`)
-        return userSnapshot.docs[0].id
-      }
-
-      // Create new exercise in user's collection using serverTimestamp()
-      const exerciseId = uuidv4()
-      const now = serverTimestamp()
-
-      const exerciseDoc: MobileExercise = {
-        id: exerciseId,
-        name: exerciseName,
-        muscleGroup: "Other",
-        isCardio: false,
-        isFullBody: false,
-        isMobility: false,
-        createdAt: now,
-        updatedAt: now,
-        deletedAt: null,
-      }
-
-      await setDoc(doc(userExercisesRef, exerciseId), exerciseDoc)
-      console.log(`[ensureExerciseExists] ✅ Created new exercise: ${exerciseName} with ID: ${exerciseId}`)
-
-      return exerciseId
+      const newExercise = await this.createExercise(userId, exerciseName)
+      return newExercise
     } catch (error) {
       console.error(`[ensureExerciseExists] Error processing exercise ${exerciseName}:`, error)
       throw error
     }
+  }
+
+  private async createExercise(userId: string, exerciseName: string): Promise<string> {
+    const userExercisesRef = collection(db, "users", userId, "exercises")
+    const exerciseId = uuidv4()
+    const now = serverTimestamp()
+    const exerciseDoc: MobileExercise = {
+      id: exerciseId,
+      name: exerciseName,
+      muscleGroup: "Other",
+      isCardio: false,
+      isFullBody: false,
+      isMobility: false,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    }
+    await setDoc(doc(userExercisesRef, exerciseId), exerciseDoc)
+    return exerciseId
   }
 
   /**
@@ -209,7 +198,8 @@ export class ProgramConversionService {
         }
 
         try {
-          const exerciseId = await this.ensureExerciseExists(userId, exercise.name.trim())
+          const allExercises = await getAllExercises(userId)
+          const exerciseId = await this.ensureExerciseExists(userId, allExercises, exercise.name.trim())
 
           let sets = exercise.sets || []
           if (!Array.isArray(sets) || sets.length === 0) {

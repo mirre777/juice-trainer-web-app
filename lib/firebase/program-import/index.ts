@@ -3,7 +3,7 @@ import { ProgramWithRoutines, RoutineWithOrder } from "../global-programs/types"
 import { WorkoutExercise } from "../workout-exercise-service"
 import { db } from "@/lib/db"
 
-type SimpleExercise = {
+export type SimpleExercise = {
   id: string
   name: string
 }
@@ -93,7 +93,7 @@ async function createExercise(userId: string, exercise: WorkoutExercise): Promis
     return newExercise
 }
 
-async function getAllExercises(userId: string): Promise<SimpleExercise[]> {
+export async function getAllExercises(userId: string): Promise<SimpleExercise[]> {
     const globalExercises = await getGlobalExercises()
     const userExercises = await getUserExercises(userId)
     return [...globalExercises, ...userExercises]
