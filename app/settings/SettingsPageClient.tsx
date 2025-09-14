@@ -164,6 +164,16 @@ export default function SettingsPageClient() {
     setSaveMessage("")
 
     try {
+      // Check if user has more than 3 active clients
+      if (clientCount > 3) {
+        setSaveMessage(`Cannot cancel subscription. You currently have ${clientCount} active clients, but the Basic plan only allows 3 clients. Please remove ${clientCount - 3} client(s) before cancelling your subscription.`)
+        setShowCancelSubscriptionModal(false)
+        setIsLoading(false)
+        // Clear message after 8 seconds (longer for this important message)
+        setTimeout(() => setSaveMessage(""), 8000)
+        return
+      }
+
       // Get current user ID
       const response = await fetch("/api/auth/me", {
         method: "GET",
@@ -472,21 +482,37 @@ export default function SettingsPageClient() {
               Cancel Subscription
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to cancel your current subscription? You will be downgraded to the Basic plan
-              (€0/month) and your client capacity will be reduced to 3 clients. This action can be reversed by upgrading again.
+              {clientCount > 3 ? (
+                <span className="text-red-600 font-medium">
+                  ⚠️ You currently have {clientCount} active clients. You must remove {clientCount - 3} client(s) before cancelling your subscription.
+                </span>
+              ) : (
+                <>
+                  Are you sure you want to cancel your current subscription? You will be downgraded to the Basic plan
+                  (€0/month) and your client capacity will be reduced to 3 clients. This action can be reversed by upgrading again.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCancelSubscriptionModal(false)}>
-              Keep Current Plan
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleCancelSubscription}
-              disabled={isLoading}
-            >
-              {isLoading ? "Cancelling..." : "Yes, Cancel Subscription"}
-            </Button>
+            {clientCount > 3 ? (
+              <Button variant="outline" onClick={() => setShowCancelSubscriptionModal(false)}>
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setShowCancelSubscriptionModal(false)}>
+                  Keep Current Plan
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleCancelSubscription}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Cancelling..." : "Yes, Cancel Subscription"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
