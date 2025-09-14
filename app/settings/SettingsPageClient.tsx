@@ -12,22 +12,26 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { LogOut, Trash2 } from "lucide-react"
+import { LogOut, Trash2, Users, X } from "lucide-react"
 import { PageLayout } from "@/components/shared/page-layout"
 import { LogoutModal } from "@/components/auth/logout-modal"
+import { ClientStatus } from "@/types/client"
 
 export default function SettingsPageClient() {
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [showCancelSubscriptionModal, setShowCancelSubscriptionModal] = useState(false)
   const [inviteCode, setInviteCode] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
   const [isLoadingData, setIsLoadingData] = useState(true)
+  const [clientCount, setClientCount] = useState(0)
   const [userData, setUserData] = useState({
     name: "",
     email: "",
     phone: "",
   })
+  const [subscriptionPlan, setSubscriptionPlan] = useState("trainer_basic")
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -50,12 +54,14 @@ export default function SettingsPageClient() {
           const data = await response.json()
           console.log("✅ User data from API:", data)
 
+          fetchClientCount()
           setInviteCode(data.universalInviteCode || "")
           setUserData({
             name: data.name || "",
             email: data.email || "",
             phone: "", // Not available in current API response
           })
+          setSubscriptionPlan(data.subscriptionPlan || "trainer_basic")
           setSaveMessage("") // Clear any previous error messages
         } else {
           const errorData = await response.json()
@@ -79,6 +85,21 @@ export default function SettingsPageClient() {
 
     fetchUserData()
   }, [])
+
+  const fetchClientCount = async () => {
+    const response = await fetch("/api/clients", {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+    const data = await response.json()
+    const clients = data.clients
+    // count clients with status "Active"
+    const activeClients = clients.filter((client: any) => client.status === ClientStatus.Active)
+    setClientCount(activeClients.length)
+  }
 
   const handleSaveChanges = async () => {
     setIsLoading(true)
@@ -115,6 +136,74 @@ export default function SettingsPageClient() {
       }
     } catch (error) {
       setSaveMessage("Error saving changes")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const getClientCapacity = () => {
+    return subscriptionPlan === "trainer_basic" ? 3 :
+           subscriptionPlan === "trainer_pro" ? 10 :
+           subscriptionPlan === "trainer_elite" ? 25 :
+           3
+  }
+
+  const calculateSubscriptionProgress = () => {
+    const progress = (clientCount / getClientCapacity()) * 100
+    if (progress > 100) {
+      return 100
+    }
+    if (progress < 0) {
+      return 0
+    }
+    return progress
+  }
+
+  const handleCancelSubscription = async () => {
+    setIsLoading(true)
+    setSaveMessage("")
+
+    try {
+      // Get current user ID
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("User not authenticated")
+      }
+
+      const userData = await response.json()
+      const userId = userData.uid
+
+      // Call API to cancel subscription (downgrade to basic)
+      const cancelResponse = await fetch("/api/payments/cancel-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          planId: subscriptionPlan, // Downgrade to basic plan
+        }),
+      })
+
+      const cancelData = await cancelResponse.json()
+
+      if (!cancelResponse.ok) {
+        throw new Error(cancelData.error || "Failed to cancel subscription")
+      }
+
+      setSaveMessage("Subscription cancelled successfully. You've been downgraded to the Basic plan.")
+      setSubscriptionPlan("trainer_basic")
+      setShowCancelSubscriptionModal(false)
+
+      // Clear message after 5 seconds
+      setTimeout(() => setSaveMessage(""), 5000)
+    } catch (error: any) {
+      setSaveMessage(`Error cancelling subscription: ${error.message}`)
     } finally {
       setIsLoading(false)
     }
@@ -201,6 +290,115 @@ export default function SettingsPageClient() {
           </CardContent>
         </Card>
 
+        {/* Subscription Plan Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Subscription Plan</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingData ? (
+              <div className="flex justify-center items-center p-8">
+                <div className="text-gray-500">Loading...</div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-md bg-gray-50">
+                  <div>
+                    <h3 className="font-medium text-lg capitalize">
+                      {subscriptionPlan === "trainer_basic" ? "Basic Plan" :
+                       subscriptionPlan === "trainer_pro" ? "Pro Plan" :
+                       subscriptionPlan === "trainer_elite" ? "Elite Plan" :
+                       subscriptionPlan}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {subscriptionPlan === "trainer_basic" ? "Up to 10 clients" :
+                       subscriptionPlan === "trainer_pro" ? "Up to 25 clients" :
+                       subscriptionPlan === "trainer_elite" ? "Unlimited clients" :
+                       "Current subscription plan"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {subscriptionPlan === "trainer_basic" ? "€0" :
+                       subscriptionPlan === "trainer_pro" ? "€49" :
+                       subscriptionPlan === "trainer_elite" ? "€69" :
+                       "—"}
+                    </div>
+                    <div className="text-sm text-gray-500">per month</div>
+                  </div>
+                </div>
+
+                {/* Client Capacity Progress Bar */}
+                <div className="p-4 border rounded-md bg-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center">
+                      <Users className="w-4 h-4 mr-2 text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700">Client Capacity ({clientCount} / {getClientCapacity()})
+                       </span>
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      {clientCount} / {getClientCapacity()}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${calculateSubscriptionProgress()}%`
+                      }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>0</span>
+                    <span>
+                      {getClientCapacity()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Upgrade CTA */}
+                <div className="p-4 border rounded-md bg-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Need more clients?</h4>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Upgrade your plan to increase your client capacity and unlock advanced features
+                      </p>
+                    </div>
+                    <Button
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => window.location.href = "/pricing"}
+                    >
+                      Upgrade Plan
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Cancel Subscription Button - Only show if not on basic plan */}
+                {subscriptionPlan !== "trainer_basic" && (
+                  <div className="p-4 border border-red-200 rounded-md bg-red-50">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-red-900">Cancel Subscription</h4>
+                        <p className="text-sm text-red-700 mt-1">
+                          Downgrade to the Basic plan and reduce your monthly costs
+                        </p>
+                      </div>
+                      <Button
+                        variant="destructive"
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                        onClick={() => setShowCancelSubscriptionModal(true)}
+                      >
+                        Cancel Plan
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Account Actions Section */}
         <Card>
           <CardHeader>
@@ -264,6 +462,34 @@ export default function SettingsPageClient() {
 
       {/* Logout Modal */}
       <LogoutModal open={showLogoutModal} onOpenChange={setShowLogoutModal} />
+
+      {/* Cancel Subscription Modal */}
+      <Dialog open={showCancelSubscriptionModal} onOpenChange={setShowCancelSubscriptionModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <X className="h-5 w-5 mr-2 text-red-500" />
+              Cancel Subscription
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel your current subscription? You will be downgraded to the Basic plan
+              (€0/month) and your client capacity will be reduced to 3 clients. This action can be reversed by upgrading again.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelSubscriptionModal(false)}>
+              Keep Current Plan
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelSubscription}
+              disabled={isLoading}
+            >
+              {isLoading ? "Cancelling..." : "Yes, Cancel Subscription"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   )
 }

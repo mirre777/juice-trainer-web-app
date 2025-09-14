@@ -1,8 +1,13 @@
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
-import { ErrorType, createError, logError, tryCatch } from "@/lib/utils/error-handler"
+import { ErrorType, createError, logError } from "@/lib/utils/error-handler"
+import { getUserById } from "./user-service"
 
-export type SubscriptionPlan = "trainer_basic" | "trainer_pro" | "trainer_elite"
+export enum SubscriptionPlan {
+  TrainerBasic = "trainer_basic",
+  TrainerPro = "trainer_pro",
+  TrainerElite = "trainer_elite",
+}
 
 // Set default subscription plan for new users
 export async function setDefaultSubscriptionPlan(userId: string): Promise<{ success: boolean; error?: any }> {
@@ -21,21 +26,11 @@ export async function setDefaultSubscriptionPlan(userId: string): Promise<{ succ
     console.log(`[setDefaultSubscriptionPlan] Setting default plan for user: ${userId}`)
 
     const userRef = doc(db, "users", userId)
-    const [, updateError] = await tryCatch(
-      () =>
-        updateDoc(userRef, {
+    updateDoc(userRef, {
           subscriptionPlan: "trainer_basic",
           subscriptionUpdatedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-        }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "setDefaultSubscriptionPlan", userId },
-    )
-
-    if (updateError) {
-      console.error(`[setDefaultSubscriptionPlan] ❌ Failed to set default plan:`, updateError)
-      return { success: false, error: updateError }
-    }
+        })
 
     console.log(`[setDefaultSubscriptionPlan] ✅ Successfully set trainer_basic plan for user: ${userId}`)
     return { success: true }
@@ -72,21 +67,12 @@ export async function updateSubscriptionPlan(
     console.log(`[updateSubscriptionPlan] Updating plan for user ${userId} to: ${plan}`)
 
     const userRef = doc(db, "users", userId)
-    const [, updateError] = await tryCatch(
-      () =>
-        updateDoc(userRef, {
-          subscriptionPlan: plan,
-          subscriptionUpdatedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }),
-      ErrorType.DB_WRITE_FAILED,
-      { function: "updateSubscriptionPlan", userId, plan },
-    )
 
-    if (updateError) {
-      console.error(`[updateSubscriptionPlan] ❌ Failed to update plan:`, updateError)
-      return { success: false, error: updateError }
-    }
+    updateDoc(userRef, {
+      subscriptionPlan: plan,
+      subscriptionUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
 
     console.log(`[updateSubscriptionPlan] ✅ Successfully updated plan for user ${userId} to: ${plan}`)
     return { success: true }
@@ -111,7 +97,6 @@ export async function getUserSubscriptionPlan(userId: string): Promise<Subscript
       return null
     }
 
-    const { getUserById } = await import("./user-service")
     const userData = await getUserById(userId)
 
     if (!userData) {
@@ -119,7 +104,7 @@ export async function getUserSubscriptionPlan(userId: string): Promise<Subscript
       return null
     }
 
-    return userData.subscriptionPlan || "trainer_basic"
+    return userData.subscriptionPlan as SubscriptionPlan || SubscriptionPlan.TrainerBasic
   } catch (error) {
     console.error("Error getting user subscription plan:", error)
     return null

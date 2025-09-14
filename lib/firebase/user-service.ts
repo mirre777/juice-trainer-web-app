@@ -13,6 +13,7 @@ import {
   type Timestamp,
 } from "firebase/firestore"
 import { getAuth, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
+import { SubscriptionPlan } from "./subscription-service"
 
 export interface User {
   id: string
@@ -24,6 +25,7 @@ export interface User {
   inviteCode?: string
   universalInviteCode?: string
   pendingUsers?: string[]
+  subscriptionPlan?: SubscriptionPlan
 }
 
 export async function getCurrentUser(): Promise<FirebaseUser | null> {

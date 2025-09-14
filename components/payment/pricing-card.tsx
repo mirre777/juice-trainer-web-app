@@ -30,19 +30,44 @@ function PricingCard({
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubscribe = () => {
+  const handleSubscribe = async () => {
     if (isCurrentPlan) {
       // Do nothing if this is the current plan
       return
     }
 
     setIsLoading(true)
-    // In a real app, you would check if the user is logged in first
-    // For demo purposes, we'll use a hardcoded user ID
-    const userId = "demo-user-123"
 
-    // Navigate to checkout page with plan details
-    router.push(`/checkout?plan=${planId}&price=${price}&name=${encodeURIComponent(name)}&userId=${userId}`)
+    try {
+      // Get the actual user ID from the authentication system
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("User not authenticated")
+      }
+
+      const userData = await response.json()
+      const userId = userData.uid
+
+      if (!userId) {
+        throw new Error("User ID not found")
+      }
+
+      // Navigate to checkout page with plan details
+      router.push(`/checkout?plan=${planId}&price=${price}&name=${encodeURIComponent(name)}&userId=${userId}`)
+    } catch (error) {
+      console.error("Error getting user ID:", error)
+      // Redirect to login if user is not authenticated
+      router.push("/login")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
