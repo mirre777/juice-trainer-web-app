@@ -66,7 +66,7 @@ export default function CheckoutForm({ planId, planName, amount, userId }: Check
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: amount * 100, // Convert to cents
-          currency: "usd",
+          currency: "eur",
           userId,
           planId,
         }),
@@ -81,7 +81,28 @@ export default function CheckoutForm({ planId, planName, amount, userId }: Check
       // 2. Simulate successful payment confirmation
       // In a real implementation, you would use stripe.confirmCardPayment with the client secret
 
-      // 3. Redirect to success page
+      // 3. Call handle-success endpoint to update subscription
+      const successResponse = await fetch("/api/payments/handle-success", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          planId,
+          sessionId: data.paymentIntentId, // Using payment intent ID as session ID
+        }),
+      })
+
+      const successData = await successResponse.json()
+
+      if (!successResponse.ok) {
+        console.error("Failed to update subscription:", successData.error)
+        // Still redirect to success page even if subscription update fails
+        // The user can contact support if needed
+      } else {
+        console.log("✅ Subscription updated successfully:", successData)
+      }
+
+      // 4. Redirect to success page
       router.push(`/payment-success?payment_intent=${data.paymentIntentId}&user_id=${userId}`)
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please try again.")

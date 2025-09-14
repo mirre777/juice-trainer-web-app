@@ -1,6 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { updateSubscriptionPlan } from "@/lib/firebase/subscription-service"
 
+enum SubscriptionPlan {
+  TrainerBasic = "trainer_basic",
+  TrainerPro = "trainer_pro",
+  TrainerElite = "trainer_elite",
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId, planId, sessionId } = await request.json()
@@ -12,9 +18,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Map plan IDs to subscription plans
-    const planMapping: Record<string, "trainer_basic" | "trainer_pro" | "trainer_elite"> = {
-      trainer_pro: "trainer_pro",
-      trainer_elite: "trainer_elite",
+    const planMapping: Record<string, SubscriptionPlan> = {
+      trainer_basic: SubscriptionPlan.TrainerBasic,
+      trainer_pro: SubscriptionPlan.TrainerPro,
+      trainer_elite: SubscriptionPlan.TrainerElite,
     }
 
     const subscriptionPlan = planMapping[planId]

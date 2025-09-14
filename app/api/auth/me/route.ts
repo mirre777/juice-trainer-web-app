@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/firebase/firebase"
 import { collection, doc, getDoc } from "firebase/firestore"
+import { SubscriptionPlan } from "@/lib/firebase/subscription-service"
 
 export async function GET() {
   try {
@@ -42,7 +43,7 @@ export async function GET() {
       }
 
       const userData = userDoc.data()
-      console.log("✅ User data extracted:", userData.id, userData.name, userData.role)
+      console.log("✅ User data extracted:", userDoc.id, userData.name, userData.role)
 
       // Determine user role with fallback logic
       let role = userData?.role ?? "client"
@@ -57,6 +58,8 @@ export async function GET() {
         universalInviteCode: userData?.universalInviteCode || "",
         // Add the inviteCode field that gets stored during login
         inviteCode: userData?.inviteCode || "",
+        // Add subscription plan with default to "trainer_basic"
+        subscriptionPlan: userData?.subscriptionPlan || SubscriptionPlan.TrainerBasic,
       }
 
       console.log("📤 Sending successful response:", response)
