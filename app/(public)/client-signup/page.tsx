@@ -1,7 +1,6 @@
 import { Metadata } from "next"
 import Image from "next/image"
 import { ClientSignupForm } from "./ClientSignupForm"
-import { importProgram, acceptInvite } from "./actions"
 
 enum SourceType {
     TRAINER_INVITE = "trainer-invite",
@@ -9,8 +8,7 @@ enum SourceType {
 }
 
 interface ClientSignupProps {
-    params: Promise<{}>
-    searchParams: Promise<{ source: string, programId?: string, inviteCode?: string }>
+    searchParams: Promise<{ source: string, programId?: string, inviteCode?: string, trainerName?: string }>
 }
 
 export async function generateMetadata({ searchParams }: ClientSignupProps): Promise<Metadata> {
@@ -26,10 +24,10 @@ export async function generateMetadata({ searchParams }: ClientSignupProps): Pro
 }
 
 export default async function ClientSignupPage({ searchParams }: ClientSignupProps) {
-  const { source, programId, inviteCode } = await searchParams
+  const { source, programId, inviteCode, trainerName } = await searchParams
   const sourceType = source === "program" ? SourceType.PROGRAM : SourceType.TRAINER_INVITE
   console.log("source", sourceType)
-  const successUrl = sourceType === SourceType.PROGRAM? `/program-import-celebration` : "https://juice.fitness/download-juice-app"
+  const successUrl = sourceType === SourceType.PROGRAM? `/program-import-celebration` : `/trainer-invite-celebration?trainerName=${trainerName}`
 
   return (
     <>

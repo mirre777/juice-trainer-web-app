@@ -120,45 +120,7 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
 
       // Set cookies and local storage
       await saveAuth(data)
-
-      // Handle different response scenarios
-      if (currentMode === "signup") {
-        console.log(`[AuthForm] Trainer auto-signed in, redirecting to overview`)
-        navigateToSuccess()
-      } else if (currentMode === "login") {
-        // Successful login - get user data to determine redirect
-        console.log(`[AuthForm] Successful login, checking user role`)
-
-        try {
-          // Add a small delay to ensure cookies are set
-          await new Promise((resolve) => setTimeout(resolve, 100))
-
-          const userResponse = await fetch("/api/auth/me", {
-            credentials: "include", // Ensure cookies are sent
-          })
-          const userData = await userResponse.json()
-
-          console.log(`[AuthForm] User data response:`, userData)
-
-          if (!userResponse.ok) {
-            console.error("[AuthForm] Failed to get user data:", userData)
-            // Fallback to mobile app success for safety
-            navigateToSuccess()
-            return
-          }
-          if (userData.role === "trainer") {
-            console.log(`[AuthForm] User is trainer, redirecting to overview`)
-            router.push("/overview")
-          } else {
-            console.log(`[AuthForm] User is not trainer (role: ${userData.role}), redirecting to mobile app success`)
-            navigateToSuccess()
-          }
-        } catch (userError) {
-          console.error("[AuthForm] Error fetching user data:", userError)
-          // Fallback to mobile app success for safety
-          navigateToSuccess()
-        }
-      }
+      navigateToSuccess()
     } catch (err) {
       console.error(`[AuthForm] Error during ${currentMode}:`, err)
       setError(`An unexpected error occurred. Please try again.`)
