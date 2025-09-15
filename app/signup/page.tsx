@@ -6,7 +6,6 @@ import { ClientWorkoutView } from "@/components/client-workout-view"
 import { useState, useEffect } from "react"
 import { getSharedWorkout } from "@/lib/firebase/shared-workout-service"
 import type { FirebaseWorkout } from "@/lib/firebase/workout-service"
-import
 
 export default function SignupPage() {
   const pathname = usePathname()
