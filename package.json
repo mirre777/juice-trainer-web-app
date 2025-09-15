@@ -63,6 +63,7 @@
     "jsonwebtoken": "latest",
     "lucide-react": "^0.454.0",
     "next": "15.0.0",
+    "next-client-cookies": "^2.1.0",
     "next-themes": "latest",
     "node-fetch": "latest",
     "node-notifier": "latest",

@@ -1,6 +1,6 @@
 export interface WorkoutProgram {
   id?: string
-  title: string
+  name: string
   notes?: string
   weeks: ProgramWeek[]
   duration?: number
@@ -102,7 +102,7 @@ export interface MobileExercise {
 }
 
 export function validateProgramForMobileConversion(program: WorkoutProgram): boolean {
-  if (!program.title || !program.weeks || program.weeks.length === 0) {
+  if (!program.name || !program.weeks || program.weeks.length === 0) {
     return false
   }
 

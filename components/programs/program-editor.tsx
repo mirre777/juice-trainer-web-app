@@ -94,7 +94,7 @@ export default function ProgramEditor({ hideNewProgramDialog = false }: ProgramE
               <div>
                 <label className="text-sm font-medium mb-1 block">Program Title</label>
                 <Input
-                  value={program.program_title}
+                  value={program.name}
                   onChange={handleProgramTitleChange}
                   placeholder="Enter program title"
                 />

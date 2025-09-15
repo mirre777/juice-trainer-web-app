@@ -97,8 +97,8 @@ useEffect(() => {
   if (!userId) return
 
   const q = query(
-    collection(db, "sheets_imports"), 
-    where("userId", "==", userId), 
+    collection(db, "sheets_imports"),
+    where("userId", "==", userId),
     orderBy("createdAt", "desc")
   )
 
@@ -111,7 +111,7 @@ useEffect(() => {
       importsData.push(importData)
 
       // Detect newly completed imports for notifications
-      if (importData.status === "conversion_complete" && 
+      if (importData.status === "conversion_complete" &&
           !dismissedNotifications.has(importData.id)) {
         newlyCompleted.push(importData)
       }
@@ -133,7 +133,7 @@ useEffect(() => {
 \`\`\`typescript
 // Response format from API
 {
-  program_title: string,
+  name: string,
   program_notes: string,
   program_weeks: number,
   routine_count: number,
@@ -227,7 +227,7 @@ interface ImportState {
 \`\`\`typescript
 // URL validation in ImportProgramsClient.tsx
 const isValidGoogleSheetsUrl = (url: string): boolean => {
-  return url.includes("docs.google.com/spreadsheets") && 
+  return url.includes("docs.google.com/spreadsheets") &&
          extractSpreadsheetId(url) !== null
 }
 
@@ -252,8 +252,8 @@ const dismissNotification = (importId: string) => {
 }
 
 // Filter newly completed imports
-const newlyCompleted = imports.filter(imp => 
-  imp.status === "conversion_complete" && 
+const newlyCompleted = imports.filter(imp =>
+  imp.status === "conversion_complete" &&
   !dismissedNotifications.has(imp.id)
 )
 \`\`\`
@@ -297,7 +297,7 @@ const newlyCompleted = imports.filter(imp =>
 // Debounced search implementation
 const debouncedSearchTerm = useDebounce(searchTerm, 300)
 
-const filteredImports = useMemo(() => 
+const filteredImports = useMemo(() =>
   imports.filter(importItem =>
     importItem.name?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
     importItem.programName?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
@@ -329,11 +329,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /sheets_imports/{importId} {
       // Users can only access their own imports
-      allow read, write: if request.auth != null && 
+      allow read, write: if request.auth != null &&
                            request.auth.uid == resource.data.userId;
-      
+
       // Allow creation if user is authenticated
-      allow create: if request.auth != null && 
+      allow create: if request.auth != null &&
                       request.auth.uid == request.resource.data.userId;
     }
   }

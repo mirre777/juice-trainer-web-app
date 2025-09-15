@@ -47,7 +47,6 @@ interface Week {
 
 interface Program {
   name?: string
-  program_title?: string
   description?: string
   duration_weeks?: number
   program_weeks?: number
@@ -86,8 +85,6 @@ export default function PeriodizedReviewClient({
   const [customMessage, setCustomMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [clientsLoading, setClientsLoading] = useState(false)
-  const [clientsError, setClientsError] = useState<string | null>(null)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({})
   const [showSendToClient, setShowSendToClient] = useState(false)
 
@@ -117,12 +114,12 @@ export default function PeriodizedReviewClient({
 
       // Set reasonable defaults if missing
       actualProgram.duration_weeks =
-        Number.isInteger(actualProgram.duration_weeks) && actualProgram.duration_weeks > 0
+        Number.isInteger(actualProgram.duration_weeks || 0) && (actualProgram.duration_weeks || 0) > 0
           ? actualProgram.duration_weeks
           : actualProgram.program_weeks || actualProgram.weeks?.length || 1
 
       // Use the import name or program name
-      actualProgram.name = importData.name || actualProgram.program_title || actualProgram.name || "Untitled Program"
+      actualProgram.name = importData.name || "Untitled Program"
 
       console.log("[PeriodizedReviewClient] Setting actual program state:", {
         name: actualProgram.name,
@@ -156,8 +153,8 @@ export default function PeriodizedReviewClient({
   }, [initialClients])
 
   const fetchClientsFromAPI = async () => {
-    setClientsLoading(true)
-    setClientsError(null)
+    setIsLoading(true)
+    setError(null)
 
     try {
       const response = await fetch("/api/clients", {
@@ -173,9 +170,9 @@ export default function PeriodizedReviewClient({
       }
     } catch (error) {
       console.error("Error fetching clients:", error)
-      setClientsError(error instanceof Error ? error.message : "Failed to fetch clients")
+      setError(error instanceof Error ? error.message : "Failed to fetch clients")
     } finally {
-      setClientsLoading(false)
+      setIsLoading(false)
     }
   }
 
@@ -192,7 +189,7 @@ export default function PeriodizedReviewClient({
         },
         body: JSON.stringify({
           program: programState,
-          name: programState.name || programState.program_title,
+          name: programState.name,
         }),
       })
 
@@ -200,16 +197,15 @@ export default function PeriodizedReviewClient({
         throw new Error("Failed to save changes")
       }
 
-      toast({
+      toast.success({
         title: "Changes Saved",
         description: "Your program changes have been saved successfully.",
       })
     } catch (error) {
       console.error("Error saving changes:", error)
-      toast({
+      toast.error({
         title: "Save Failed",
         description: "Failed to save your changes. Please try again.",
-        variant: "destructive",
       })
     } finally {
       setIsSaving(false)
@@ -218,20 +214,18 @@ export default function PeriodizedReviewClient({
 
   const handleSendToClient = async () => {
     if (!selectedClientId) {
-      toast({
+      toast.error({
         title: "No Client Selected",
         description: "Please select a client to send the program to.",
-        variant: "destructive",
       })
       return
     }
 
     const selectedClient = clients.find((c) => c.id === selectedClientId)
     if (!selectedClient) {
-      toast({
+      toast.error({
         title: "Client Not Found",
         description: "The selected client could not be found.",
-        variant: "destructive",
       })
       return
     }
@@ -258,9 +252,9 @@ export default function PeriodizedReviewClient({
         throw new Error(errorData.error || "Failed to send program")
       }
 
-      toast({
+      toast.success({
         title: "Program Sent Successfully!",
-        description: `The program "${programState?.name || programState?.program_title}" has been sent to ${selectedClient.name}.`,
+        description: `The program "${programState?.name}" has been sent to ${selectedClient.name}.`,
       })
 
       setSelectedClientId("")
@@ -268,10 +262,9 @@ export default function PeriodizedReviewClient({
       setShowSendToClient(false)
     } catch (error) {
       console.error("[PeriodizedReviewClient] Error sending program:", error)
-      toast({
+      toast.error({
         title: "Failed to Send Program",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
-        variant: "destructive",
       })
     } finally {
       setIsSending(false)
@@ -454,7 +447,7 @@ export default function PeriodizedReviewClient({
           <Label htmlFor="program-title">Program Title</Label>
           <Input
             id="program-title"
-            value={programState.name || programState.program_title || ""}
+            value={programState.name || ""}
             onChange={(e) => updateProgramField("name", e.target.value)}
             placeholder="Enter program title..."
           />

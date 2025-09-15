@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const docRef = doc(db, "sheets_imports", id)
 
     // Only allow updating 'name' and 'status' for now
-    const updateData: { name?: string; status?: string } = {}
+    const updateData: { name?: string; status?: string, program?: string } = {}
     if (body.name !== undefined) {
       updateData.name = body.name
     }
