@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { setCookie } from "cookies-next"
 
-enum SourceType {
+export enum SourceType {
   TRAINER_INVITE = "trainer-invite",
-  PROGRAM = "program"
+  PROGRAM = "program",
+  TRAINER_AUTH = "trainer-auth"
 }
 
 interface AuthFormProps {
@@ -40,11 +41,11 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
       return "Log in to connect with your trainer"
     } else if (source === SourceType.PROGRAM && currentMode === "login") {
       return "Log in to add this workout program"
+    } else if (source === SourceType.TRAINER_AUTH && currentMode === "login") {
+      return "Enter your information bellow to access your account"
+    } else {
+      return "Enter your information below to create your account "
     }
-    // Fallback for server-side rendering
-    return currentMode === "login"
-      ? "Enter your email below to login to your account"
-      : "Enter your information below to create your account"
   }, [source, currentMode])
 
   const navigateToSuccess = useCallback(async () => {
@@ -56,8 +57,8 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
         const error = source === SourceType.PROGRAM ? "Error importing program" : "Error connecting with trainer"
         console.error(error, err)
         setError(error)
+      } finally {
         setLoading(false)
-        return
       }
     }
     console.log("Navigating to success url", successUrl)
@@ -70,6 +71,7 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
 
   const saveAuth = async (data: any) => {
     // Set cookies and local storage
+    console.log(`Saving auth for user ${data.userId}`)
     if (data.userId) {
       setCookie("user_id", data.userId)
       localStorage.setItem("user_id", data.userId)
@@ -120,45 +122,9 @@ export function AuthForm({ mode, isTrainerSignup = true, successUrl = "", source
 
       // Set cookies and local storage
       await saveAuth(data)
-
-      // Handle different response scenarios
-      if (currentMode === "signup") {
-        console.log(`[AuthForm] Trainer auto-signed in, redirecting to overview`)
-        navigateToSuccess()
-      } else if (currentMode === "login") {
-        // Successful login - get user data to determine redirect
-        console.log(`[AuthForm] Successful login, checking user role`)
-
-        try {
-          // Add a small delay to ensure cookies are set
-          await new Promise((resolve) => setTimeout(resolve, 100))
-
-          const userResponse = await fetch("/api/auth/me", {
-            credentials: "include", // Ensure cookies are sent
-          })
-          const userData = await userResponse.json()
-
-          console.log(`[AuthForm] User data response:`, userData)
-
-          if (!userResponse.ok) {
-            console.error("[AuthForm] Failed to get user data:", userData)
-            // Fallback to mobile app success for safety
-            navigateToSuccess()
-            return
-          }
-          if (userData.role === "trainer") {
-            console.log(`[AuthForm] User is trainer, redirecting to overview`)
-            router.push("/overview")
-          } else {
-            console.log(`[AuthForm] User is not trainer (role: ${userData.role}), redirecting to mobile app success`)
-            navigateToSuccess()
-          }
-        } catch (userError) {
-          console.error("[AuthForm] Error fetching user data:", userError)
-          // Fallback to mobile app success for safety
-          navigateToSuccess()
-        }
-      }
+      // Add a small delay to ensure cookies are set
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      await navigateToSuccess()
     } catch (err) {
       console.error(`[AuthForm] Error during ${currentMode}:`, err)
       setError(`An unexpected error occurred. Please try again.`)

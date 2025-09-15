@@ -147,7 +147,7 @@ export function TrainerInviteDetails({ inviteCode }: TrainerInviteDetailsProps) 
         {/* Call to Action */}
         <div className="text-center">
           <Button className="w-full bg-[#D2FF28] hover:bg-[#B8E624] text-gray-900 font-medium py-4 px-6 rounded-lg text-lg" onClick={() => {
-            window.location.href = `/client-signup?source=trainer-invite&inviteCode=${inviteCode}`
+            window.location.href = `/client-signup?source=trainer-invite&inviteCode=${inviteCode}&trainerName=${invitation.trainerName}`
           }}>
             Sign Up and Connect
           </Button>
