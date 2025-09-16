@@ -11,6 +11,7 @@ export type WorkoutExercise = {
   muscleGroup?: string
   sets: WorkoutSet[],
   oneRepMax: number | null
+  video_url?: string
 }
 
 function calculate1RM(weight: number, reps: number): number {

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,7 +40,6 @@ interface Week {
 
 interface Program {
   name?: string
-  program_title?: string
   title?: string
   description?: string
   duration_weeks?: number
@@ -81,11 +80,10 @@ const errorLog = (message: string, error?: any) => {
   console.error(`[ReviewProgramClient ERROR] ${message}`, error || "")
 }
 
-export default function ReviewProgramClient({ importData, importId, initialClients = [] }: ReviewProgramClientProps) {
+export default function ReviewProgramClient({ importData, importId }: ReviewProgramClientProps) {
   debugLog("Component initialized with props:", {
     importData: !!importData,
     importId,
-    clientCount: initialClients.length,
   })
 
   const router = useRouter()
@@ -94,7 +92,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   const [originalProgramState, setOriginalProgramState] = useState<Program | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [clients, setClients] = useState<Client[]>(initialClients)
+  const [clients, setClients] = useState<Client[]>([])
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [customMessage, setCustomMessage] = useState("")
   const [isSaving, setIsSaving] = useState(false)
@@ -234,8 +232,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         debugLog("Program data from import:", program)
 
         const programState: Program = {
-          name: importData.name || program.program_title || program.title || program.name || "Untitled Program",
-          program_title: program.program_title || program.title || program.name,
+          name: importData.name || program.name || "Untitled Program",
           description: program.description || "",
           duration_weeks: Number(program.duration_weeks || program.program_weeks || program.weeks?.length || 1),
           is_periodized: Boolean(program.is_periodized || (program.weeks && program.weeks.length > 1)),
@@ -261,31 +258,25 @@ export default function ReviewProgramClient({ importData, importId, initialClien
   // Fetch clients if not provided initially
   useEffect(() => {
     const fetchClients = async () => {
-      debugLog("Fetching clients, initial count:", initialClients.length)
+      try {
+        const response = await fetch("/api/clients", {
+          credentials: "include",
+        })
 
-      if (initialClients.length === 0) {
-        try {
-          const response = await fetch("/api/clients", {
-            credentials: "include",
-          })
-
-          if (response.ok) {
-            const data = await response.json()
-            debugLog("Fetched clients from API:", data.clients)
-            setClients(data.clients || [])
-          } else {
-            debugLog("Failed to fetch clients, status:", response.status)
-          }
-        } catch (error) {
-          errorLog("Error fetching clients:", error)
+        if (response.ok) {
+          const data = await response.json()
+          debugLog("Fetched clients from API:", data.clients)
+          setClients(data.clients || [])
+        } else {
+          debugLog("Failed to fetch clients, status:", response.status)
         }
-      } else {
-        setClients(initialClients)
+      } catch (error) {
+        errorLog("Error fetching clients:", error)
       }
     }
 
     fetchClients()
-  }, [initialClients])
+  }, [])
 
   const handleSaveChanges = useCallback(async () => {
     debugLog("Saving changes for program:", programState?.name)
@@ -305,7 +296,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
         },
         body: JSON.stringify({
           program: programState,
-          name: programState.name || programState.program_title,
+          name: programState.name,
           status: "reviewed",
         }),
       })
@@ -396,7 +387,7 @@ export default function ReviewProgramClient({ importData, importId, initialClien
 
       toast.success({
         title: "Program Sent Successfully!",
-        description: `The program "${programState.name || programState.program_title}" has been sent to ${selectedClient.name}.`,
+        description: `The program "${programState.name}" has been sent to ${selectedClient.name}.`,
       })
 
       setSelectedClientId("")

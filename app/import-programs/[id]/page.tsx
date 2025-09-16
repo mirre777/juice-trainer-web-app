@@ -1,135 +1,56 @@
+"use client"
 import { notFound } from "next/navigation"
-import { cookies } from "next/headers"
 import ReviewProgramClient from "./review-program-client"
-import { fetchClients } from "@/lib/firebase/client-service"
-import { db } from "@/lib/firebase/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { ImportProgram } from "@/lib/firebase/program/types"
+import { useEffect, useState, use } from "react"
 
-interface ImportData {
-  id: string
-  name?: string
-  program: any
-  status: string
-  created_at: string
-  trainer_id?: string
-}
-
-interface Client {
-  id: string
-  name: string
-  email?: string
-  status?: string
-  initials?: string
-}
-
-async function getImportData(id: string): Promise<ImportData | null> {
+const getImportData = async (id: string): Promise<ImportProgram | null> => {
   try {
     console.log(`[getImportData] Fetching import data for ID: ${id}`)
 
-    // Get trainer ID from cookies
-    const cookieStore = await cookies()
-    const userId = cookieStore.get("user_id")?.value
-    const userIdAlt = cookieStore.get("userId")?.value
-    const trainerId = userId || userIdAlt
+    // Check environment variables
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const url = `${baseUrl}/api/trainer-program/${id}`
+    console.log("Full URL:", url)
 
-    if (!trainerId) {
-      console.log("[getImportData] No trainer ID found in cookies")
-      return null
-    }
-
-    console.log(`[getImportData] Using trainer ID: ${trainerId}`)
-
-    // Fetch the actual import document from Firebase - try both possible paths
-    let importDoc
-
-    // First try the subcollection path
-    const subCollectionRef = doc(db, "users", trainerId, "sheets-imports", id)
-    importDoc = await getDoc(subCollectionRef)
-
-    if (!importDoc.exists()) {
-      // Try the root collection path as fallback
-      const rootCollectionRef = doc(db, "sheets_imports", id)
-      importDoc = await getDoc(rootCollectionRef)
-    }
-
-    if (!importDoc.exists()) {
-      console.log(`[getImportData] Import document not found in either location for ID: ${id}`)
-      return null
-    }
-
-    const importData = importDoc.data()
-    console.log(`[getImportData] Found import data:`, {
-      id: importData.id || id,
-      name: importData.name,
-      status: importData.status,
-      hasProgram: !!importData.program,
-      programKeys: importData.program ? Object.keys(importData.program) : [],
-      programTitle: importData.program?.program_title || importData.program?.title || importData.program?.name,
-      userId: importData.userId,
-      trainer_id: importData.trainer_id,
+    const response = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        "Content-Type": "application/json",
+      },
     })
 
-    // Convert Firestore Timestamp to ISO string for serialization
-    const created_at = importData.created_at || importData.createdAt || new Date()
-    const created_at_string = created_at.toDate ? created_at.toDate().toISOString() : created_at.toISOString()
+    console.log("Response status:", response.status)
 
-    return {
-      id: importData.id || id,
-      name:
-        importData.name ||
-        importData.program?.program_title ||
-        importData.program?.title ||
-        importData.program?.name ||
-        "Untitled Program",
-      program: importData.program || null,
-      status: importData.status || "pending",
-      created_at: created_at_string,
-      trainer_id: importData.trainer_id || importData.userId || trainerId,
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[getImportData] API Error ${response.status}:`, errorText)
+      return null
     }
+
+    const contentType = response.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      const responseText = await response.text()
+      console.error(`[getImportData] Expected JSON but got:`, contentType)
+      console.error(`[getImportData] Response body:`, responseText.substring(0, 500))
+      return null
+    }
+
+    const data = await response.json()
+    console.log("Successfully fetched program data:", data)
+    return data
   } catch (error) {
-    console.error("[getImportData] Error fetching import data:", error)
+    console.error("[getImportData] Network or other error:", error)
     return null
   }
 }
 
-async function getClients(): Promise<Client[]> {
-  try {
-    const cookieStore = await cookies()
-    const userId = cookieStore.get("user_id")?.value
-    const userIdAlt = cookieStore.get("userId")?.value
-    const trainerId = userId || userIdAlt
-
-    if (!trainerId) {
-      console.log("No trainer ID found in cookies")
-      return []
-    }
-
-    console.log("Fetching clients for trainer:", trainerId)
-    const clients = await fetchClients(trainerId)
-
-    // Transform clients to match expected interface
-    const transformedClients: Client[] = clients.map((client) => ({
-      id: client.id,
-      name: client.name,
-      email: client.email,
-      status: client.status || "Active",
-      initials: client.initials || client.name?.charAt(0) || "?",
-    }))
-
-    console.log("Server-side clients fetched:", transformedClients.length)
-    return transformedClients
-  } catch (error) {
-    console.error("Error fetching clients server-side:", error)
-    return []
-  }
-}
-
-export default async function ReviewProgramPage({
+export default function ReviewProgramPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { id } = await params
+  const { id } = use(params)
 
   if (!id) {
     notFound()
@@ -138,18 +59,61 @@ export default async function ReviewProgramPage({
   console.log(`[ReviewProgramPage] Loading page for import ID: ${id}`)
 
   // Fetch import data and clients in parallel
-  const [importData, initialClients] = await Promise.all([getImportData(id), getClients()])
+  const [importData, setImportData] = useState<ImportProgram | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        const data = await getImportData(id)
+        if (!data) {
+          console.log(`[ReviewProgramPage] No import data found for ID: ${id}`)
+          setError("Program not found")
+          return
+        }
+
+        setImportData(data)
+        console.log(`[ReviewProgramPage] Successfully loaded import data:`, {
+          id: data.id,
+          name: data.name,
+          status: data.status,
+        })
+      } catch (err) {
+        console.error("[ReviewProgramPage] Error fetching data:", err)
+        setError("Failed to load program data")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchData()
+  }, [id])
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-gray-500">Loading program...</div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-red-500">{error}</div>
+      </div>
+    )
+  }
+
+  // Show not found if no data
   if (!importData) {
-    console.log(`[ReviewProgramPage] No import data found for ID: ${id}`)
     notFound()
   }
 
-  console.log(`[ReviewProgramPage] Successfully loaded import data:`, {
-    name: importData.name,
-    hasProgram: !!importData.program,
-    status: importData.status,
-  })
-
-  return <ReviewProgramClient importData={importData} importId={id} initialClients={initialClients} />
+  return <ReviewProgramClient importData={importData} importId={id} />
 }

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       weeksLength: programData.weeks?.length,
       hasRoutines: !!programData.routines,
       routinesLength: programData.routines?.length,
-      programTitle: programData.program_title || programData.title || programData.name,
+      name: programData.name,
     })
 
     // Validate program data structure

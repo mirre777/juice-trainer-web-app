@@ -2,8 +2,8 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { getGlobalProgram } from "@/lib/firebase/global-programs"
-import { cookies } from "next/headers"
 import { importProgram } from "@/lib/firebase/program-import"
+import { getUserIdFromCookie } from "@/lib/utils/user"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const { id } = await params
@@ -11,9 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   try {
     // Get user ID from cookies (following the app's authentication pattern)
-    const cookieStore = await cookies()
-    const userId = cookieStore.get("user_id")?.value
-    console.log("userId from cookie:", userId)
+    const userId = await getUserIdFromCookie()
 
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized - No user ID found" }, { status: 401 })
