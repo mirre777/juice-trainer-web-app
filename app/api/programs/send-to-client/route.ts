@@ -109,17 +109,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[send-to-client API] ❌ Error sending program to client:", error)
 
-    // Provide detailed error information
-    const errorDetails = {
-      message: error.message,
-      stack: error.stack?.substring(0, 1000), // Limit stack trace length
-      name: error.name,
-    }
-
     return NextResponse.json(
       {
         error: "Failed to send program to client",
-        details: errorDetails,
+        details: {
+          message: error
+        },
       },
       { status: 500 },
     )

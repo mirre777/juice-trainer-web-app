@@ -1,11 +1,17 @@
 import { collection, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore"
 import { ProgramWithRoutines, RoutineWithOrder } from "../global-programs/types"
-import { WorkoutExercise } from "../workout-exercise-service"
 import { db } from "@/lib/db"
+import { v4 as uuidv4 } from "uuid"
 
 type SimpleExercise = {
   id: string
   name: string
+}
+
+type GetOrCreateExercise = {
+  name: string
+  id?: string
+  muscleGroup?: string
 }
 
 export async function importProgram(program: ProgramWithRoutines, userId: string) {
@@ -39,7 +45,12 @@ export async function importProgram(program: ProgramWithRoutines, userId: string
 
 export async function importRoutine(userId: string, routine: RoutineWithOrder, programId: string, allExercises: SimpleExercise[]): Promise<string> {
   const exercises = await Promise.all(routine.exercises.map(async (exercise) => {
-    const exerciseId = await getOrCreateExercise(userId, exercise, allExercises)
+    const exerciseToGetOrCreate: GetOrCreateExercise = {
+      name: exercise.name,
+      id: exercise.id,
+      muscleGroup: exercise.muscleGroup
+    };
+    const exerciseId = await getOrCreateExercise(userId, allExercises, exerciseToGetOrCreate)
     return {
         ...exercise,
         id: exerciseId
@@ -62,7 +73,24 @@ export async function importRoutine(userId: string, routine: RoutineWithOrder, p
   return routine.id
 }
 
-async function getOrCreateExercise(userId: string, exercise: WorkoutExercise, allExercises: SimpleExercise[]): Promise<string> {
+export async function getOrCreateProgramExercises(userId: string, exerciseNames: Set<string>) {
+  const allExercises = await getAllExercises(userId);
+  const programExerciseNameToId = new Map<string, string>();
+  // return map of exercise names to id do it in parallel
+  await Promise.all(Array.from(exerciseNames).map(async (exerciseName) => {
+    const exercise = allExercises.find((e) => e.name.toLowerCase() === exerciseName.toLowerCase());
+    if (exercise) {
+      programExerciseNameToId.set(exerciseName, exercise.id);
+    } else {
+      const newExercise = await createExercise(userId, { name: exerciseName });
+      programExerciseNameToId.set(exerciseName, newExercise.id)
+    }
+  }));
+  console.log("programExerciseNameToId", programExerciseNameToId);
+  return programExerciseNameToId;
+}
+
+async function getOrCreateExercise(userId: string, allExercises: SimpleExercise[], exercise: GetOrCreateExercise): Promise<string> {
     // compare exercise.name to allExercises without case insensitive
     console.log("searching for exercise", exercise.name)
     const existingExercise = allExercises.find((e) => e.name.toLowerCase() === exercise.name.toLowerCase())
@@ -71,15 +99,17 @@ async function getOrCreateExercise(userId: string, exercise: WorkoutExercise, al
         console.log("found existingExercise", existingExercise)
         return existingExercise.id
     }
-    const newExercise = await createExercise(userId, exercise)
+    const newExercise = await createExercise(userId, getOrCreateExercise)
     return newExercise.id
 }
 
-async function createExercise(userId: string, exercise: WorkoutExercise): Promise<SimpleExercise> {
-    const exerciseRef = doc(db, "users", userId, "exercises", exercise.id)
+async function createExercise(userId: string, exercise: GetOrCreateExercise): Promise<SimpleExercise> {
+    const id = exercise.id ?? uuidv4()
+    const exerciseRef = doc(db, "users", userId, "exercises", id)
     const now = serverTimestamp()
+
     const newExercise = {
-        id: exercise.id,
+        id,
         name: exercise.name,
         muscleGroup: exercise.muscleGroup ?? "Other",
         isCardio: false,
