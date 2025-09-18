@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,6 +16,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     console.error("Error fetching sheets import:", error)
     return NextResponse.json({ message: "Failed to fetch sheets import" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const docRef = doc(db, "sheets_imports", id)
+    const docSnap = await getDoc(docRef)
+
+    if (!docSnap.exists()) {
+      return NextResponse.json({ message: "Import not found" }, { status: 404 })
+    }
+
+    await deleteDoc(docRef)
+
+    return NextResponse.json({ message: "Import deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting sheets import:", error)
+    return NextResponse.json({ message: "Failed to delete sheets import" }, { status: 500 })
   }
 }
 
