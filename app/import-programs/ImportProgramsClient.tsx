@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog" // Added DialogHeader, DialogTitle, DialogFooter
-import { Search, FileSpreadsheet, ChevronRight } from "lucide-react"
+import { Search, FileSpreadsheet, ChevronRight, Copy, Trash2 } from "lucide-react"
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { useEffect, useState, useMemo } from "react"
@@ -168,6 +168,8 @@ export default function ImportProgramsClient() {
     return new Set()
   })
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [programToDelete, setProgramToDelete] = useState<string | null>(null)
   // Removed showInstructionsDialog and doNotShowInstructionsAgain since instructions are now always visible
 
   useEffect(() => {
@@ -423,6 +425,71 @@ export default function ImportProgramsClient() {
     }
   }
 
+  // Handle duplicate program
+  const handleDuplicate = async (importId: string) => {
+    try {
+      console.log("[ImportPrograms] Duplicating program:", importId)
+
+      const response = await fetch(`/api/sheets-imports/${importId}/duplicate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to duplicate program')
+      }
+
+      const duplicatedProgram = await response.json()
+      console.log("[ImportPrograms] Program duplicated successfully:", duplicatedProgram.id)
+
+      // Show success message
+      alert(`Program duplicated successfully! New program ID: ${duplicatedProgram.id}`)
+
+    } catch (error) {
+      console.error("[ImportPrograms] Error duplicating program:", error)
+      alert("Failed to duplicate program. Please try again.")
+    }
+  }
+
+  // Handle delete program
+  const handleDelete = async (importId: string) => {
+    try {
+      console.log("[ImportPrograms] Deleting program:", importId)
+
+      const response = await fetch(`/api/sheets-imports/${importId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete program')
+      }
+
+      console.log("[ImportPrograms] Program deleted successfully:", importId)
+
+      // Remove from local state
+      setImports(prev => prev.filter(imp => imp.id !== importId))
+
+      // Close dialog
+      setDeleteDialogOpen(false)
+      setProgramToDelete(null)
+
+    } catch (error) {
+      console.error("[ImportPrograms] Error deleting program:", error)
+      alert("Failed to delete program. Please try again.")
+    }
+  }
+
+  // Handle delete confirmation
+  const handleDeleteClick = (importId: string) => {
+    setProgramToDelete(importId)
+    setDeleteDialogOpen(true)
+  }
+
   // Format program names for the toast
   const formatProgramName = (importItem: SheetsImport) => {
     return importItem.programName || importItem.name || `Spreadsheet ${importItem.spreadsheetId.slice(0, 12)}...`
@@ -650,7 +717,23 @@ export default function ImportProgramsClient() {
                       <div key={importItem.id} className="p-4 bg-gray-50 rounded-lg flex justify-between items-center">
                         <div className="flex-1 flex items-center space-x-3">
                           <div className="flex flex-col">
-                            <EditableProgramName importItem={importItem} onNameUpdate={handleNameUpdate} />
+                            <div className="flex items-center space-x-2">
+                              <EditableProgramName importItem={importItem} onNameUpdate={handleNameUpdate} />
+                              <button
+                                onClick={() => handleDuplicate(importItem.id)}
+                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                title="Duplicate this program"
+                              >
+                                <Copy className="h-4 w-4 text-gray-500 hover:text-gray-700" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(importItem.id)}
+                                className="p-1 hover:bg-red-100 rounded transition-colors"
+                                title="Delete this program"
+                              >
+                                <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-600" />
+                              </button>
+                            </div>
                             {date && (
                               <div className="flex items-center space-x-2 mt-1">
                                 <span className="text-[12px] text-gray-500 font-inter">{dayName}</span>
@@ -755,6 +838,35 @@ export default function ImportProgramsClient() {
                   Converting rows and columns into exercises, sets, and reps...
                 </p>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-md font-sen">
+            <DialogTitle className="text-[20px] font-bold text-gray-900">
+              Delete Program
+            </DialogTitle>
+            <div className="text-center">
+              <p className="text-[14px] text-gray-700 mb-6">
+                Are you sure you want to delete this program? This action cannot be undone.
+              </p>
+
+              <div className="flex gap-3 justify-center">
+                <Button
+                  onClick={() => setDeleteDialogOpen(false)}
+                  className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium text-[14px] rounded-lg"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => programToDelete && handleDelete(programToDelete)}
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium text-[14px] rounded-lg"
+                >
+                  Delete
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
