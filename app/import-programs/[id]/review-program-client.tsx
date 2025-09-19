@@ -50,6 +50,109 @@ interface Program {
   notes?: string
 }
 
+// Editable Exercise Field Component
+function EditableExerciseField({
+  exercise,
+  routineIndex,
+  exerciseIndex,
+  field,
+  onFieldUpdate,
+}: {
+  exercise: Exercise
+  routineIndex: number
+  exerciseIndex: number
+  field: string
+  onFieldUpdate: (routineIndex: number, exerciseIndex: number, field: string, value: any) => void
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+
+  const displayValue = (exercise[field as keyof Exercise] as string) || (field === "name" ? "Untitled Exercise" : "")
+
+  const handleDoubleClick = () => {
+    console.log("[EditableExerciseField] Double click on:", { routineIndex, exerciseIndex, field })
+    setIsEditing(true)
+    setEditValue(displayValue)
+  }
+
+  const handleSave = async () => {
+    if (isSaving) return
+
+    const trimmedValue = editValue.trim()
+    console.log("[EditableExerciseField] Saving field:", {
+      routineIndex,
+      exerciseIndex,
+      field,
+      oldValue: displayValue,
+      newValue: trimmedValue
+    })
+
+    // If no change, just exit edit mode
+    if (trimmedValue === displayValue) {
+      setIsEditing(false)
+      return
+    }
+
+    setIsSaving(true)
+
+    try {
+      // Update the exercise field
+      onFieldUpdate(routineIndex, exerciseIndex, field, trimmedValue)
+      setIsEditing(false)
+    } catch (error) {
+      console.error("[EditableExerciseField] Save failed:", error)
+      alert(`Failed to update exercise ${field}. Please try again.`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave()
+    } else if (e.key === "Escape") {
+      setIsEditing(false)
+      setEditValue(displayValue === (field === "name" ? "Untitled Exercise" : "") ? "" : displayValue)
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <Input
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className="text-[14px] font-medium text-black font-sen h-6 px-1 py-0 border-0 bg-white focus:ring-1 focus:ring-blue-500 rounded"
+        placeholder={`Enter exercise ${field}...`}
+        autoFocus
+        disabled={isSaving}
+      />
+    )
+  }
+
+  return (
+    field === "name" ? (
+      <h4
+        className="font-medium mb-3 cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors text-left"
+        onDoubleClick={handleDoubleClick}
+        title="Double-click to edit"
+      >
+        {displayValue}
+      </h4>
+    ) : (
+      <p
+        className="text-sm text-gray-600 mb-3 cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors"
+        onDoubleClick={handleDoubleClick}
+        title="Double-click to edit"
+      >
+        {displayValue}
+      </p>
+    )
+  )
+}
+
 interface Client {
   id: string
   name: string
@@ -699,6 +802,204 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
     [currentWeekIndex], // Add currentWeekIndex as dependency
   )
 
+  const updateExerciseField = useCallback(
+    (routineIndex: number, exerciseIndex: number, field: string, value: any) => {
+      debugLog("Updating exercise field:", { routineIndex, exerciseIndex, field, value })
+
+      setProgramState((prev) => {
+        if (!prev) {
+          debugLog("Cannot update exercise field - no program state")
+          return prev
+        }
+
+        const newState = { ...prev }
+
+        // Handle both periodized (weeks) and non-periodized structures
+        let targetRoutines: Routine[] = []
+
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          // For periodized programs, update the current week being viewed
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+            debugLog("Using periodized routines from current week:", currentWeekIndex)
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          // For non-periodized programs, use the routines array
+          targetRoutines = newState.routines
+          debugLog("Using non-periodized routines")
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          // Fallback: use first week's routines if routines array is empty
+          targetRoutines = newState.weeks[0].routines
+          debugLog("Using fallback routines from first week")
+        }
+
+        debugLog("Target routines for exercise field update:", targetRoutines.length)
+
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+          targetRoutines[routineIndex].exercises[exerciseIndex] = {
+            ...targetRoutines[routineIndex].exercises[exerciseIndex],
+            [field]: value,
+          }
+
+          debugLog("Updated exercise field:", {
+            routineIndex,
+            exerciseIndex,
+            field,
+            value,
+            updatedExercise: targetRoutines[routineIndex].exercises[exerciseIndex],
+          })
+
+          setHasChanges(true)
+        } else {
+          debugLog("Cannot find target exercise for field update:", {
+            routineIndex,
+            exerciseIndex,
+            hasRoutines: targetRoutines.length > 0,
+            hasExercises: targetRoutines[routineIndex]?.exercises?.length,
+          })
+        }
+
+        return newState
+      })
+    },
+    [currentWeekIndex],
+  )
+
+  const duplicateExercise = useCallback(
+    (routineIndex: number, exerciseIndex: number) => {
+      debugLog("Duplicating exercise:", { routineIndex, exerciseIndex })
+
+      setProgramState((prev) => {
+        if (!prev) {
+          debugLog("Cannot duplicate exercise - no program state")
+          return prev
+        }
+
+        const newState = { ...prev }
+
+        // Handle both periodized (weeks) and non-periodized structures
+        let targetRoutines: Routine[] = []
+
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          // For periodized programs, update the current week being viewed
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+            debugLog("Using periodized routines from current week:", currentWeekIndex)
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          // For non-periodized programs, use the routines array
+          targetRoutines = newState.routines
+          debugLog("Using non-periodized routines")
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          // Fallback: use first week's routines if routines array is empty
+          targetRoutines = newState.weeks[0].routines
+          debugLog("Using fallback routines from first week")
+        }
+
+        debugLog("Target routines for exercise duplication:", targetRoutines.length)
+
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+          const originalExercise = targetRoutines[routineIndex].exercises[exerciseIndex]
+
+          // Create a deep copy of the exercise
+          const duplicatedExercise = {
+            ...originalExercise,
+            name: `${originalExercise.name} (Copy)`,
+            sets: originalExercise.sets ? [...originalExercise.sets] : undefined,
+          }
+
+          // Insert the duplicated exercise after the original
+          targetRoutines[routineIndex].exercises.splice(exerciseIndex + 1, 0, duplicatedExercise)
+
+          debugLog("Duplicated exercise:", {
+            routineIndex,
+            exerciseIndex,
+            originalName: originalExercise.name,
+            duplicatedName: duplicatedExercise.name,
+            totalExercises: targetRoutines[routineIndex].exercises.length,
+          })
+
+          setHasChanges(true)
+        } else {
+          debugLog("Cannot find target exercise for duplication:", {
+            routineIndex,
+            exerciseIndex,
+            hasRoutines: targetRoutines.length > 0,
+            hasExercises: targetRoutines[routineIndex]?.exercises?.length,
+          })
+        }
+
+        return newState
+      })
+    },
+    [currentWeekIndex],
+  )
+
+  const deleteExercise = useCallback(
+    (routineIndex: number, exerciseIndex: number) => {
+      debugLog("Deleting exercise:", { routineIndex, exerciseIndex })
+
+      setProgramState((prev) => {
+        if (!prev) {
+          debugLog("Cannot delete exercise - no program state")
+          return prev
+        }
+
+        const newState = { ...prev }
+
+        // Handle both periodized (weeks) and non-periodized structures
+        let targetRoutines: Routine[] = []
+
+        if (newState.is_periodized && newState.weeks && newState.weeks.length > 0) {
+          // For periodized programs, update the current week being viewed
+          const currentWeek = newState.weeks[currentWeekIndex]
+          if (currentWeek && currentWeek.routines) {
+            targetRoutines = currentWeek.routines
+            debugLog("Using periodized routines from current week:", currentWeekIndex)
+          }
+        } else if (newState.routines && newState.routines.length > 0) {
+          // For non-periodized programs, use the routines array
+          targetRoutines = newState.routines
+          debugLog("Using non-periodized routines")
+        } else if (newState.weeks && newState.weeks.length > 0 && newState.weeks[0].routines) {
+          // Fallback: use first week's routines if routines array is empty
+          targetRoutines = newState.weeks[0].routines
+          debugLog("Using fallback routines from first week")
+        }
+
+        debugLog("Target routines for exercise deletion:", targetRoutines.length)
+
+        if (targetRoutines[routineIndex]?.exercises[exerciseIndex]) {
+          const exerciseToDelete = targetRoutines[routineIndex].exercises[exerciseIndex]
+
+          // Remove the exercise from the array
+          targetRoutines[routineIndex].exercises.splice(exerciseIndex, 1)
+
+          debugLog("Deleted exercise:", {
+            routineIndex,
+            exerciseIndex,
+            deletedName: exerciseToDelete.name,
+            remainingExercises: targetRoutines[routineIndex].exercises.length,
+          })
+
+          setHasChanges(true)
+        } else {
+          debugLog("Cannot find target exercise for deletion:", {
+            routineIndex,
+            exerciseIndex,
+            hasRoutines: targetRoutines.length > 0,
+            hasExercises: targetRoutines[routineIndex]?.exercises?.length,
+          })
+        }
+
+        return newState
+      })
+    },
+    [currentWeekIndex],
+  )
+
   const addSet = useCallback(
     (routineIndex: number, exerciseIndex: number) => {
 
@@ -1097,8 +1398,38 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
                             <div className="mt-4 space-y-4">
                               {routine.exercises?.map((exercise, exerciseIndex) => (
                                 <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
-                                  <h4 className="font-medium mb-3">{exercise.name}</h4>
-                                  {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
+                                  <div className="mb-3">
+                                    <div className="flex items-center space-x-2">
+                                      <EditableExerciseField
+                                        exercise={exercise}
+                                        routineIndex={routineIndex}
+                                        exerciseIndex={exerciseIndex}
+                                        field="name"
+                                        onFieldUpdate={updateExerciseField}
+                                      />
+                                      <button
+                                        onClick={() => duplicateExercise(routineIndex, exerciseIndex)}
+                                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                        title="Duplicate this exercise"
+                                      >
+                                        <Copy className="h-4 w-4 text-gray-500 hover:text-gray-700" />
+                                      </button>
+                                      <button
+                                        onClick={() => deleteExercise(routineIndex, exerciseIndex)}
+                                        className="p-1 hover:bg-red-100 rounded transition-colors"
+                                        title="Delete this exercise"
+                                      >
+                                        <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-600" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {exercise.notes && (<EditableExerciseField
+                                    exercise={exercise}
+                                    routineIndex={routineIndex}
+                                    exerciseIndex={exerciseIndex}
+                                    field="notes"
+                                    onFieldUpdate={updateExerciseField}
+                                  />)}
 
                                   {/* Sets Table */}
                                   {exercise.sets && exercise.sets.length > 0 && (
@@ -1289,8 +1620,38 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
                     <div className="mt-4 space-y-4">
                       {routine.exercises?.map((exercise, exerciseIndex) => (
                         <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
-                          <h4 className="font-medium mb-3">{exercise.name}</h4>
-                          {exercise.notes && <p className="text-sm text-gray-600 mb-3">{exercise.notes}</p>}
+                          <div className="mb-3">
+                            <div className="flex items-center space-x-2">
+                              <EditableExerciseField
+                                exercise={exercise}
+                                routineIndex={routineIndex}
+                                exerciseIndex={exerciseIndex}
+                                field="name"
+                                onFieldUpdate={updateExerciseField}
+                              />
+                              <button
+                                onClick={() => duplicateExercise(routineIndex, exerciseIndex)}
+                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                title="Duplicate this exercise"
+                              >
+                                <Copy className="h-4 w-4 text-gray-500 hover:text-gray-700" />
+                              </button>
+                              <button
+                                onClick={() => deleteExercise(routineIndex, exerciseIndex)}
+                                className="p-1 hover:bg-red-100 rounded transition-colors"
+                                title="Delete this exercise"
+                              >
+                                <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-600" />
+                              </button>
+                            </div>
+                          </div>
+                            {exercise.notes && (<EditableExerciseField
+                            exercise={exercise}
+                            routineIndex={routineIndex}
+                            exerciseIndex={exerciseIndex}
+                            field="notes"
+                            onFieldUpdate={updateExerciseField}
+                          />)}
 
                           {/* Sets Table */}
                           {exercise.sets && exercise.sets.length > 0 && (
