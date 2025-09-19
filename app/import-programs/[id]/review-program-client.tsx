@@ -70,7 +70,7 @@ function EditableExerciseField({
 
   const displayValue = (exercise[field as keyof Exercise] as string) || (field === "name" ? "Untitled Exercise" : "")
 
-  const handleDoubleClick = () => {
+  const handleClick = () => {
     console.log("[EditableExerciseField] Double click on:", { routineIndex, exerciseIndex, field })
     setIsEditing(true)
     setEditValue(displayValue)
@@ -136,16 +136,16 @@ function EditableExerciseField({
     field === "name" ? (
       <h4
         className="font-medium mb-3 cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors text-left"
-        onDoubleClick={handleDoubleClick}
-        title="Double-click to edit"
+        onClick={handleClick}
+        title="Click to edit"
       >
         {displayValue}
       </h4>
     ) : (
       <p
         className="text-sm text-gray-600 mb-3 cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded transition-colors"
-        onDoubleClick={handleDoubleClick}
-        title="Double-click to edit"
+        onClick={handleClick}
+        title="Click to edit"
       >
         {displayValue}
       </p>
