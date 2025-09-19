@@ -3,12 +3,13 @@ import { ProgramWithRoutines, RoutineWithOrder } from "../global-programs/types"
 import { db } from "@/lib/db"
 import { v4 as uuidv4 } from "uuid"
 
-type SimpleExercise = {
+export type SimpleExercise = {
   id: string
   name: string
+  deletedAt?: Date
 }
 
-type GetOrCreateExercise = {
+export type GetOrCreateExercise = {
   name: string
   id?: string
   muscleGroup?: string
@@ -80,11 +81,12 @@ export async function getOrCreateProgramExercises(userId: string, exerciseNames:
   await Promise.all(Array.from(exerciseNames.entries()).map(async ([exerciseName, exercise]) => {
     const cleanExerciseName = exerciseName.trim();
     const existingExercise = allExercises.find((e) => e.name.toLowerCase() === cleanExerciseName.toLowerCase());
-    if (existingExercise) {
-      programExerciseNameToId.set(cleanExerciseName.toLowerCase(), existingExercise.id);
+    const exerciseId = existingExercise?.id ?? exercise.id ?? uuidv4();
+    if (existingExercise && (!existingExercise.deletedAt || existingExercise.deletedAt === null)) {
+        programExerciseNameToId.set(cleanExerciseName.toLowerCase(), existingExercise.id);
     } else {
-      const newExercise = await createExercise(userId, exercise);
-      programExerciseNameToId.set(cleanExerciseName.toLowerCase(), newExercise.id)
+      await createExercise(userId, {...exercise, id: exerciseId});
+      programExerciseNameToId.set(cleanExerciseName.toLowerCase(), exerciseId)
     }
   }));
   console.log("programExerciseNameToId", programExerciseNameToId);
@@ -136,7 +138,8 @@ async function getGlobalExercises() {
     return exercises.docs.map((doc) => {
         return {
             id: doc.id,
-            name: doc.data().name
+            name: doc.data().name,
+            deletedAt: doc.data().deletedAt
         }
     })
 }
@@ -146,7 +149,8 @@ async function getUserExercises(userId: string) {
     return exercises.docs.map((doc) => {
         return {
             id: doc.id,
-            name: doc.data().name
+            name: doc.data().name,
+            deletedAt: doc.data().deletedAt
         }
     })
 }
