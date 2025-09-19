@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/firebase"
 import { v4 as uuidv4 } from "uuid"
 
@@ -17,6 +17,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ...docSnap.data(),
       name: "Copy of " + docSnap.data().name,
       id: newProgramId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     })
 
     return NextResponse.json({ id: newProgramId, ...docSnap.data() })
