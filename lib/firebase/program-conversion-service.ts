@@ -117,7 +117,8 @@ export class ProgramConversionService {
         }
 
         try {
-          const exerciseId = programExerciseNameToId.get(exercise.name.trim())!!
+          const cleanExerciseName = exercise.name.trim().toLowerCase();
+          const exerciseId = programExerciseNameToId.get(cleanExerciseName)!!
 
           let sets = exercise.sets || []
           if (!Array.isArray(sets) || sets.length === 0) {
@@ -186,6 +187,7 @@ export class ProgramConversionService {
     // Add to batch WITHOUT calling removeUndefinedValues to preserve serverTimestamp()
     const routinesRef = collection(db, "users", userId, "routines")
     const routineDocRef = doc(routinesRef, routineId)
+    console.log("routine", routineDoc)
     batch.set(routineDocRef, routineDoc)
 
     return {

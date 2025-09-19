@@ -78,12 +78,13 @@ export async function getOrCreateProgramExercises(userId: string, exerciseNames:
   const programExerciseNameToId = new Map<string, string>();
   // return map of exercise names to id do it in parallel
   await Promise.all(Array.from(exerciseNames).map(async (exerciseName) => {
-    const exercise = allExercises.find((e) => e.name.toLowerCase() === exerciseName.toLowerCase());
+    const cleanExerciseName = exerciseName.trim();
+    const exercise = allExercises.find((e) => e.name.toLowerCase() === cleanExerciseName.toLowerCase());
     if (exercise) {
-      programExerciseNameToId.set(exerciseName, exercise.id);
+      programExerciseNameToId.set(cleanExerciseName.toLowerCase(), exercise.id);
     } else {
-      const newExercise = await createExercise(userId, { name: exerciseName });
-      programExerciseNameToId.set(exerciseName, newExercise.id)
+      const newExercise = await createExercise(userId, { name: cleanExerciseName });
+      programExerciseNameToId.set(cleanExerciseName.toLowerCase(), newExercise.id)
     }
   }));
   console.log("programExerciseNameToId", programExerciseNameToId);
