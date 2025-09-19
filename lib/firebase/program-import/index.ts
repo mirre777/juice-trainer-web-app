@@ -73,17 +73,17 @@ export async function importRoutine(userId: string, routine: RoutineWithOrder, p
   return routine.id
 }
 
-export async function getOrCreateProgramExercises(userId: string, exerciseNames: Set<string>) {
+export async function getOrCreateProgramExercises(userId: string, exerciseNames: Map<string, GetOrCreateExercise>) {
   const allExercises = await getAllExercises(userId);
   const programExerciseNameToId = new Map<string, string>();
   // return map of exercise names to id do it in parallel
-  await Promise.all(Array.from(exerciseNames).map(async (exerciseName) => {
+  await Promise.all(Array.from(exerciseNames.entries()).map(async ([exerciseName, exercise]) => {
     const cleanExerciseName = exerciseName.trim();
-    const exercise = allExercises.find((e) => e.name.toLowerCase() === cleanExerciseName.toLowerCase());
-    if (exercise) {
-      programExerciseNameToId.set(cleanExerciseName.toLowerCase(), exercise.id);
+    const existingExercise = allExercises.find((e) => e.name.toLowerCase() === cleanExerciseName.toLowerCase());
+    if (existingExercise) {
+      programExerciseNameToId.set(cleanExerciseName.toLowerCase(), existingExercise.id);
     } else {
-      const newExercise = await createExercise(userId, { name: cleanExerciseName });
+      const newExercise = await createExercise(userId, exercise);
       programExerciseNameToId.set(cleanExerciseName.toLowerCase(), newExercise.id)
     }
   }));

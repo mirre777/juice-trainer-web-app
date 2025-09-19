@@ -10,7 +10,7 @@ import {
 import { fetchClients } from "./client-service"
 import { v4 as uuidv4 } from "uuid"
 import { getOrCreateProgramExercises } from "./program-import"
-
+import { GetOrCreateExercise } from "./program-import/types"
 // Types matching your mobile app structure
 export interface MobileProgram {
   id: string
@@ -229,13 +229,13 @@ export class ProgramConversionService {
     return obj
   }
 
-  async getProgramExerciseNames(programData: any): Promise<Set<string>> {
+  async getProgramExerciseNames(programData: any): Promise<Map<string, GetOrCreateExercise>> {
     if (programData.weeks && Array.isArray(programData.weeks) && programData.weeks.length > 0) {
-      return new Set(programData.weeks.flatMap((week: any) => week.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exercise.name))));
+      return new Map(programData.weeks.flatMap((week: any) => week.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => ({ name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup })))));
     } else if (programData.routines && Array.isArray(programData.routines) && programData.routines.length > 0) {
-      return new Set(programData.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exercise.name)));
+      return new Map(programData.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => ({ name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup }))));
     }
-    return new Set();
+    return new Map();
   }
 
   /**
