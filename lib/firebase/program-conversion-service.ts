@@ -10,7 +10,7 @@ import {
 import { fetchClients } from "./client-service"
 import { v4 as uuidv4 } from "uuid"
 import { getOrCreateProgramExercises } from "./program-import"
-import { GetOrCreateExercise } from "./program-import/types"
+import { GetOrCreateExercise } from "./program-import/index"
 // Types matching your mobile app structure
 export interface MobileProgram {
   id: string
@@ -162,7 +162,7 @@ export class ProgramConversionService {
 
           exercises.push({
             id: exerciseId,
-            name: exercise.name.trim(),
+            ...exercise,
             sets: mobileSets,
           })
         } catch (exerciseError) {
@@ -230,12 +230,13 @@ export class ProgramConversionService {
   }
 
   async getProgramExerciseNames(programData: any): Promise<Map<string, GetOrCreateExercise>> {
+    const exerciseMap = new Map<string, GetOrCreateExercise>();
     if (programData.weeks && Array.isArray(programData.weeks) && programData.weeks.length > 0) {
-      return new Map(programData.weeks.flatMap((week: any) => week.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => ({ name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup })))));
+      programData.weeks.flatMap((week: any) => week.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exerciseMap.set(exercise.name, { name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup }))));
     } else if (programData.routines && Array.isArray(programData.routines) && programData.routines.length > 0) {
-      return new Map(programData.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => ({ name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup }))));
+      programData.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exerciseMap.set(exercise.name, { name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup })));
     }
-    return new Map();
+    return exerciseMap;
   }
 
   /**
@@ -256,6 +257,7 @@ export class ProgramConversionService {
       console.log(`[convertAndSendProgram] Timestamp type:`, typeof now)
 
       const programExerciseNames = await this.getProgramExerciseNames(programData);
+      console.log("programExerciseNames", programExerciseNames)
       const programExerciseNameToId = await getOrCreateProgramExercises(clientUserId, programExerciseNames);
 
       // Batch all Firebase operations to reduce timeout risk
