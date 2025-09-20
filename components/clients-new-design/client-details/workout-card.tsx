@@ -63,13 +63,23 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
   }
 
   const getSetText = (set: WorkoutSet) => {
-    if (set.weight && set.weight > 0) {
-      return set.weight + " kg × " + set.reps + " reps"
-    } else if (set.reps && set.reps.length > 0) {
-      return set.reps + " reps"
-    } else {
-      return "Incomplete"
+    let weight;
+    if (set.weight && set.weight.toString().length > 0) {
+      weight = `${set.weight} kg`;
     }
+    let reps;
+    if (set.reps && set.reps.toString().length > 0) {
+      reps = `${set.reps} reps`;
+    }
+    let setWithReps
+    if (weight && reps) {
+      setWithReps = `${weight} x ${reps}`;
+    } else if (weight) {
+      setWithReps = weight;
+    } else if (reps) {
+      setWithReps = reps;
+    }
+    return setWithReps ?? "Incomplete";
   }
 
 
@@ -136,7 +146,7 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
                         {setNumbers?.get(set.id)}
                       </div>
                       <div className={clientsPageStyles.setItemWeight}>
-                        {getSetText(set)}
+                        {getSetText(set) + (set.notes ? ` (${set.notes})` : "")}
                       </div>
                     </div>
                   ))}
