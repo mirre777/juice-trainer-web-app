@@ -63,15 +63,15 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
   }
 
   const getSetText = (set: WorkoutSet) => {
-    let weight = "";
+    let weight;
     if (set.weight && set.weight.toString().length > 0) {
       weight = `${set.weight} kg`;
     }
-    let reps = "";
+    let reps;
     if (set.reps && set.reps.toString().length > 0) {
       reps = `${set.reps} reps`;
     }
-    let setWithReps = null
+    let setWithReps
     if (weight && reps) {
       setWithReps = `${weight} x ${reps}`;
     } else if (weight) {
@@ -79,7 +79,7 @@ export function WorkoutCard({ clientId, userId, workout }: WorkoutCardProps) {
     } else if (reps) {
       setWithReps = reps;
     }
-    return setWithReps;
+    return setWithReps ?? "Incomplete";
   }
 
 
