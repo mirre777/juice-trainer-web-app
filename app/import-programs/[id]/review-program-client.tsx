@@ -202,6 +202,7 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
   const [isSending, setIsSending] = useState(isSaving)
   const [expandedRoutines, setExpandedRoutines] = useState<{ [key: number]: boolean }>({ 0: true })
   const [showSendDialog, setShowSendDialog] = useState(false)
+  const [showSendSuccess, setShowSendSuccess] = useState<boolean>(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showPeriodizationDialog, setShowPeriodizationDialog] = useState(false)
@@ -488,11 +489,7 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
       const result = await response.json()
       debugLog("Program sent successfully:", result)
 
-      toast.success({
-        title: "Program Sent Successfully!",
-        description: `The program "${programState.name}" has been sent to ${selectedClient.name}.`,
-      })
-
+      setShowSendSuccess(true)
       setSelectedClientId("")
       setCustomMessage("")
       setShowSendDialog(false)
@@ -1865,6 +1862,41 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
                     {isSending ? "Sending..." : "Send Program"}
                   </Button>
                 </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Send to Client Sucess */}
+      {showSendSuccess && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <div className="p-8 text-center flex flex-col items-center">
+              <img
+                src="/images/dumbbell_sparkles.png"
+                alt="Program sent illustration"
+                className="w-24 mb-6 mt-10"
+              />
+
+              <h3 className="text-[18px] font-semibold mb-2">
+                Program sent to client
+              </h3>
+
+              <p className="text-[#9C9695] text-[16px] px-9 leading-6 mb-16 max-w-sm">
+                Success! Your client will receive a notification about their new program.
+              </p>
+
+              <div className="w-full flex justify-end">
+                <Button
+                  variant="outline"
+                  disabled={isSending}
+                  onClick={createSafeClickHandler(
+                    () => setShowSendSuccess(false),
+                    "setShowSendSuccess-false"
+                  )}>
+                  Close
+                </Button>
               </div>
             </div>
           </Card>
