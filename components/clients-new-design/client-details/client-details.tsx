@@ -20,6 +20,8 @@ export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, on
   const [client, setClient] = useState<Client | null>(null)
   const [workouts, setWorkouts] = useState<FirebaseWorkout[]>([])
   const [selectedWorkout, setSelectedWorkout] = useState<FirebaseWorkout | null>(null)
+  const [startDate, setStartDate] = useState<Date>(new Date())
+  const [endDate, setEndDate] = useState<Date>(new Date())
 
   useEffect(() => {
     const fetchClientData = async () => {
@@ -27,7 +29,7 @@ export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, on
         setClient(null)
         return
       }
-      const [client, workouts] = await Promise.all([fetchClientInfo(), fetchWorkouts()])
+      const [client, workouts] = await Promise.all([fetchClientInfo(), fetchWorkouts(startDate, endDate)])
       if (client) {
         setClient(client)
       }
@@ -37,15 +39,19 @@ export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, on
       }
     }
     fetchClientData()
-  }, [clientId, refreshTrigger])
+  }, [clientId, refreshTrigger, startDate, endDate])
 
   const fetchClientInfo: () => Promise<Client> = async () => {
     const clientResponse = await fetch(`/api/clients/${clientId}`)
     return await clientResponse.json() as Client
   }
 
-  const fetchWorkouts: () => Promise<FirebaseWorkout[]> = async () => {
-    const workoutsResponse = await fetch(`/api/clients/${clientId}/workouts`)
+  const fetchWorkouts: (startDate: Date, endDate: Date) => Promise<FirebaseWorkout[]> = async (startDate: Date, endDate: Date) => {
+    // Format dates as ISO strings for the API
+    const startDateISO = startDate.toISOString()
+    const endDateISO = endDate.toISOString()
+
+    const workoutsResponse = await fetch(`/api/clients/${clientId}/workouts?startDate=${startDateISO}&endDate=${endDateISO}`)
     const { workouts: fetchedWorkouts } = await workoutsResponse.json()
     return fetchedWorkouts as FirebaseWorkout[]
   }
@@ -58,6 +64,11 @@ export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, on
     setSelectedWorkout(workout)
   }
 
+  const handleWeekChange = (newStartDate: Date, newEndDate: Date) => {
+    setStartDate(newStartDate)
+    setEndDate(newEndDate)
+  }
+
   const [trainerNote, setTrainerNote] = useState(client?.notes || "")
 
   return (
@@ -68,7 +79,10 @@ export function ClientDetails({ clientId, trainerInviteCode, onClientDeleted, on
         client={client}
         workouts={workouts}
         selectedWorkout={selectedWorkout}
+        startDate={startDate}
+        endDate={endDate}
         handleWorkoutSelect={handleWorkoutSelect}
+        onWeekChange={handleWeekChange}
         trainerInviteCode={trainerInviteCode}
         onClientDeleted={onClientDeleted}
         onClientUpdated={onClientUpdated}

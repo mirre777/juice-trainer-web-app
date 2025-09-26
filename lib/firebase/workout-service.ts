@@ -340,9 +340,48 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
       return null
     }
 
-    const { startDate, endDate } = getCurrentWeek();
+    const { startDate, endDate } = getCurrentWeek()
     console.log("startDate", startDate)
     console.log("endDate", endDate)
+
+    return getWorkoutsByDateRange(userId, startDate, endDate)
+  } catch (error) {
+    const appError = createError(
+      ErrorType.UNKNOWN_ERROR,
+      error,
+      { function: "getThisWeekWorkouts", userId },
+      "Unexpected error fetching this week's workouts",
+    )
+    logError(appError)
+    return null
+  }
+}
+
+const isWithinDateRange = (workout: FirebaseWorkout, startDate: Date, endDate: Date): boolean => {
+  const completeAt = workout.completedAt ?? workout.startedAt;
+  return completeAt >= startDate && completeAt <= endDate;
+}
+
+// Get workouts for a specific date range
+export async function getWorkoutsByDateRange(
+  userId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<FirebaseWorkout[] | null> {
+  try {
+    if (!userId) {
+      const error = createError(
+        ErrorType.API_MISSING_PARAMS,
+        null,
+        { function: "getWorkoutsByDateRange" },
+        "user ID is required",
+      )
+      logError(error)
+      return null
+    }
+
+    console.log("getWorkoutsByDateRange - startDate:", startDate)
+    console.log("getWorkoutsByDateRange - endDate:", endDate)
 
     const workoutsCollectionRef = collection(db, "users", userId, "workouts")
     // (createAt >= startDate and createAt <= endDate) or (completedAt >= startDate and completedAt <= endDate)
@@ -356,7 +395,7 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
       orderBy("createdAt", "desc"),
     )
 
-    const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), (error) => createError(ErrorType.DB_READ_FAILED, error, { function: "getThisWeeksWorkouts", userId }, "Error fetching workouts"))
+    const [workoutsSnapshot, error] = await tryCatch(() => getDocs(q), (error) => createError(ErrorType.DB_READ_FAILED, error, { function: "getWorkoutsByDateRange", userId }, "Error fetching workouts"))
 
     if (error || !workoutsSnapshot || workoutsSnapshot.empty) {
       return []
@@ -366,22 +405,17 @@ export async function getThisWeekWorkouts(userId: string): Promise<FirebaseWorko
     return workouts
       .filter((workout) => workout.deletedAt === null || workout.deletedAt === undefined)
       .map((workout) => convertTimestampsToDates(workout) as unknown as FirebaseWorkout)
-      .filter((workout) => isThisWeekWorkout(workout, startDate, endDate))
+      .filter((workout) => isWithinDateRange(workout, startDate, endDate))
   } catch (error) {
     const appError = createError(
       ErrorType.UNKNOWN_ERROR,
       error,
-      { function: "getThisWeekWorkouts", userId },
-      "Unexpected error fetching this week's workouts",
+      { function: "getWorkoutsByDateRange", userId },
+      "Unexpected error fetching workouts by date range",
     )
     logError(appError)
     return null
   }
-}
-
-const isThisWeekWorkout = (workout: FirebaseWorkout, startDate: Date, endDate: Date): boolean => {
-  const completeAt = workout.completedAt ?? workout.startedAt;
-  return completeAt >= startDate && completeAt <= endDate;
 }
 
 export async function getUserWorkouts(userId: string): Promise<{ workouts: FirebaseWorkout[]; error: any }> {
