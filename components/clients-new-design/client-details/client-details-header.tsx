@@ -11,13 +11,17 @@ import { ClientInvitationDialog } from "@/components/clients/client-invitation-d
 import { DeleteClientDialog } from "@/components/clients/delete-client-dialog"
 import { EditClientModal } from "@/components/clients/edit-client-modal"
 import { Skeleton } from "@/components/ui/skeleton"
+import { WeekSelector } from "./week-selector"
 
 interface ClientDetailsHeaderProps {
   client: Client
   workouts: FirebaseWorkout[]
   selectedWorkout: FirebaseWorkout | null
+  startDate: Date
+  endDate: Date
   trainerInviteCode: string
   handleWorkoutSelect: (workout: FirebaseWorkout | null) => void;
+  onWeekChange?: (startDate: Date, endDate: Date) => void;
   onClientDeleted?: () => void;
   onClientUpdated?: (client: Client) => void;
 }
@@ -34,23 +38,24 @@ export type Session = {
 
 export type WeeklySessions = Map<WeekDay, Session>;
 
-export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleWorkoutSelect, trainerInviteCode, onClientDeleted, onClientUpdated }: ClientDetailsHeaderProps) {
+export function ClientDetailsHeader({ client, workouts, selectedWorkout, startDate, endDate, handleWorkoutSelect, onWeekChange, trainerInviteCode, onClientDeleted, onClientUpdated }: ClientDetailsHeaderProps) {
   const [weeklySessions, setWeeklySessions] = useState<WeeklySessions>(new Map());
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentWeek, setCurrentWeek] = useState<Date>(startDate);
 
   useEffect(() => {
     const fetchWeeklySessions = async () => {
       setIsLoading(true)
-      const weeklySessions = await getWeeklySessions(workouts)
+      const weeklySessions = await getWeeklySessions(workouts, currentWeek)
       setWeeklySessions(weeklySessions)
       setIsLoading(false)
     }
     fetchWeeklySessions()
-  }, [client, workouts])
+  }, [client, workouts, currentWeek])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -88,9 +93,13 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
     return 0 as WeekDay;
   }
 
-  async function getWeeklySessions(workouts: FirebaseWorkout[]): Promise<WeeklySessions> {
-    // start date monday this week
-    const { startDate } = getCurrentWeek();
+  async function getWeeklySessions(workouts: FirebaseWorkout[], weekDate: Date): Promise<WeeklySessions> {
+    // Calculate start date of the selected week (Monday)
+    const startDate = new Date(weekDate);
+    const dayOfWeek = startDate.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    startDate.setDate(startDate.getDate() + daysToMonday);
+
     // create a map where the key is the date and the value is the boolean if the workout is completed
     const weeklySessions = initializeWeeklySessions(startDate);
     // set the workout completed to true if the workout is completed
@@ -123,6 +132,39 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
   const handleDeleteClient = () => {
     setIsDropdownOpen(false);
     setIsDeleteDialogOpen(true);
+  }
+
+  const handleWeekChange = (newWeek: Date) => {
+    setCurrentWeek(newWeek);
+
+    // Calculate start and end dates for the selected week
+    const weekStart = new Date(newWeek);
+    const dayOfWeek = weekStart.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    weekStart.setDate(weekStart.getDate() + daysToMonday);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    // Notify parent component of the week change
+    if (onWeekChange) {
+      onWeekChange(weekStart, weekEnd);
+    }
+  }
+
+  const canGoForward = () => {
+    const today = new Date();
+    const currentWeekStart = new Date(currentWeek);
+    const dayOfWeek = currentWeekStart.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    currentWeekStart.setDate(currentWeekStart.getDate() + daysToMonday);
+
+    const nextWeekStart = new Date(currentWeekStart);
+    nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+
+    return nextWeekStart <= today;
   }
 
   const getWorkoutDayStyle = (isActive: boolean) => {
@@ -205,7 +247,14 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
           </div>
         </div>
 
-        <div className={clientsPageStyles.workoutDaysContainer}>
+
+
+        <div className="flex flex-col items-center space-y-3">
+          <WeekSelector
+            currentStartOfWeek={currentWeek}
+            onWeekChange={handleWeekChange}
+            canGoForward={canGoForward()}
+          />
           <div className={clientsPageStyles.workoutDaysFlex}>
           {Array.from(weeklySessions.entries()).map(([weekDay, session], index) => (
               <div
@@ -219,6 +268,8 @@ export function ClientDetailsHeader({ client, workouts, selectedWorkout, handleW
           </div>
         </div>
       </div>
+
+
       <ClientInvitationDialog
         isOpen={isInviteDialogOpen}
         onClose={() => setIsInviteDialogOpen(false)}

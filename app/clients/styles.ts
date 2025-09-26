@@ -69,6 +69,14 @@ export const clientsPageStyles = {
   clientHeaderButton: "p-2 hover:bg-gray-100 rounded-lg transition-colors",
   clientHeaderIcon: "h-5 w-5 text-gray-400",
 
+  // Week selector styles
+  weekSelectorContainer: "flex items-center justify-center",
+  weekSelectorContent: "flex items-center justify-center space-x-4",
+  weekSelectorButton: "p-2 rounded-full hover:bg-gray-100 transition-colors flex items-center justify-center",
+  weekSelectorButtonDisabled: "opacity-50 cursor-not-allowed hover:bg-transparent",
+  weekSelectorIcon: "h-4 w-4 text-gray-600",
+  weekSelectorDisplay: "text-sm font-medium text-gray-700 px-4",
+
   // Workout days styles
   workoutDaysContainer: "mt-6",
   workoutDaysHeader: "flex items-center space-x-2 mb-3",
