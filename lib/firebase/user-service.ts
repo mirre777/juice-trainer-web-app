@@ -11,9 +11,11 @@ import {
   serverTimestamp,
   arrayUnion,
   type Timestamp,
+  deleteDoc,
 } from "firebase/firestore"
 import { getAuth, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
 import { SubscriptionPlan } from "./subscription-service"
+import { getFirebaseAdmin } from "./firebase-admin"
 
 export interface User {
   id: string
@@ -257,4 +259,14 @@ export async function updateUniversalInviteCode(
     console.error("Error updating universal invite code:", error)
     return { success: false, message: "Failed to update invite code" }
   }
+}
+
+export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+  console.log("deleting user", userId)
+  const userRef = doc(db, "users", userId)
+  await deleteDoc(userRef)
+  const admin = await getFirebaseAdmin()
+  await admin.auth().deleteUser(userId)
+  return { success: true }
+
 }

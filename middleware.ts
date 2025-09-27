@@ -45,6 +45,17 @@ export function middleware(request: NextRequest) {
   console.log(`[Middleware] Is shared workout path: ${isSharedWorkoutPath}`)
   console.log(`[Middleware] Auth cookie exists: ${!!authCookie}`)
 
+  // if the request goes to /api* add the authorization header
+  if (path.startsWith("/api/") && token) {
+    const headers = new Headers(request.headers)
+    headers.set("Authorization", `Bearer ${token}`)
+    return NextResponse.next({
+      request: {
+        headers: headers,
+      },
+    })
+  }
+
   // Handle redirects from old invite URL format to new format
   const { pathname, searchParams } = request.nextUrl
   if (pathname.startsWith("/signup") && searchParams.has("invite")) {
