@@ -73,7 +73,10 @@ export async function signOut() {
     await firebaseSignOut(auth)
 
     const cookieStore = await cookies()
-    cookieStore.delete("auth_token")
+    const allCookies = cookieStore.getAll()
+    for (const cookie of allCookies) {
+      cookieStore.delete(cookie.name)
+    }
 
     return { success: true }
   } catch (error: any) {

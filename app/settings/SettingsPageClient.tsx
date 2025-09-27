@@ -219,6 +219,43 @@ export default function SettingsPageClient() {
     }
   }
 
+  const handleDeleteAccount = async () => {
+    console.log('handleDeleteAccount')
+    try {
+      setIsLoading(true)
+
+      // Using HTTP client with automatic authentication
+      const response = await fetch("/api/users", {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (response.ok) {
+        if (typeof window !== "undefined") {
+          localStorage.clear()
+          sessionStorage.clear()
+        }
+
+        // Refresh page - let the app's auth logic handle the redirect
+        window.location.reload()
+        setShowDeleteAccountModal(false)
+        // Handle successful deletion (redirect, show message, etc.)
+      } else {
+        const errorData = await response.json()
+        setSaveMessage(`Error deleting account: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("Error deleting account:", error)
+      setSaveMessage("Failed to delete account. Please try again.")
+    } finally {
+      setIsLoading(false)
+      setShowDeleteAccountModal(false)
+    }
+  }
+
   return (
     <PageLayout title="Settings" description="Manage your account preferences">
       <div className="space-y-6">
@@ -465,7 +502,7 @@ export default function SettingsPageClient() {
             <Button variant="outline" onClick={() => setShowDeleteAccountModal(false)}>
               Cancel
             </Button>
-            <Button variant="destructive">Delete Account</Button>
+            <Button variant="destructive" onClick={() => handleDeleteAccount()}>Delete Account</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
