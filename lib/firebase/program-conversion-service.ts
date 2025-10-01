@@ -21,6 +21,7 @@ export interface MobileProgram {
   createdAt: any // Firestore Timestamp
   updatedAt: any // Firestore Timestamp
   program_URL: string
+  hasAcknowledgedNewProgram?: boolean
   routines: Array<{
     routineId: string
     week: number
@@ -315,9 +316,10 @@ export class ProgramConversionService {
       const program: MobileProgram = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
+        startedAt: programData.start_date || now,
+        hasAcknowledgedNewProgram: false,
         notes: "",
         createdAt: now,
-        startedAt: now,
         updatedAt: now,
         duration: Number(
           programData.program_weeks ||

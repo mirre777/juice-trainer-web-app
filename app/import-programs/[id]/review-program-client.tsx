@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
+import DatePicker from "react-datepicker"
+import "react-datepicker/dist/react-datepicker.css"
 
 interface Exercise {
   name: string
@@ -42,6 +44,7 @@ interface Program {
   id: string
   name?: string
   title?: string
+  start_date?: string
   description?: string
   duration_weeks?: number
   program_weeks?: number // Keep for backward compatibility
@@ -339,6 +342,7 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
         const programState: Program = {
           id: importData.id ?? importId,
           name: importData.name || program.name || "Untitled Program",
+          start_date: program.start_date || new Date().toISOString(),
           description: program.description || "",
           duration_weeks: Number(program.duration_weeks || program.program_weeks || program.weeks?.length || 1),
           is_periodized: Boolean(program.is_periodized || (program.weeks && program.weeks.length > 1)),
@@ -1266,7 +1270,24 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
               }}
             />
           </div>
-          <div className="md:col-span-2">
+          <div>
+            <Label htmlFor="start-date">Start Date</Label>
+            <div className="w-full">
+              <DatePicker
+                id="start-date"
+                selected={programState.start_date ? new Date(programState.start_date) : null}
+                onChange={(date) => {
+                  updateProgramField("start_date", date ? date.toISOString().split('T')[0] : "")
+                }}
+                dateFormat="dd-MM-yyyy"
+                placeholderText="Select start date"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                showPopperArrow={false}
+                popperClassName="react-datepicker-popper"
+              />
+            </div>
+          </div>
+          <div className="md:col-span-3">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"

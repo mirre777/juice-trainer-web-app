@@ -35,6 +35,7 @@ export async function importProgram(program: ProgramWithRoutines, userId: string
     notes: program.notes ?? "",
     routines: routines,
     isGlobal: true,
+    hasAcknowledgedNewProgram: program.isOnboarding ?? false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     deletedAt: null,

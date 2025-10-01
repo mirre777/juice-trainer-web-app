@@ -5,6 +5,7 @@ type GlobalProgram = {
   name: string
   description: string
   notes: string
+  isOnboarding: boolean
   routines: GlobalProgramRoutine[]
   createdAt: string
   updatedAt: string
