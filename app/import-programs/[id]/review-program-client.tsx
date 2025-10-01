@@ -39,6 +39,7 @@ interface Week {
 }
 
 interface Program {
+  id: string
   name?: string
   title?: string
   description?: string
@@ -336,6 +337,7 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
         debugLog("Program data from import:", program)
 
         const programState: Program = {
+          id: importData.id ?? importId,
           name: importData.name || program.name || "Untitled Program",
           description: program.description || "",
           duration_weeks: Number(program.duration_weeks || program.program_weeks || program.weeks?.length || 1),

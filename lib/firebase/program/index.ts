@@ -43,7 +43,10 @@ export async function getProgramById(trainerId: string, programId: string): Prom
     return {
       id: programId,
       name: importData.name,
-      program: importData.program,
+      program: {
+        ...importData.program,
+        id: programId,
+      },
       status: importData.status || "pending",
       createdAt: created_at_string,
     }

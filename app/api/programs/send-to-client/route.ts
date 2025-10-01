@@ -39,11 +39,12 @@ export async function POST(request: NextRequest) {
 
     // Log the program data structure for debugging
     console.log("[send-to-client API] Program data structure:", {
+      id: !!programData.id,
+      name: programData.name,
       hasWeeks: !!programData.weeks,
       weeksLength: programData.weeks?.length,
       hasRoutines: !!programData.routines,
       routinesLength: programData.routines?.length,
-      name: programData.name,
     })
 
     // Validate program data structure
