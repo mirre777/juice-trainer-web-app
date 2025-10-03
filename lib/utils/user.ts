@@ -22,9 +22,7 @@ export async function getUserId(request: NextRequest): Promise<string | null> {
   if (!authToken) {
     return null;
   }
-  console.log("authToken", authToken);
   const admin = await getFirebaseAdmin()
   const decodedToken = await admin.auth().verifyIdToken(authToken);
-  console.log("decodedToken", decodedToken);
   return decodedToken.uid;
 }
