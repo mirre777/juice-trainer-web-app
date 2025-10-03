@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
+import { getUserIdFromCookie } from "@/lib/utils/user"
 import { db } from "@/lib/firebase/firebase"
 import { collection, doc, getDoc } from "firebase/firestore"
 import { SubscriptionPlan } from "@/lib/firebase/subscription-service"
@@ -11,13 +11,13 @@ export async function GET() {
   try {
     console.log("🚀 Starting /api/auth/me request")
 
-    const cookieStore = await cookies()
-    const userId = cookieStore.get("user_id")?.value
+    const userId = await getUserIdFromCookie()
     console.log("🆔 User ID from cookie:", userId)
 
     if (!userId) {
       console.log("❌ No user_id in cookies")
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      // redirect to login
+      return NextResponse.redirect(new URL("/login", window.location.origin))
     }
 
     try {
