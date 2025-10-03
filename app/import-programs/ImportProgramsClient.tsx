@@ -23,9 +23,9 @@ interface SheetsImport {
   status: string
   updatedAt: any
   userId: string
-  programName?: string
   name?: string
   description?: string
+  acknowledgedAt?: Date
 }
 
 // Utility function to format date and get day name
@@ -55,7 +55,7 @@ function EditableProgramName({
   const [editValue, setEditValue] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
-  const displayName = importItem.programName || importItem.name || "Untitled"
+  const displayName = importItem.name || "Untitled"
 
   const handleDoubleClick = () => {
     console.log("[EditableName] Double click on:", importItem.id)
@@ -155,18 +155,6 @@ export default function ImportProgramsClient() {
   const [imports, setImports] = useState<SheetsImport[]>([])
   const [isLoadingImports, setIsLoadingImports] = useState(false)
   const [completedImports, setCompletedImports] = useState<SheetsImport[]>([])
-  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("dismissedImportNotifications")
-        return new Set(saved ? JSON.parse(saved) : [])
-      } catch (error) {
-        console.error("Failed to parse dismissed notifications from localStorage", error)
-        return new Set()
-      }
-    }
-    return new Set()
-  })
   const [activeToastId, setActiveToastId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [programToDelete, setProgramToDelete] = useState<string | null>(null)
@@ -235,26 +223,18 @@ export default function ImportProgramsClient() {
             status: importData.status,
             userId: importData.userId,
             spreadsheetId: importData.spreadsheetId,
-            programName: importData.programName,
             name: importData.name,
             rawData: doc.data(),
           })
 
           importsData.push(importData)
-
-          if (importData.status === "conversion_complete" && !dismissedNotifications.has(importData.id)) {
+          if (importData.status === "conversion_complete" && !importData.acknowledgedAt) {
             console.log(`[ImportPrograms] Found newly completed import (not dismissed):`, {
               id: importData.id,
-              programName: importData.programName,
               name: importData.name,
-              isDismissed: dismissedNotifications.has(importData.id),
+              acknowledgedAt: importData.acknowledgedAt,
             })
             newlyCompleted.push(importData)
-          } else if (importData.status === "conversion_complete") {
-            console.log(`[ImportPrograms] Completed import is dismissed:`, {
-              id: importData.id,
-              isDismissed: dismissedNotifications.has(importData.id),
-            })
           }
         })
 
@@ -289,12 +269,7 @@ export default function ImportProgramsClient() {
       console.log("[ImportPrograms] Cleaning up Firebase listener for userId:", userId)
       unsubscribe()
     }
-  }, [userId, dismissedNotifications, activeToastId])
-
-  // Persist dismissed notifications to localStorage
-  useEffect(() => {
-    localStorage.setItem("dismissedImportNotifications", JSON.stringify(Array.from(dismissedNotifications)))
-  }, [dismissedNotifications])
+  }, [userId, activeToastId])
 
   // Memoized search filtering
   const filteredImports = useMemo(() => {
@@ -310,7 +285,6 @@ export default function ImportProgramsClient() {
 
     const filtered = imports.filter(
       (importItem) =>
-        importItem.programName?.toLowerCase().includes(lowercaseSearchTerm) ||
         importItem.name?.toLowerCase().includes(lowercaseSearchTerm) ||
         importItem.description?.toLowerCase().includes(lowercaseSearchTerm) ||
         importItem.spreadsheetId.toLowerCase().includes(lowercaseSearchTerm),
@@ -492,7 +466,7 @@ export default function ImportProgramsClient() {
 
   // Format program names for the toast
   const formatProgramName = (importItem: SheetsImport) => {
-    return importItem.programName || importItem.name || `Spreadsheet ${importItem.spreadsheetId.slice(0, 12)}...`
+    return importItem.name || `Spreadsheet ${importItem.spreadsheetId.slice(0, 12)}...`
   }
 
   // Show completion toast
@@ -532,11 +506,15 @@ export default function ImportProgramsClient() {
             }
           }
 
-          const newDismissed = new Set(dismissedNotifications)
-          newlyCompleted.forEach((imp) => {
-            newDismissed.add(imp.id)
+          // call backend to acknowledge the import
+          newlyCompleted.forEach(async (imp) => {
+            await fetch(`/api/sheets-imports/${imp.id}/acknowledge`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            })
           })
-          setDismissedNotifications(newDismissed)
           setActiveToastId(null)
         },
       },

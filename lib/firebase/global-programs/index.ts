@@ -17,6 +17,21 @@ async function getGlobalProgram(id: string): Promise<ProgramWithRoutines | null>
   }
 }
 
+async function getDefaultGlobalProgram(): Promise<ProgramWithRoutines | null> {
+  // query program where isOnboarding is true
+  const q = query(collection(db, "global_programs"), where("isOnboarding", "==", true))
+  const programs = await getDocs(q)
+  if (programs.empty) {
+    return null
+  }
+  const program = programs.docs[0].data() as GlobalProgram
+  console.log("program", convertTimestampsToDates(program))
+  return {
+    ...program,
+    routines: await getGlobalRoutines(program.routines)
+  }
+}
+
 async function getGlobalRoutines(globalRoutines: GlobalProgramRoutine[]): Promise<RoutineWithOrder[]> {
   // global routines as a map - these are GlobalProgramRoutine objects with order and week
   const globalRoutinesMap = new Map(globalRoutines.map((routine) => [routine.routineId, routine]))
@@ -39,4 +54,4 @@ async function getGlobalRoutines(globalRoutines: GlobalProgramRoutine[]): Promis
   return routinesData
 }
 
-export { getGlobalProgram }
+export { getGlobalProgram, getDefaultGlobalProgram }

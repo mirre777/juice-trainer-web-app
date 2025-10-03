@@ -9,11 +9,6 @@ const serviceAccount: ServiceAccount = {
 };
 
 export async function getFirebaseAdmin(): Promise<admin.app.App> {
-  console.log("serviceAccount", serviceAccount)
-  console.log("process.env.FIREBASE_PROJECT_ID", process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)
-  console.log("process.env.FIREBASE_PRIVATE_KEY", process.env.FIREBASE_PRIVATE_KEY)
-  console.log("process.env.FIREBASE_CLIENT_EMAIL", process.env.FIREBASE_CLIENT_EMAIL)
-  console.log("Getting Firebase Admin SDK")
   console.log("admin.apps.length", admin.apps.length)
   if (!admin.apps.length) {
     console.log("Initializing Firebase Admin SDK")
