@@ -1,10 +1,9 @@
 import { getUserId } from "@/lib/utils/user";
 import { NextRequest, NextResponse } from "next/server";
-import { ProgramWithRoutines } from "@/lib/firebase/global-programs/types";
-import { createDefaultProgram } from "@/lib/firebase/program";
+import { createDefaultProgram, SheetsImport } from "@/lib/firebase/program";
 import { convertTimestampsToISO } from "@/lib/utils/date-utils";
 
-export async function GET  (
+export async function POST  (
     request: NextRequest,
   ) {
     try {
@@ -19,7 +18,7 @@ export async function GET  (
       console.log(`🔍 [PROGRAM API] creating default program for trainer: ${trainerId}`)
 
       // Fetch program from sheets_imports collection
-      const program: ProgramWithRoutines | null = await createDefaultProgram(trainerId)
+      const program: SheetsImport | null = await createDefaultProgram(trainerId)
 
       if (!program) {
         return NextResponse.json(

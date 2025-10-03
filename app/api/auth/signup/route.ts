@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createUser, User } from "@/lib/firebase/user-service"
 import { signUp } from "@/lib/auth/auth-service"
+import { createDefaultProgram } from "@/lib/firebase/program"
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
         ...(inviteCode && { inviteCode }),
       } as Omit<User, "id" | "createdAt" | "updatedAt">
       await createUser(user.uid, newUser)
+      await createDefaultProgram(user.uid)
 
       console.log(`[Signup] ✅ Successfully created account with role: ${role || "none"} and trainer_basic plan`)
 

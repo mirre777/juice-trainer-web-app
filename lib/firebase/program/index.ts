@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase/firebase"
-import { doc, getDoc, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc } from "firebase/firestore"
 import { ImportProgram } from "./types"
 import { ProgramWithRoutines } from "../global-programs/types"
 import { getDefaultGlobalProgram } from "../global-programs"
@@ -78,7 +78,7 @@ export async function createDefaultProgram(trainerId: string): Promise<SheetsImp
   }
 }
 
-type SheetsImport = {
+export type SheetsImport = {
   id: string
   name: string
   program: ProgramWithRoutines
