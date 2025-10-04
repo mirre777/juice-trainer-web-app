@@ -13,6 +13,7 @@ export function ProgramDetails({ programId }: ProgramDetailsProps) {
   const [program, setProgram] = useState<ProgramWithRoutines | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchProgram = async () => {
@@ -108,20 +109,37 @@ export function ProgramDetails({ programId }: ProgramDetailsProps) {
         {/* Routine Sections */}
         <div className="space-y-4 mb-8">
           {program.routines.sort((a, b) => a.order - b.order).map((routine, index) => {
-            const routineWithExercises = routine as any;
-            return (
-              <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer">
-                <div className="text-left">
-                  <h3 className="font-bold text-gray-900 mb-1">
-                    {routineWithExercises.name || `Routine ${index + 1}`}
-                  </h3>
-                  <span className="text-gray-600 text-sm">
-                    {routineWithExercises.exercises?.length || 0} exercises
-                  </span>
+              const routineWithExercises = routine as any;
+              const isOpen = openIndex === index;
+              return (
+                <div key={index} className="relative" onMouseLeave={() => setOpenIndex(null)}>
+                  <div className="bg-white rounded-lg p-4 border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer"
+                    onClick={() => setOpenIndex(isOpen ? null : index)}>
+                    <div className="text-left">
+                      <h3 className="font-bold text-gray-900 mb-1">
+                        {routineWithExercises.name || `Routine ${index + 1}`}
+                      </h3>
+                      <span className="text-gray-600 text-sm">
+                        {routineWithExercises.exercises?.length || 0} exercises
+                      </span>
+                    </div>
+                  </div>
+
+                  {isOpen && (
+                    <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-10">
+                      <ul className="space-y-1.5 text-sm font-light text-gray-700">
+                        {routineWithExercises.exercises?.map((ex: any, i: number) => (
+                          <li key={i} className="flex justify-between">
+                            <span>{ex.name}</span>
+                            <span className="text-gray-500">{ex.sets.length} sets</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
 
         {/* Call to Action */}
