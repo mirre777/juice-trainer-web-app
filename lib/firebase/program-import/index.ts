@@ -6,13 +6,15 @@ import { v4 as uuidv4 } from "uuid"
 export type SimpleExercise = {
   id: string
   name: string
-  deletedAt?: Date
+  deletedAt?: Date | null
 }
 
 export type GetOrCreateExercise = {
   name: string
   id?: string
   muscleGroup?: string
+  secondaryMuscleGroup?: string[]
+  isCardio?: boolean
 }
 
 export async function importProgram(program: ProgramWithRoutines, userId: string) {
@@ -50,7 +52,9 @@ export async function importRoutine(userId: string, routine: RoutineWithOrder, p
     const exerciseToGetOrCreate: GetOrCreateExercise = {
       name: exercise.name,
       id: exercise.id,
-      muscleGroup: exercise.muscleGroup
+      muscleGroup: exercise.muscleGroup,
+      secondaryMuscleGroup: exercise.secondaryMuscleGroup ?? [],
+      isCardio: exercise.isCardio ?? false,
     };
     const exerciseId = await getOrCreateExercise(userId, allExercises, exerciseToGetOrCreate)
     return {
@@ -86,6 +90,7 @@ export async function getOrCreateProgramExercises(userId: string, exerciseNames:
     if (existingExercise && (!existingExercise.deletedAt || existingExercise.deletedAt === null)) {
         programExerciseNameToId.set(cleanExerciseName.toLowerCase(), existingExercise.id);
     } else {
+      console.log("creating exercise", exercise)
       await createExercise(userId, {...exercise, id: exerciseId});
       programExerciseNameToId.set(cleanExerciseName.toLowerCase(), exerciseId)
     }
@@ -103,7 +108,7 @@ async function getOrCreateExercise(userId: string, allExercises: SimpleExercise[
         console.log("found existingExercise", existingExercise)
         return existingExercise.id
     }
-    const newExercise = await createExercise(userId, getOrCreateExercise)
+    const newExercise = await createExercise(userId, exercise)
     return newExercise.id
 }
 
@@ -116,7 +121,8 @@ async function createExercise(userId: string, exercise: GetOrCreateExercise): Pr
         id,
         name: exercise.name,
         muscleGroup: exercise.muscleGroup ?? "Other",
-        isCardio: false,
+        secondaryMuscleGroup: exercise.secondaryMuscleGroup ?? [],
+        isCardio: exercise.isCardio ?? false,
         isFullBody: false,
         isMobility: false,
         createdAt: now,
