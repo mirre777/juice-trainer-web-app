@@ -20,6 +20,7 @@ export interface MobileProgram {
   duration: number
   createdAt: any // Firestore Timestamp
   updatedAt: any // Firestore Timestamp
+  deletedAt: any
   program_URL: string
   hasAcknowledgedNewProgram?: boolean
   routines: Array<{
@@ -57,6 +58,8 @@ export interface MobileExercise {
   id: string
   name: string
   muscleGroup: string
+  secondaryMuscleGroup: string[]
+  videoUrl?: string
   isCardio: boolean
   isFullBody: boolean
   isMobility: boolean
@@ -160,10 +163,11 @@ export class ProgramConversionService {
 
             return cleanSet
           })
-
+          const videoUrl = exercise.video_url ?? exercise.videoUrl
           exercises.push({
             id: exerciseId,
             ...exercise,
+            videoUrl: videoUrl,
             sets: mobileSets,
           })
         } catch (exerciseError) {
@@ -233,11 +237,21 @@ export class ProgramConversionService {
   async getProgramExerciseNames(programData: any): Promise<Map<string, GetOrCreateExercise>> {
     const exerciseMap = new Map<string, GetOrCreateExercise>();
     if (programData.weeks && Array.isArray(programData.weeks) && programData.weeks.length > 0) {
-      programData.weeks.flatMap((week: any) => week.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exerciseMap.set(exercise.name, { name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup }))));
+      programData.weeks.flatMap((week: any) => week.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exerciseMap.set(exercise.name, this.getExercise(exercise)))));
     } else if (programData.routines && Array.isArray(programData.routines) && programData.routines.length > 0) {
-      programData.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exerciseMap.set(exercise.name, { name: exercise.name, id: exercise.id, muscleGroup: exercise.muscleGroup })));
+      programData.routines.flatMap((routine: any) => routine.exercises.flatMap((exercise: any) => exerciseMap.set(exercise.name, this.getExercise(exercise))));
     }
     return exerciseMap;
+  }
+
+  private getExercise(exercise: any): GetOrCreateExercise {
+    return {
+      name: exercise.name,
+      id: exercise.id,
+      muscleGroup: exercise.muscleGroup,
+      secondaryMuscleGroup: exercise.secondaryMuscleGroup ?? [],
+      isCardio: exercise.isCardio,
+    }
   }
 
   /**
@@ -312,15 +326,21 @@ export class ProgramConversionService {
 
       console.log(`[convertAndSendProgram] Total routines created: ${routineMap.length}`)
 
+
+      console.log("programData.start_date", programData.start_date)
+      const startDate = new Date(programData.start_date)
+      console.log("convertToFirestoreTimestamp(programData.start_date)", startDate)
+
       // Create the program document with proper Firestore Timestamps using serverTimestamp()
       const program: MobileProgram = {
         id: programId,
         name: programData.program_title || programData.title || programData.name || "Imported Program",
-        startedAt: programData.start_date || now,
+        startedAt: startDate,
         hasAcknowledgedNewProgram: false,
         notes: "",
         createdAt: now,
         updatedAt: now,
+        deletedAt: null,
         duration: Number(
           programData.program_weeks ||
             programData.duration_weeks ||
@@ -335,6 +355,9 @@ export class ProgramConversionService {
       console.log(`[convertAndSendProgram] Program object before saving:`, {
         id: program.id,
         name: program.name,
+        startedAt: program.startedAt,
+        startedAtType: typeof program.startedAt,
+        originalStartDate: programData.start_date,
         createdAt: program.createdAt,
         createdAtType: typeof program.createdAt,
       })

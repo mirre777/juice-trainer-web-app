@@ -31,8 +31,8 @@ export function CardioToggle({
       onClick={handleClick}
       className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-colors ${
         exercise.isCardio
-          ? "bg-white text-gray-800 hover:bg-gray-50 border-2 border-gray-800"
-          : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300"
+          ? "bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300"
+          : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-300"
       }`}
     >
       Cardio

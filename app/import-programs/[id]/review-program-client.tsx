@@ -16,6 +16,7 @@ import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, Che
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
 import { CardioToggle } from "@/components/programs/cardio-toggle"
+import { MuscleGroupSelector } from "@/components/programs/muscle-group-selector"
 import { ProgramExercise } from "@/types/workout-program"
 
 interface Routine {
@@ -1419,7 +1420,13 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
                                             onFieldUpdate={updateExerciseField}
                                           />
                                         </div>
-                                        <div className="flex items-center">
+                                        <div className="flex items-center space-x-2">
+                                          <MuscleGroupSelector
+                                            exercise={exercise}
+                                            routineIndex={routineIndex}
+                                            exerciseIndex={exerciseIndex}
+                                            onFieldUpdate={updateExerciseField}
+                                          />
                                           <CardioToggle
                                             exercise={exercise}
                                             routineIndex={routineIndex}
@@ -1655,7 +1662,13 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
                                     onFieldUpdate={updateExerciseField}
                                   />
                                 </div>
-                                <div className="flex items-center">
+                                <div className="flex items-center space-x-2">
+                                  <MuscleGroupSelector
+                                    exercise={exercise}
+                                    routineIndex={routineIndex}
+                                    exerciseIndex={exerciseIndex}
+                                    onFieldUpdate={updateExerciseField}
+                                  />
                                   <CardioToggle
                                     exercise={exercise}
                                     routineIndex={routineIndex}
