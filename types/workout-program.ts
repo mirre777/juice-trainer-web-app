@@ -24,6 +24,9 @@ export interface ProgramExercise {
   name: string
   video_url?: string
   notes?: string
+  muscleGroup?: string
+  secondaryMuscleGroup?: string[]
+  isCardio?: boolean
   sets: ProgramSet[]
 }
 

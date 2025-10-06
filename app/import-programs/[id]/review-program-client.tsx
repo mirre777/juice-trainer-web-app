@@ -15,24 +15,13 @@ import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronUp, Copy, Trash2, Plus, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
-
-interface Exercise {
-  name: string
-  sets?: Array<{
-    reps?: string
-    weight?: string
-    rpe?: string
-    rest?: string
-    notes?: string
-    set_number?: number
-  }>
-  notes?: string
-}
+import { CardioToggle } from "@/components/programs/cardio-toggle"
+import { ProgramExercise } from "@/types/workout-program"
 
 interface Routine {
   name?: string
   title?: string
-  exercises: Exercise[]
+  exercises: ProgramExercise[]
 }
 
 interface Week {
@@ -62,7 +51,7 @@ function EditableExerciseField({
   field,
   onFieldUpdate,
 }: {
-  exercise: Exercise
+  exercise: ProgramExercise
   routineIndex: number
   exerciseIndex: number
   field: string
@@ -72,7 +61,7 @@ function EditableExerciseField({
   const [editValue, setEditValue] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
-  const displayValue = (exercise[field as keyof Exercise] as string) || (field === "name" ? "Untitled Exercise" : "")
+  const displayValue = (exercise[field as keyof ProgramExercise] as string) || (field === "name" ? "Untitled Exercise" : "")
 
   const handleClick = () => {
     console.log("[EditableExerciseField] Double click on:", { routineIndex, exerciseIndex, field })
@@ -910,11 +899,12 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
           const duplicatedExercise = {
             ...originalExercise,
             name: `${originalExercise.name} (Copy)`,
+            id: undefined,
             sets: originalExercise.sets ? [...originalExercise.sets] : undefined,
-          }
+          } as ProgramExercise;
 
           // Insert the duplicated exercise after the original
-          targetRoutines[routineIndex].exercises.splice(exerciseIndex + 1, 0, duplicatedExercise)
+          targetRoutines[routineIndex].exercises.splice(exerciseIndex + 1, 0, duplicatedExercise);
 
           debugLog("Duplicated exercise:", {
             routineIndex,
@@ -1034,8 +1024,7 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
             rpe: "",
             rest: "",
             notes: "",
-            set_number: exercise.sets.length + 1,
-          })
+          });
 
           debugLog("Added new set, total sets now:", exercise.sets.length)
         }
@@ -1419,28 +1408,42 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
                               {routine.exercises?.map((exercise, exerciseIndex) => (
                                 <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
                                   <div className="mb-3">
-                                    <div className="flex items-center space-x-2">
-                                      <EditableExerciseField
-                                        exercise={exercise}
-                                        routineIndex={routineIndex}
-                                        exerciseIndex={exerciseIndex}
-                                        field="name"
-                                        onFieldUpdate={updateExerciseField}
-                                      />
-                                      <button
-                                        onClick={() => duplicateExercise(routineIndex, exerciseIndex)}
-                                        className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                        title="Duplicate this exercise"
-                                      >
-                                        <Copy className="h-4 w-4 text-gray-500 hover:text-gray-700" />
-                                      </button>
-                                      <button
-                                        onClick={() => deleteExercise(routineIndex, exerciseIndex)}
-                                        className="p-1 hover:bg-red-100 rounded transition-colors"
-                                        title="Delete this exercise"
-                                      >
-                                        <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-600" />
-                                      </button>
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="flex items-center">
+                                          <EditableExerciseField
+                                            exercise={exercise}
+                                            routineIndex={routineIndex}
+                                            exerciseIndex={exerciseIndex}
+                                            field="name"
+                                            onFieldUpdate={updateExerciseField}
+                                          />
+                                        </div>
+                                        <div className="flex items-center">
+                                          <CardioToggle
+                                            exercise={exercise}
+                                            routineIndex={routineIndex}
+                                            exerciseIndex={exerciseIndex}
+                                            onFieldUpdate={updateExerciseField}
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <button
+                                          onClick={() => duplicateExercise(routineIndex, exerciseIndex)}
+                                          className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                          title="Duplicate this exercise"
+                                        >
+                                          <Copy className="h-4 w-4 text-gray-500 hover:text-gray-700" />
+                                        </button>
+                                        <button
+                                          onClick={() => deleteExercise(routineIndex, exerciseIndex)}
+                                          className="p-1 hover:bg-red-100 rounded transition-colors"
+                                          title="Delete this exercise"
+                                        >
+                                          <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-600" />
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                   {exercise.notes && (<EditableExerciseField
@@ -1641,28 +1644,42 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
                       {routine.exercises?.map((exercise, exerciseIndex) => (
                         <div key={exerciseIndex} className="bg-gray-50 rounded-lg p-4">
                           <div className="mb-3">
-                            <div className="flex items-center space-x-2">
-                              <EditableExerciseField
-                                exercise={exercise}
-                                routineIndex={routineIndex}
-                                exerciseIndex={exerciseIndex}
-                                field="name"
-                                onFieldUpdate={updateExerciseField}
-                              />
-                              <button
-                                onClick={() => duplicateExercise(routineIndex, exerciseIndex)}
-                                className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                title="Duplicate this exercise"
-                              >
-                                <Copy className="h-4 w-4 text-gray-500 hover:text-gray-700" />
-                              </button>
-                              <button
-                                onClick={() => deleteExercise(routineIndex, exerciseIndex)}
-                                className="p-1 hover:bg-red-100 rounded transition-colors"
-                                title="Delete this exercise"
-                              >
-                                <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-600" />
-                              </button>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <div className="flex items-center">
+                                  <EditableExerciseField
+                                    exercise={exercise}
+                                    routineIndex={routineIndex}
+                                    exerciseIndex={exerciseIndex}
+                                    field="name"
+                                    onFieldUpdate={updateExerciseField}
+                                  />
+                                </div>
+                                <div className="flex items-center">
+                                  <CardioToggle
+                                    exercise={exercise}
+                                    routineIndex={routineIndex}
+                                    exerciseIndex={exerciseIndex}
+                                    onFieldUpdate={updateExerciseField}
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => duplicateExercise(routineIndex, exerciseIndex)}
+                                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                  title="Duplicate this exercise"
+                                >
+                                  <Copy className="h-4 w-4 text-gray-500 hover:text-gray-700" />
+                                </button>
+                                <button
+                                  onClick={() => deleteExercise(routineIndex, exerciseIndex)}
+                                  className="p-1 hover:bg-red-100 rounded transition-colors"
+                                  title="Delete this exercise"
+                                >
+                                  <Trash2 className="h-4 w-4 text-gray-500 hover:text-red-600" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                             {exercise.notes && (<EditableExerciseField
