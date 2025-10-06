@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { v4 as uuidv4 } from "uuid"
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -900,7 +900,7 @@ export default function ReviewProgramClient({ importData, importId }: ReviewProg
           const duplicatedExercise = {
             ...originalExercise,
             name: `${originalExercise.name} (Copy)`,
-            id: undefined,
+            id: uuidv4(),
             sets: originalExercise.sets ? [...originalExercise.sets] : undefined,
           } as ProgramExercise;
 
