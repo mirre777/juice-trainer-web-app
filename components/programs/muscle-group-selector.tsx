@@ -11,20 +11,20 @@ interface MuscleGroupSelectorProps {
   onFieldUpdate: (routineIndex: number, exerciseIndex: number, field: string, value: any) => void
 }
 
-const MUSCLE_GROUPS = [
-  "Chest",
-  "Back",
-  "Shoulders",
-  "Biceps",
-  "Triceps",
-  "Forearms",
-  "Core",
-  "Quads",
-  "Hamstrings",
-  "Glutes",
-  "Calves",
-  "Other"
-]
+export enum MuscleGroup {
+  BACK = "Back",
+  BICEPS = "Biceps",
+  CALVES = "Calves",
+  CHEST = "Chest",
+  CORE = "Core",
+  FOREARMS = "Forearms",
+  GLUTES = "Glutes",
+  HAMSTRINGS = "Hamstrings",
+  SHOULDERS = "Shoulders",
+  QUADS = "Quads",
+  TRICEPS = "Triceps",
+  OTHER = "Other",
+}
 
 export function MuscleGroupSelector({
   exercise,
@@ -121,7 +121,7 @@ export function MuscleGroupSelector({
           <div className="p-4">
             <h4 className="text-sm font-medium text-gray-700 mb-3">Muscle Groups</h4>
             <div className="grid grid-cols-2 gap-2">
-              {MUSCLE_GROUPS.map((group) => {
+              {Object.values(MuscleGroup).map((group) => {
                 const isPrimary = group === primaryMuscleGroup
                 const isSecondary = secondaryMuscleGroups.includes(group)
                 const isSelected = isPrimary || isSecondary
