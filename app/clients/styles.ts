@@ -49,7 +49,7 @@ export const clientsPageStyles = {
 
   // Client details styles
   detailsContainer: "flex-1",
-  detailsContent: "space-y-6 bg-white border-b border-gray-200 px-8 py-6 rounded-lg shadow-sm border border-gray-200 p-6",
+  detailsContent: "space-y-6 bg-white border-b border-gray-200 px-8 py-6 rounded-lg shadow-sm border border-gray-200 p-6 h-[calc(100vh-200px)] overflow-y-auto",
 
   // Client header card styles
   clientHeaderFlex: "flex items-start justify-between",
