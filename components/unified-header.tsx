@@ -396,7 +396,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
                 Programs
               </Link>
               <a
-                href="https://www.juice.fitness/marketplace"
+                href="https://www.juice.fitness/download-juice-app"
                 className="flex items-center px-4 py-3 rounded-md text-sm text-gray-600 hover:bg-gray-50"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -418,7 +418,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
                     strokeLinejoin="round"
                   />
                 </svg>
-                Marketplace
+                Download App
               </a>
               <Link
                 href={`${pathPrefix}/settings`}
