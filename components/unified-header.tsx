@@ -163,7 +163,7 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
       { name: "Overview", path: "/overview" },
       { name: "Clients", path: "/clients" },
       { name: "Programs", path: "/import-programs" },
-      { name: "Marketplace", path: "https://www.juice.fitness/marketplace" },
+      { name: "Download App", path: "https://www.juice.fitness/download-juice-app" },
     ],
     [],
   )
