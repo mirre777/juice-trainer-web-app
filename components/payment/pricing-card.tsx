@@ -1,5 +1,5 @@
 import { Check } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 interface PricingCardProps {
   name: string
@@ -11,6 +11,8 @@ interface PricingCardProps {
   comingSoon?: boolean
   buttonText?: string
   isCurrentPlan?: boolean
+  userId?: string
+  email?: string
 }
 
 function PricingCard({
@@ -23,28 +25,10 @@ function PricingCard({
   comingSoon = false,
   buttonText = "Get Elite",
   isCurrentPlan = false,
+  userId,
+  email,
 }: PricingCardProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [email, setEmail] = useState("")
-  const [userId, setUserId] = useState("")
-
-  useEffect(() => {
-      const fetchUser = async () => {
-      const response = await fetch("/api/auth/me")
-      if (response.ok) {
-        console.log("User data:", response)
-        const { uid: userId, email } = await response.json()
-        console.log("User:", userId, email)
-        if (userId) {
-          setUserId(userId)
-          setEmail(email)
-        }
-      } else {
-        console.error("Failed to fetch user data:", response)
-      }
-    }
-    fetchUser();
-  }, []);
 
   const handleSubscribe = async () => {
     if (isCurrentPlan) {
@@ -52,12 +36,6 @@ function PricingCard({
       return
     }
     setIsLoading(true);
-    if (!userId) {
-      console.error("User ID not found")
-      setIsLoading(false);
-      return
-    }
-
     if (planId === "trainer_pro") {
       window.location.href = `https://buy.stripe.com/cNicN63CJ2u248L4cUfMA02?client_reference_id=${userId}&locked_prefilled_email=${email}`
     } else if (planId === "trainer_elite") {
@@ -106,7 +84,7 @@ function PricingCard({
       </ul>
 
       <button
-        onClick={handleSubscribe}
+        onClick={() => handleSubscribe()}
         disabled={isLoading || isCurrentPlan}
         className={`w-full py-3 px-4 rounded-md font-medium transition-colors text-sm mt-auto ${
           isCurrentPlan
