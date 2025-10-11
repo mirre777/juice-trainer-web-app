@@ -7,6 +7,8 @@ import { getUserSubscriptionPlan } from "@/lib/firebase/subscription-service"
 
 export default function PricingPage() {
   const [currentPlan, setCurrentPlan] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [userData, setUserData] = useState<{ userId: string; email: string } | null>(null)
 
   useEffect(() => {
     async function fetchUserPlan() {
@@ -16,12 +18,15 @@ export default function PricingPage() {
         if (response.ok) {
           const { uid: userId, email } = await response.json()
           if (userId) {
+            setUserData({ userId, email })
             const plan = await getUserSubscriptionPlan(userId)
             setCurrentPlan(plan)
           }
         }
       } catch (error) {
         console.error("Error fetching user plan:", error)
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -52,65 +57,80 @@ export default function PricingPage() {
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {/* Basic Plan */}
-          <PricingCard
-            name="Basic"
-            price="0"
-            description="Perfect for getting started"
-            features={[
-              "Up to 3 clients",
-              "Basic workout tracking",
-              "Client progress monitoring",
-              "Email support",
-              "Mobile app access",
-            ]}
-            buttonText={currentPlan === "trainer_basic" ? "Current Plan" : "Start"}
-            isCurrentPlan={currentPlan === "trainer_basic"}
-            planId="trainer_basic"
-          />
-
-          {/* Pro Plan */}
-          <div className="relative">
-            <PricingCard
-              name="Pro"
-              price="25"
-              description="For growing coaching businesses"
-              features={[
-                "Unlimited clients",
-                "Advanced workout builder",
-                "Google Sheets integration",
-                "Progress analytics",
-                "Custom branding",
-                "Email & chat support",
-              ]}
-              buttonText="Pay us for Pro"
-              isCurrentPlan={currentPlan === "trainer_pro"}
-              planId="trainer_pro"
-            />
+        {isLoading ? (
+          <div className="flex justify-center items-center h-96">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 border-2 border-[#D2FF28] border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-gray-600">Loading your current plan...</span>
+            </div>
           </div>
-
-          {/* Elite Plan */}
-          <div className="relative">
+        ) : (
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {/* Basic Plan */}
             <PricingCard
-              name="Elite"
-              price="49"
-              description="For established coaching businesses"
+              name="Basic"
+              price="0"
+              description="Perfect for getting started"
               features={[
-                "Everything in Pro",
-                "Priority support",
-                "Vacation mode",
-                "Advanced analytics",
-                "API access",
-                "White-label solution",
-                "Dedicated account manager",
+                "Up to 3 clients",
+                "Basic workout tracking",
+                "Client progress monitoring",
+                "Email support",
+                "Mobile app access",
               ]}
-              buttonText="Pay us for Elite"
-              isCurrentPlan={currentPlan === "trainer_elite"}
-              planId="trainer_elite"
+              buttonText={currentPlan === "trainer_basic" ? "Current Plan" : "Start"}
+              isCurrentPlan={currentPlan === "trainer_basic"}
+              planId="trainer_basic"
+              userId={userData?.userId}
+              email={userData?.email}
             />
+
+            {/* Pro Plan */}
+            <div className="relative">
+              <PricingCard
+                name="Pro"
+                price="29"
+                description="For growing coaching businesses"
+                features={[
+                  "Unlimited clients",
+                  "Advanced workout builder",
+                  "Google Sheets integration",
+                  "Progress analytics",
+                  "Custom branding",
+                  "Email & chat support",
+                ]}
+                buttonText="Pay us for Pro"
+                isCurrentPlan={currentPlan === "trainer_pro"}
+                planId="trainer_pro"
+                userId={userData?.userId}
+                email={userData?.email}
+              />
+            </div>
+
+            {/* Elite Plan */}
+            <div className="relative">
+              <PricingCard
+                name="Elite"
+                price="45"
+                description="For established coaching businesses"
+                features={[
+                  "Everything in Pro",
+                  "Priority support",
+                  "Vacation mode",
+                  "Advanced analytics",
+                  "API access",
+                  "White-label solution",
+                  "Dedicated account manager",
+                ]}
+                buttonText="Pay us for Elite"
+                isCurrentPlan={currentPlan === "trainer_elite"}
+                planId="trainer_elite"
+                userId={userData?.userId}
+                email={userData?.email}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Additional Info */}
         <div className="text-center mt-16">

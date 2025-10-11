@@ -144,7 +144,7 @@ export default function SettingsPageClient() {
   const getClientCapacity = () => {
     return subscriptionPlan === "trainer_basic" ? 3 :
            subscriptionPlan === "trainer_pro" ? 10 :
-           subscriptionPlan === "trainer_elite" ? 25 :
+           subscriptionPlan === "trainer_elite" ? 20 :
            3
   }
 
@@ -358,17 +358,17 @@ export default function SettingsPageClient() {
                        subscriptionPlan}
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">
-                      {subscriptionPlan === "trainer_basic" ? "Up to 10 clients" :
-                       subscriptionPlan === "trainer_pro" ? "Up to 25 clients" :
-                       subscriptionPlan === "trainer_elite" ? "Unlimited clients" :
+                      {subscriptionPlan === "trainer_basic" ? "Up to 3 clients" :
+                       subscriptionPlan === "trainer_pro" ? "Up to 10 clients" :
+                       subscriptionPlan === "trainer_elite" ? "Up to 20 clients" :
                        "Current subscription plan"}
                     </p>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-gray-900">
                       {subscriptionPlan === "trainer_basic" ? "€0" :
-                       subscriptionPlan === "trainer_pro" ? "€49" :
-                       subscriptionPlan === "trainer_elite" ? "€69" :
+                       subscriptionPlan === "trainer_pro" ? "€29" :
+                       subscriptionPlan === "trainer_elite" ? "45" :
                        "—"}
                     </div>
                     <div className="text-sm text-gray-500">per month</div>
