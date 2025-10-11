@@ -1,33 +1,31 @@
+"use server"
 import { type NextRequest, NextResponse } from "next/server"
+import Stripe from "stripe"
 
 export async function POST(request: NextRequest) {
   try {
-    const { amount, currency = "usd", userId, planId } = await request.json()
+    const { amount, currency = "eur", userId, planId } = await request.json()
 
     if (!amount || !userId) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
+    const apiKey = process.env.STRIPE_SECRET_KEY
+    if (!apiKey) {
+      return NextResponse.json({ error: "STRIPE_SECRET_KEY is not set" }, { status: 500 })
+    }
 
     // In a real implementation, you would create a payment intent with Stripe
-    // const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-    // const paymentIntent = await stripe.paymentIntents.create({
-    //   amount,
-    //   currency,
-    //   metadata: { userId, planId },
-    // })
-
-    // For demo purposes, we'll create a mock payment intent
-    const mockPaymentIntent = {
-      id: `pi_${Math.random().toString(36).substring(2, 15)}`,
-      client_secret: `pi_${Math.random().toString(36).substring(2, 15)}_secret_${Math.random().toString(36).substring(2, 15)}`,
+    const stripe = new Stripe(apiKey)
+    const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
       metadata: { userId, planId },
-    }
+    })
+    console.log("paymentIntent", paymentIntent)
 
     return NextResponse.json({
-      clientSecret: mockPaymentIntent.client_secret,
-      paymentIntentId: mockPaymentIntent.id,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
     })
   } catch (error) {
     console.error("Error creating payment intent:", error)

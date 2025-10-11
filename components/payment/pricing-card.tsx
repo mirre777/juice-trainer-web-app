@@ -1,8 +1,5 @@
-"use client"
-
-import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Check } from "lucide-react"
+import { useEffect, useState } from "react"
 
 interface PricingCardProps {
   name: string
@@ -27,47 +24,46 @@ function PricingCard({
   buttonText = "Get Elite",
   isCurrentPlan = false,
 }: PricingCardProps) {
-  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("")
+  const [userId, setUserId] = useState("")
+
+  useEffect(() => {
+      const fetchUser = async () => {
+      const response = await fetch("/api/auth/me")
+      if (response.ok) {
+        console.log("User data:", response)
+        const { uid: userId, email } = await response.json()
+        console.log("User:", userId, email)
+        if (userId) {
+          setUserId(userId)
+          setEmail(email)
+        }
+      } else {
+        console.error("Failed to fetch user data:", response)
+      }
+    }
+    fetchUser();
+  }, []);
 
   const handleSubscribe = async () => {
     if (isCurrentPlan) {
       // Do nothing if this is the current plan
       return
     }
-
-    setIsLoading(true)
-
-    try {
-      // Get the actual user ID from the authentication system
-      const response = await fetch("/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("User not authenticated")
-      }
-
-      const userData = await response.json()
-      const userId = userData.uid
-
-      if (!userId) {
-        throw new Error("User ID not found")
-      }
-
-      // Navigate to checkout page with plan details
-      router.push(`/checkout?plan=${planId}&price=${price}&name=${encodeURIComponent(name)}&userId=${userId}`)
-    } catch (error) {
-      console.error("Error getting user ID:", error)
-      // Redirect to login if user is not authenticated
-      router.push("/login")
-    } finally {
-      setIsLoading(false)
+    setIsLoading(true);
+    if (!userId) {
+      console.error("User ID not found")
+      setIsLoading(false);
+      return
     }
+
+    if (planId === "trainer_pro") {
+      window.location.href = `https://buy.stripe.com/cNicN63CJ2u248L4cUfMA02?client_reference_id=${userId}&locked_prefilled_email=${email}`
+    } else if (planId === "trainer_elite") {
+      window.location.href = `https://buy.stripe.com/eVqfZi1uB4CafRt24MfMA03?client_reference_id=${userId}&locked_prefilled_email=${email}`
+    }
+    setIsLoading(false);
   }
 
   return (

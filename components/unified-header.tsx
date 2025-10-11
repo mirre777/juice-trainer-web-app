@@ -71,7 +71,6 @@ export const UnifiedHeader = React.memo(function UnifiedHeader() {
               }
 
               const userData = userDoc.data()
-              console.log("User data fetched:", userData)
 
               let name = ""
               if (userData && userData.name) {

@@ -14,9 +14,9 @@ export default function PricingPage() {
         // Get user ID from auth token or session
         const response = await fetch("/api/auth/me")
         if (response.ok) {
-          const { user } = await response.json()
-          if (user?.id) {
-            const plan = await getUserSubscriptionPlan(user.id)
+          const { uid: userId, email } = await response.json()
+          if (userId) {
+            const plan = await getUserSubscriptionPlan(userId)
             setCurrentPlan(plan)
           }
         }
@@ -74,7 +74,7 @@ export default function PricingPage() {
           <div className="relative">
             <PricingCard
               name="Pro"
-              price="49"
+              price="25"
               description="For growing coaching businesses"
               features={[
                 "Unlimited clients",
@@ -94,7 +94,7 @@ export default function PricingPage() {
           <div className="relative">
             <PricingCard
               name="Elite"
-              price="69"
+              price="49"
               description="For established coaching businesses"
               features={[
                 "Everything in Pro",
