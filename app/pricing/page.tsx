@@ -92,11 +92,11 @@ export default function PricingPage() {
                 price="29"
                 description="For growing coaching businesses"
                 features={[
-                  "Unlimited clients",
+                  "Everything in Basic",
+                  "Up to 10 clients",
                   "Advanced workout builder",
                   "Google Sheets integration",
                   "Progress analytics",
-                  "Custom branding",
                   "Email & chat support",
                 ]}
                 buttonText="Pay us for Pro"
@@ -115,11 +115,10 @@ export default function PricingPage() {
                 description="For established coaching businesses"
                 features={[
                   "Everything in Pro",
+                  "Up to 20 clients",
                   "Priority support",
-                  "Vacation mode",
                   "Advanced analytics",
-                  "API access",
-                  "White-label solution",
+                  "AI assistance",
                   "Dedicated account manager",
                 ]}
                 buttonText="Pay us for Elite"
