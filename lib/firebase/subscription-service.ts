@@ -50,10 +50,11 @@ export async function setDefaultSubscriptionPlan(userId: string): Promise<{ succ
 // Update user subscription plan
 export async function updateSubscriptionPlan(
   userId: string,
+  stripeUserId: string,
   plan: SubscriptionPlan,
 ): Promise<{ success: boolean; error?: any }> {
   try {
-    if (!userId || !plan) {
+    if (!userId || !plan || !stripeUserId) {
       const error = createError(
         ErrorType.API_MISSING_PARAMS,
         null,
@@ -71,6 +72,7 @@ export async function updateSubscriptionPlan(
     updateDoc(userRef, {
       subscriptionPlan: plan,
       subscriptionUpdatedAt: serverTimestamp(),
+      stripeUserId: stripeUserId,
       updatedAt: serverTimestamp(),
     })
 
