@@ -67,6 +67,7 @@
     "next-themes": "latest",
     "node-fetch": "latest",
     "node-notifier": "latest",
+    "openai": "^6.3.0",
     "path": "latest",
     "qrcode.react": "latest",
     "react": "^18",
